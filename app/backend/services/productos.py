@@ -6,8 +6,9 @@ from datetime import date
 
 import pandas as pd
 
-from core.constants import GESTORES_PERMITIDOS, METAS_PRODUCTOS_CES
+from core.constants import GESTORES_PERMITIDOS
 from services.loader import STD_COLS, ReportData, only_valid_gestores
+from services.settings_store import config_for_report
 
 
 def _build_resumen(df_src: pd.DataFrame) -> list[dict]:
@@ -25,11 +26,13 @@ def _build_resumen(df_src: pd.DataFrame) -> list[dict]:
     return r.to_dict(orient="records")
 
 
-def compute_productos(report: ReportData, trabaja_sabado: bool = False) -> dict:
-    """Calcula resumen CES/PROCOVAR, por gestor y cumplimiento vs meta mensual."""
+def compute_productos(report: ReportData, config: dict | None = None) -> dict:
+    eff = config_for_report(config or {}, report)
+    metas = eff["metas_productos_ces"]
+    trabaja_sabado = bool(eff["trabaja_sabado"])
+
     df = only_valid_gestores(report.df).copy()
 
-    # Separar CES (general) y PROCOVAR (cervezas / parranda)
     if STD_COLS["grupo"] in df.columns:
         mask_proc = (
             df[STD_COLS["grupo"]].astype(str).str.contains("PROCOVAR|PARRANDA", case=False, na=False)
@@ -41,7 +44,6 @@ def compute_productos(report: ReportData, trabaja_sabado: bool = False) -> dict:
     ces = df[~mask_proc].copy()
     procovar = df[mask_proc].copy()
 
-    # Días laborales (lun-vie o lun-sáb) basados en rango del reporte
     dias_trans = dias_totales = dias_rest = 1
     if report.date_min is not None and report.date_max is not None:
         weekmask = "1111100" if not trabaja_sabado else "1111110"
@@ -52,10 +54,9 @@ def compute_productos(report: ReportData, trabaja_sabado: bool = False) -> dict:
         dias_trans = max(1, len(pd.bdate_range(start=start, end=end, freq="C", weekmask=weekmask)))
         dias_rest = max(1, dias_totales - dias_trans)
 
-    # Cumplimiento de metas por producto CES (se matchea por substring)
     cumplimiento: list[dict] = []
     qcol = STD_COLS["cant"]
-    for producto, meta in METAS_PRODUCTOS_CES.items():
+    for producto, meta in metas.items():
         if STD_COLS["merc"] not in ces.columns or qcol not in ces.columns:
             real = 0.0
         else:
@@ -76,7 +77,6 @@ def compute_productos(report: ReportData, trabaja_sabado: bool = False) -> dict:
             "estado": "ok" if delta >= 0 else ("alerta" if real >= 0.8 * deberia else "critico"),
         })
 
-    # Resumen por gestor
     por_gestor: list[dict] = []
     for g in GESTORES_PERMITIDOS:
         por_gestor.append({
@@ -87,6 +87,7 @@ def compute_productos(report: ReportData, trabaja_sabado: bool = False) -> dict:
 
     return {
         "rango": report.rango_str,
+        "periodo": eff.get("_period"),
         "dias_laborales_totales": dias_totales,
         "dias_laborales_transcurridos": dias_trans,
         "dias_laborales_restantes": dias_rest,

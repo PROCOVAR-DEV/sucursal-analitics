@@ -1,0 +1,55 @@
+{
+  "meta_hectolitros_total": 920.0,
+  "meta_dinero_total": 350000.0,
+  "metas_productos_ces": {
+    "ACEITE": 1000.0,
+    "ARROZ": 2500.0,
+    "AZUCAR": 5000.0,
+    "REFRESCO": 2418.0,
+    "SANTA ISABEL": 8000.0
+  },
+  "gestores": {
+    "ALEXANDER": {
+      "nombre": "Alexander Padron",
+      "sector": "Zona 1",
+      "cuota_hl": 178.5,
+      "cuota_ccc": 100.0
+    },
+    "DEYANIRA": {
+      "nombre": "Deyanira Zaldivar",
+      "sector": "Zona 2",
+      "cuota_hl": 178.5,
+      "cuota_ccc": 100.0
+    },
+    "GEORLIS": {
+      "nombre": "Georlis Cardenas",
+      "sector": "Zona 3",
+      "cuota_hl": 178.5,
+      "cuota_ccc": 100.0
+    },
+    "JEAN MICHEL": {
+      "nombre": "Jean Ramos",
+      "sector": "Zona 4",
+      "cuota_hl": 178.5,
+      "cuota_ccc": 100.0
+    },
+    "JELEN": {
+      "nombre": "Jelen",
+      "sector": "Zona 5",
+      "cuota_hl": 15.0,
+      "cuota_ccc": 50.0
+    },
+    "MAYLEN": {
+      "nombre": "Maylen Remon",
+      "sector": "Zona 6",
+      "cuota_hl": 178.5,
+      "cuota_ccc": 100.0
+    }
+  },
+  "trabaja_sabado": false,
+  "metas_mensuales": {
+    "2026-04": {
+      "meta_hectolitros_total": 1500.0
+    }
+  }
+}

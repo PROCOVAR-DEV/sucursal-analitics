@@ -6,12 +6,14 @@ import { formatMoney } from "./Kpi.jsx";
 
 const MEDAL = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
-export default function RankingView({ sid }) {
+export default function RankingView({ sourceId }) {
   const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
 
   useEffect(() => {
-    getRanking(sid).then(setData);
-  }, [sid]);
+    setData(null); setErr(null);
+    getRanking(sourceId).then(setData).catch((e) => setErr(e?.response?.data?.detail || e.message));
+  }, [sourceId]);
 
   const diarioChart = useMemo(() => {
     if (!data) return { series: [], data: [] };
@@ -20,12 +22,10 @@ export default function RankingView({ sid }) {
     const byFecha = {};
     for (const f of fechas) byFecha[f] = { fecha: f };
     for (const r of data.diario) byFecha[r.fecha][r.vendedor] = r.acumulado;
-    return {
-      series: vendedores.map((v) => ({ key: v, label: v })),
-      data: fechas.map((f) => byFecha[f]),
-    };
+    return { series: vendedores.map((v) => ({ key: v, label: v })), data: fechas.map((f) => byFecha[f]) };
   }, [data]);
 
+  if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!data) return <div className="p-6">Cargando…</div>;
 
   return (
@@ -34,7 +34,7 @@ export default function RankingView({ sid }) {
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <Trophy className="text-amber-500" /> Ranking de ventas
         </h2>
-        <a className="btn-primary" href={exportUrl(sid, "ranking")}>
+        <a className="btn-primary" href={exportUrl(sourceId, "ranking")}>
           <Download size={16} /> Exportar Excel
         </a>
       </div>
@@ -63,7 +63,7 @@ export default function RankingView({ sid }) {
 
       <LineCard
         title="Acumulado diario por vendedor"
-        subtitle="Muestra la evolución del monto acumulado por día"
+        subtitle="Evolución del monto acumulado por día"
         data={diarioChart.data}
         xKey="fecha"
         series={diarioChart.series}

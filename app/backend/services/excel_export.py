@@ -19,8 +19,8 @@ def _writer() -> tuple[io.BytesIO, pd.ExcelWriter]:
     return buf, writer
 
 
-def export_ventas(report: ReportData) -> bytes:
-    data = compute_ventas(report)
+def export_ventas(report: ReportData, config: dict | None = None) -> bytes:
+    data = compute_ventas(report, config)
     buf, writer = _writer()
     wb = writer.book
 
@@ -69,8 +69,8 @@ def export_ventas(report: ReportData) -> bytes:
     return buf.getvalue()
 
 
-def export_productos(report: ReportData) -> bytes:
-    data = compute_productos(report)
+def export_productos(report: ReportData, config: dict | None = None) -> bytes:
+    data = compute_productos(report, config)
     buf, writer = _writer()
     wb = writer.book
 
@@ -157,11 +157,11 @@ def export_clientes_punto(report: ReportData) -> bytes:
     return buf.getvalue()
 
 
-def export_all(report: ReportData) -> bytes:
+def export_all(report: ReportData, config: dict | None = None) -> bytes:
     """Un único libro con todas las hojas (resumen completo)."""
     buf, writer = _writer()
-    ventas = compute_ventas(report)
-    productos = compute_productos(report)
+    ventas = compute_ventas(report, config)
+    productos = compute_productos(report, config)
     ranking = compute_ranking(report)
     punto = compute_clientes_punto(report)
 

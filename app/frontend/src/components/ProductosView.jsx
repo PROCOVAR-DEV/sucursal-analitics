@@ -4,13 +4,16 @@ import { exportUrl, getProductos } from "../api.js";
 import { BarCard, PieCard } from "./Charts.jsx";
 import { formatNumber } from "./Kpi.jsx";
 
-export default function ProductosView({ sid }) {
+export default function ProductosView({ sourceId }) {
   const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
 
   useEffect(() => {
-    getProductos(sid).then(setData);
-  }, [sid]);
+    setData(null); setErr(null);
+    getProductos(sourceId).then(setData).catch((e) => setErr(e?.response?.data?.detail || e.message));
+  }, [sourceId]);
 
+  if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!data) return <div className="p-6">Cargando…</div>;
 
   const cesTop = data.resumen_ces.slice(0, 10).map((x) => ({ name: x.producto, value: x.total }));
@@ -22,11 +25,10 @@ export default function ProductosView({ sid }) {
         <div>
           <h2 className="text-2xl font-bold">Productos (CES / PROCOVAR)</h2>
           <p className="text-sm text-slate-500">
-            Días laborales: {data.dias_laborales_transcurridos}/{data.dias_laborales_totales}{" "}
-            (restan {data.dias_laborales_restantes})
+            Días laborales: {data.dias_laborales_transcurridos}/{data.dias_laborales_totales} (restan {data.dias_laborales_restantes})
           </p>
         </div>
-        <a className="btn-primary" href={exportUrl(sid, "productos")}>
+        <a className="btn-primary" href={exportUrl(sourceId, "productos")}>
           <Download size={16} /> Exportar Excel
         </a>
       </div>

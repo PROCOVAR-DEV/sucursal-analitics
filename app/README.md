@@ -31,11 +31,25 @@ La API vive en `http://localhost:8000` y el frontend en
 
 ```bash
 cd app/backend
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate           # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Si tu Linux muestra `externally-managed-environment` (PEP 668):
+
+```bash
+cd app/backend
+python3 -m venv .venv --without-pip
+source .venv/bin/activate
+curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+python /tmp/get-pip.py
+pip install -r requirements.txt
+```
+
+No uses `timeout` para correr el servidor en desarrollo, porque lo apaga
+automáticamente a los pocos segundos.
 
 Documentación automática: `http://localhost:8000/docs`.
 
@@ -54,6 +68,8 @@ Abre `http://localhost:5173`, carga tu archivo `Reporte de Venta` y listo.
 | Método | Ruta                                              | Descripción                                |
 | ------ | ------------------------------------------------- | ------------------------------------------ |
 | POST   | `/api/upload`                                     | Sube el reporte y crea la sesión           |
+| GET    | `/api/accumulated/status`                         | Estado del acumulado diario persistente    |
+| POST   | `/api/accumulated/reset`                          | Reinicia el acumulado diario               |
 | GET    | `/api/session/{sid}/dashboard`                    | KPIs + datos del resumen                   |
 | GET    | `/api/session/{sid}/ventas`                       | Ventas/Supervisor (hectolitros)            |
 | GET    | `/api/session/{sid}/productos`                    | CES/PROCOVAR + cumplimiento                |
@@ -69,3 +85,9 @@ Abre `http://localhost:5173`, carga tu archivo `Reporte de Venta` y listo.
 - En `main.py` ajusta `allow_origins` de CORS al dominio real.
 - Las sesiones viven en memoria (TTL 2h). Para escalar horizontalmente,
   reemplaza `SessionStore` por Redis.
+
+## Acumulación diaria
+
+- Cada `POST /api/upload` acumula por defecto el archivo subido al histórico.
+- El dashboard de la sesión se calcula sobre el consolidado acumulado.
+- La persistencia se guarda en `app/backend/data/`.
