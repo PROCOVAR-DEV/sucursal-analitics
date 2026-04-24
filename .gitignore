@@ -1,0 +1,74 @@
+# ==========================================
+# Python / Backend
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# ==========================================
+# Node / Frontend
+# ==========================================
+node_modules/
+app/frontend/dist/
+app/frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# ==========================================
+# Archivos de datos (reportes confidenciales)
+# ==========================================
+*.xls
+*.xlsx
+*.xlsm
+*.csv
+!app/backend/tests/fixtures/*.xls
+!app/backend/tests/fixtures/*.xlsx
+
+# Salidas típicas de los scripts
+Venta Vendedores*.xlsx
+Productos del*.xlsx
+RANKING-*.xlsx
+CLIENTES_PUNTO*.xlsx
+Reporte_Ventas_Final.xlsx
+RV *.xls
+REPORTE DE VENTA*.xls
+
+# ==========================================
+# Variables de entorno
+# ==========================================
+.env
+.env.*
+!.env.example
+
+# ==========================================
+# Editores / SO
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# Logs
+# ==========================================
+*.log
+logs/

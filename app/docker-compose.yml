@@ -1,0 +1,16 @@
+services:
+  backend:
+    build: ./backend
+    container_name: sucursal-backend
+    restart: unless-stopped
+    expose:
+      - "8000"
+
+  frontend:
+    build: ./frontend
+    container_name: sucursal-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
