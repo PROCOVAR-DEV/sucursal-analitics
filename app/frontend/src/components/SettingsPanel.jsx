@@ -22,9 +22,30 @@ export default function SettingsPanel() {
   const [msg, setMsg] = useState(null);
   const [{ year, month }, setPeriod] = useState(defaultPeriod);
 
-  useEffect(() => { getSettings().then(setCfg); }, []);
+  useEffect(() => {
+    getSettings()
+      .then(setCfg)
+      .catch((e) => setMsg({ type: "err", text: "Error cargando configuración: " + (e?.response?.data?.detail || e.message || "error desconocido") }));
+  }, []);
 
-  if (!cfg) return <div className="p-6">Cargando configuración…</div>;
+  const years = useMemo(() => {
+    const set = new Set([year, new Date().getFullYear()]);
+    Object.keys((cfg && cfg.metas_mensuales) || {}).forEach((k) => {
+      const y = parseInt(k.slice(0, 4), 10);
+      if (!Number.isNaN(y)) set.add(y);
+    });
+    return [...set].sort((a, b) => b - a);
+  }, [cfg, year]);
+
+  if (!cfg) return (
+    <div className="p-6 space-y-3">
+      {msg ? (
+        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{msg.text}</div>
+      ) : (
+        <div className="p-4 rounded-lg bg-slate-100 text-slate-600 text-sm animate-pulse">Cargando configuración…</div>
+      )}
+    </div>
+  );
 
   const pkey = periodKey(year, month);
   const monthly = (cfg.metas_mensuales && cfg.metas_mensuales[pkey]) || {};
@@ -33,15 +54,6 @@ export default function SettingsPanel() {
   const effectiveHL = monthlyHasHL ? monthly.meta_hectolitros_total : cfg.meta_hectolitros_total;
   const effectiveDinero = monthlyHasDinero ? monthly.meta_dinero_total : cfg.meta_dinero_total;
   const effectiveProductos = { ...(cfg.metas_productos_ces || {}), ...(monthly.metas_productos_ces || {}) };
-
-  const years = useMemo(() => {
-    const set = new Set([year, new Date().getFullYear()]);
-    Object.keys(cfg.metas_mensuales || {}).forEach((k) => {
-      const y = parseInt(k.slice(0, 4), 10);
-      if (!Number.isNaN(y)) set.add(y);
-    });
-    return [...set].sort((a, b) => b - a);
-  }, [cfg.metas_mensuales, year]);
 
   function setField(path, value) {
     setCfg((c) => {

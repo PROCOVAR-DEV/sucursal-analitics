@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from services.clientes_punto import compute_clientes_punto
+from services.vendedores import compute_vendedores
 from services.excel_export import (
     export_all,
     export_clientes_punto,
@@ -187,6 +188,11 @@ def src_ranking(source_id: str) -> dict:
 @app.get("/api/sources/{source_id}/clientes-punto")
 def src_punto(source_id: str) -> dict:
     return compute_clientes_punto(_get_source(source_id))
+
+
+@app.get("/api/sources/{source_id}/vendedores")
+def src_vendedores(source_id: str) -> dict:
+    return compute_vendedores(_get_source(source_id), settings_store.load())
 
 
 @app.get("/api/sources/{source_id}/dashboard")

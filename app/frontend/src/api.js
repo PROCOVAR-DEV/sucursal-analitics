@@ -36,6 +36,8 @@ export function exportUrl(id, modulo) {
 }
 
 // ---- Settings ----
+export async function getVendedores(id)  { return (await api.get(`/sources/${id}/vendedores`)).data; }
+
 export async function getSettings()           { return (await api.get("/settings")).data; }
 export async function saveSettings(payload)   { return (await api.put("/settings", payload)).data; }
 export async function resetSettings()         { return (await api.post("/settings/reset")).data; }

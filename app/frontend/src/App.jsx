@@ -1,4 +1,4 @@
-import { BarChart3, Package, Settings as SettingsIcon, Target, Trophy, Users } from "lucide-react";
+import { BarChart3, Package, Settings as SettingsIcon, Target, Trophy, UserCheck, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import ClientesPuntoView from "./components/ClientesPuntoView.jsx";
 import DashboardView from "./components/DashboardView.jsx";
@@ -6,6 +6,7 @@ import ProductosView from "./components/ProductosView.jsx";
 import RankingView from "./components/RankingView.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
+import VendedoresView from "./components/VendedoresView.jsx";
 import VentasView from "./components/VentasView.jsx";
 
 const TABS = [
@@ -13,6 +14,7 @@ const TABS = [
   { id: "ventas", label: "Ventas (HL)", icon: Target, Comp: VentasView },
   { id: "productos", label: "Productos", icon: Package, Comp: ProductosView },
   { id: "ranking", label: "Ranking", icon: Trophy, Comp: RankingView },
+  { id: "vendedores", label: "Vendedores", icon: UserCheck, Comp: VendedoresView },
   { id: "punto", label: "Clientes Punto", icon: Users, Comp: ClientesPuntoView },
 ];
 
