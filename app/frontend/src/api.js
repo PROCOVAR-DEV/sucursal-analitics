@@ -24,20 +24,22 @@ export async function deleteAllUploads() {
 }
 
 // ---- Source queries (id = uuid | "accumulated") ----
-export async function getDashboard(id)  { return (await api.get(`/sources/${id}/dashboard`)).data; }
-export async function getVentas(id)     { return (await api.get(`/sources/${id}/ventas`)).data; }
-export async function getProductos(id)  { return (await api.get(`/sources/${id}/productos`)).data; }
-export async function getRanking(id)    { return (await api.get(`/sources/${id}/ranking`)).data; }
-export async function getPunto(id)      { return (await api.get(`/sources/${id}/clientes-punto`)).data; }
-export async function getSummary(id)    { return (await api.get(`/sources/${id}/summary`)).data; }
+function q(mes) { return mes ? `?mes=${encodeURIComponent(mes)}` : ""; }
 
-export function exportUrl(id, modulo) {
-  return `/api/sources/${id}/export/${modulo}.xlsx`;
+export async function getDashboard(id, mes = null)  { return (await api.get(`/sources/${id}/dashboard${q(mes)}`)).data; }
+export async function getVentas(id, mes = null)     { return (await api.get(`/sources/${id}/ventas${q(mes)}`)).data; }
+export async function getProductos(id, mes = null)  { return (await api.get(`/sources/${id}/productos${q(mes)}`)).data; }
+export async function getRanking(id, mes = null)    { return (await api.get(`/sources/${id}/ranking${q(mes)}`)).data; }
+export async function getPunto(id, mes = null)      { return (await api.get(`/sources/${id}/clientes-punto${q(mes)}`)).data; }
+export async function getVendedores(id, mes = null) { return (await api.get(`/sources/${id}/vendedores${q(mes)}`)).data; }
+export async function getSummary(id)                { return (await api.get(`/sources/${id}/summary`)).data; }
+export async function getPeriods(id)                { return (await api.get(`/sources/${id}/periods`)).data; }
+
+export function exportUrl(id, modulo, mes = null) {
+  return `/api/sources/${id}/export/${modulo}.xlsx${q(mes)}`;
 }
 
 // ---- Settings ----
-export async function getVendedores(id)  { return (await api.get(`/sources/${id}/vendedores`)).data; }
-
 export async function getSettings()           { return (await api.get("/settings")).data; }
 export async function saveSettings(payload)   { return (await api.put("/settings", payload)).data; }
 export async function resetSettings()         { return (await api.post("/settings/reset")).data; }

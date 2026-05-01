@@ -1,17 +1,16 @@
-import { Download } from "lucide-react";
 import { useEffect, useState } from "react";
-import { exportUrl, getProductos } from "../api.js";
+import { getProductos } from "../api.js";
 import { BarCard, PieCard } from "./Charts.jsx";
 import { formatNumber } from "./Kpi.jsx";
 
-export default function ProductosView({ sourceId }) {
+export default function ProductosView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
     setData(null); setErr(null);
-    getProductos(sourceId).then(setData).catch((e) => setErr(e?.response?.data?.detail || e.message));
-  }, [sourceId]);
+    getProductos(sourceId, period).then(setData).catch((e) => setErr(e?.response?.data?.detail || e.message));
+  }, [sourceId, period]);
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!data) return <div className="p-6">Cargando…</div>;
@@ -28,9 +27,6 @@ export default function ProductosView({ sourceId }) {
             Días laborales: {data.dias_laborales_transcurridos}/{data.dias_laborales_totales} (restan {data.dias_laborales_restantes})
           </p>
         </div>
-        <a className="btn-primary" href={exportUrl(sourceId, "productos")}>
-          <Download size={16} /> Exportar Excel
-        </a>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

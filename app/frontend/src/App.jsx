@@ -1,21 +1,34 @@
-import { BarChart3, Package, Settings as SettingsIcon, Target, Trophy, UserCheck, Users } from "lucide-react";
+import { BarChart3, Calendar, FileSpreadsheet, Package, Settings as SettingsIcon, Target, Trophy, UserCheck, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import ClientesPuntoView from "./components/ClientesPuntoView.jsx";
 import DashboardView from "./components/DashboardView.jsx";
 import ProductosView from "./components/ProductosView.jsx";
 import RankingView from "./components/RankingView.jsx";
+import ReportesView from "./components/ReportesView.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import VendedoresView from "./components/VendedoresView.jsx";
 import VentasView from "./components/VentasView.jsx";
+import { getPeriods } from "./api.js";
+
+const MONTHS_ES = [
+  "Enero","Febrero","Marzo","Abril","Mayo","Junio",
+  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
+];
+function fmtPeriod(p) {
+  if (!p) return "Todo (global)";
+  const [y, m] = p.split("-");
+  return `${MONTHS_ES[parseInt(m, 10) - 1]} ${y}`;
+}
 
 const TABS = [
-  { id: "dashboard", label: "Resumen", icon: BarChart3, Comp: DashboardView },
-  { id: "ventas", label: "Ventas (HL)", icon: Target, Comp: VentasView },
-  { id: "productos", label: "Productos", icon: Package, Comp: ProductosView },
-  { id: "ranking", label: "Ranking", icon: Trophy, Comp: RankingView },
-  { id: "vendedores", label: "Vendedores", icon: UserCheck, Comp: VendedoresView },
-  { id: "punto", label: "Clientes Punto", icon: Users, Comp: ClientesPuntoView },
+  { id: "dashboard",  label: "Resumen",        icon: BarChart3,       Comp: DashboardView },
+  { id: "ventas",     label: "Ventas (HL)",     icon: Target,          Comp: VentasView },
+  { id: "productos",  label: "Productos",       icon: Package,         Comp: ProductosView },
+  { id: "ranking",    label: "Ranking",         icon: Trophy,          Comp: RankingView },
+  { id: "vendedores", label: "Vendedores",      icon: UserCheck,       Comp: VendedoresView },
+  { id: "punto",      label: "Clientes Punto",  icon: Users,           Comp: ClientesPuntoView },
+  { id: "reportes",   label: "Reportes",        icon: FileSpreadsheet, Comp: ReportesView },
 ];
 
 export default function App() {
@@ -23,6 +36,8 @@ export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [uploads, setUploads] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [period, setPeriod] = useState(null);       // null = all | "YYYY-MM"
+  const [periods, setPeriods] = useState([]);       // available months
 
   const currentUpload = uploads.find((u) => u.id === sourceId);
 
@@ -32,6 +47,15 @@ export default function App() {
       setSourceId("accumulated");
     }
   }, [uploads, sourceId, currentUpload]);
+
+  // Fetch available months whenever source changes
+  useEffect(() => {
+    setPeriod(null);
+    setPeriods([]);
+    getPeriods(sourceId)
+      .then((d) => setPeriods(d.periods || []))
+      .catch(() => setPeriods([]));
+  }, [sourceId]);
 
   const Current = TABS.find((t) => t.id === tab).Comp;
 
@@ -60,6 +84,37 @@ export default function App() {
         </div>
       </header>
 
+      {/* Period selector bar */}
+      {!showSettings && (
+        <div className="bg-white border-b border-slate-200 px-6 py-2 flex items-center gap-3 text-sm shrink-0">
+          <Calendar size={15} className="text-slate-400 shrink-0" />
+          <span className="text-slate-500 font-medium shrink-0">Periodo:</span>
+          <select
+            className="input py-1 text-sm"
+            value={period || ""}
+            onChange={(e) => setPeriod(e.target.value || null)}
+          >
+            <option value="">Todo (acumulado global)</option>
+            {periods.map((p) => (
+              <option key={p} value={p}>{fmtPeriod(p)}</option>
+            ))}
+          </select>
+          {period && (
+            <button
+              className="text-xs text-slate-400 hover:text-red-500 transition font-medium"
+              onClick={() => setPeriod(null)}
+            >
+              ✕ Limpiar
+            </button>
+          )}
+          {period && (
+            <span className="ml-1 px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold">
+              {fmtPeriod(period)}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         <UploadPanel sourceId={sourceId} onSelect={setSourceId} onRefresh={setUploads} />
 
@@ -73,8 +128,13 @@ export default function App() {
                   {TABS.map((t) => {
                     const Icon = t.icon;
                     const active = t.id === tab;
+                    const isReportes = t.id === "reportes";
                     return (
-                      <button key={t.id} className={`tab ${active ? "tab-active" : ""}`} onClick={() => setTab(t.id)}>
+                      <button
+                        key={t.id}
+                        className={`tab ${active ? "tab-active" : ""} ${isReportes && !active ? "border border-brand-200 text-brand-700 hover:bg-brand-50" : ""}`}
+                        onClick={() => setTab(t.id)}
+                      >
                         <Icon size={16} className="inline mr-1.5 -mt-0.5" /> {t.label}
                       </button>
                     );
@@ -86,7 +146,7 @@ export default function App() {
                     cuando quieras para ver datos reales.
                   </div>
                 )}
-                <Current sourceId={sourceId} />
+                <Current sourceId={sourceId} period={period} />
               </>
             )}
           </div>

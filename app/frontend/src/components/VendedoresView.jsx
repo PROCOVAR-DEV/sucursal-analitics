@@ -1,19 +1,19 @@
-import { Download, UserCheck } from "lucide-react";
+import { UserCheck } from "lucide-react";
 import { useEffect, useState } from "react";
-import { exportUrl, getVendedores } from "../api.js";
+import { getVendedores } from "../api.js";
 import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
 
-export default function VendedoresView({ sourceId }) {
+export default function VendedoresView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [selGestor, setSelGestor] = useState(null);
 
   useEffect(() => {
     setData(null); setErr(null); setSelGestor(null);
-    getVendedores(sourceId)
+    getVendedores(sourceId, period)
       .then(setData)
       .catch((e) => setErr(e?.response?.data?.detail || e.message));
-  }, [sourceId]);
+  }, [sourceId, period]);
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!data) return <div className="p-6">Cargando…</div>;
@@ -31,9 +31,6 @@ export default function VendedoresView({ sourceId }) {
           </h2>
           <p className="text-sm text-slate-500">{data.rango}</p>
         </div>
-        <a className="btn-primary" href={exportUrl(sourceId, "ventas")}>
-          <Download size={16} /> Exportar Excel
-        </a>
       </div>
 
       {/* Office summary KPIs */}

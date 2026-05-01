@@ -1,6 +1,6 @@
-import { Download, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { exportUrl, getRanking } from "../api.js";
+import { getRanking } from "../api.js";
 import { LineCard } from "./Charts.jsx";
 import { formatMoney } from "./Kpi.jsx";
 
@@ -18,7 +18,7 @@ function weekMonth(semana) {
   return parseInt(end.split("/")[1], 10);
 }
 
-export default function RankingView({ sourceId }) {
+export default function RankingView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [selMonth, setSelMonth] = useState(null);
@@ -26,10 +26,10 @@ export default function RankingView({ sourceId }) {
 
   useEffect(() => {
     setData(null); setErr(null); setSelMonth(null); setSelWeek(null);
-    getRanking(sourceId)
+    getRanking(sourceId, period)
       .then(setData)
       .catch((e) => setErr(e?.response?.data?.detail || e.message));
-  }, [sourceId]);
+  }, [sourceId, period]);
 
   const diarioChart = useMemo(() => {
     if (!data) return { series: [], data: [] };
@@ -78,9 +78,6 @@ export default function RankingView({ sourceId }) {
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <Trophy className="text-amber-500" /> Ranking de ventas
         </h2>
-        <a className="btn-primary" href={exportUrl(sourceId, "ranking")}>
-          <Download size={16} /> Exportar Excel
-        </a>
       </div>
 
       {/* General ranking */}

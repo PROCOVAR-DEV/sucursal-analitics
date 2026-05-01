@@ -1,17 +1,16 @@
-import { Download } from "lucide-react";
 import { useEffect, useState } from "react";
-import { exportUrl, getVentas } from "../api.js";
+import { getVentas } from "../api.js";
 import { BarCard } from "./Charts.jsx";
 import { Kpi, formatMoney, formatNumber } from "./Kpi.jsx";
 
-export default function VentasView({ sourceId }) {
+export default function VentasView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
     setData(null); setErr(null);
-    getVentas(sourceId).then(setData).catch((e) => setErr(e?.response?.data?.detail || e.message));
-  }, [sourceId]);
+    getVentas(sourceId, period).then(setData).catch((e) => setErr(e?.response?.data?.detail || e.message));
+  }, [sourceId, period]);
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!data) return <div className="p-6">Cargando…</div>;
@@ -22,9 +21,6 @@ export default function VentasView({ sourceId }) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Ventas / Supervisor (Hectolitros)</h2>
-        <a className="btn-primary" href={exportUrl(sourceId, "ventas")}>
-          <Download size={16} /> Exportar Excel
-        </a>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

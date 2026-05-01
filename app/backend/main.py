@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
@@ -27,11 +27,13 @@ from services.vendedores import compute_vendedores
 from services.excel_export import (
     export_all,
     export_clientes_punto,
+    export_market,
     export_productos,
     export_ranking,
     export_ventas,
+    export_ventas_general,
 )
-from services.loader import ReportData, load_report
+from services.loader import ReportData, available_periods, filter_by_period, load_report
 from services.productos import compute_productos
 from services.ranking import compute_ranking
 from services.repository import OverlapError, repository
@@ -170,33 +172,39 @@ def src_summary(source_id: str) -> dict:
     }
 
 
+@app.get("/api/sources/{source_id}/periods")
+def src_periods(source_id: str) -> dict:
+    report = _get_source(source_id)
+    return {"periods": available_periods(report)}
+
+
 @app.get("/api/sources/{source_id}/ventas")
-def src_ventas(source_id: str) -> dict:
-    return compute_ventas(_get_source(source_id), settings_store.load())
+def src_ventas(source_id: str, mes: str | None = Query(default=None)) -> dict:
+    return compute_ventas(filter_by_period(_get_source(source_id), mes), settings_store.load())
 
 
 @app.get("/api/sources/{source_id}/productos")
-def src_productos(source_id: str) -> dict:
-    return compute_productos(_get_source(source_id), settings_store.load())
+def src_productos(source_id: str, mes: str | None = Query(default=None)) -> dict:
+    return compute_productos(filter_by_period(_get_source(source_id), mes), settings_store.load())
 
 
 @app.get("/api/sources/{source_id}/ranking")
-def src_ranking(source_id: str) -> dict:
-    return compute_ranking(_get_source(source_id))
+def src_ranking(source_id: str, mes: str | None = Query(default=None)) -> dict:
+    return compute_ranking(filter_by_period(_get_source(source_id), mes))
 
 
 @app.get("/api/sources/{source_id}/clientes-punto")
-def src_punto(source_id: str) -> dict:
-    return compute_clientes_punto(_get_source(source_id))
+def src_punto(source_id: str, mes: str | None = Query(default=None)) -> dict:
+    return compute_clientes_punto(filter_by_period(_get_source(source_id), mes))
 
 
 @app.get("/api/sources/{source_id}/vendedores")
-def src_vendedores(source_id: str) -> dict:
-    return compute_vendedores(_get_source(source_id), settings_store.load())
+def src_vendedores(source_id: str, mes: str | None = Query(default=None)) -> dict:
+    return compute_vendedores(filter_by_period(_get_source(source_id), mes), settings_store.load())
 
 
 @app.get("/api/sources/{source_id}/dashboard")
-def src_dashboard(source_id: str) -> dict:
+def src_dashboard(source_id: str, mes: str | None = Query(default=None)) -> dict:
     report = _get_source_or_none(source_id)
     cfg = settings_store.load()
     if report is None:
@@ -228,10 +236,11 @@ def src_dashboard(source_id: str) -> dict:
                 for k, v in eff["metas_productos_ces"].items()
             ],
         }
-    ventas = compute_ventas(report, cfg)
-    productos = compute_productos(report, cfg)
-    ranking = compute_ranking(report)
-    punto = compute_clientes_punto(report)
+    r = filter_by_period(report, mes)
+    ventas = compute_ventas(r, cfg)
+    productos = compute_productos(r, cfg)
+    ranking = compute_ranking(r)
+    punto = compute_clientes_punto(r)
     return {
         "id": source_id,
         "filename": report.filename,
@@ -258,28 +267,52 @@ def src_dashboard(source_id: str) -> dict:
 # Exportaciones Excel
 # --------------------------------------------------------------------
 @app.get("/api/sources/{source_id}/export/ventas.xlsx")
-def export_ventas_xlsx(source_id: str) -> Response:
-    return _xlsx_response(export_ventas(_get_source(source_id), settings_store.load()), "ventas.xlsx")
+def export_ventas_xlsx(source_id: str, mes: str | None = Query(default=None)) -> Response:
+    report = filter_by_period(_get_source(source_id), mes)
+    suffix = f"_{mes}" if mes else ""
+    return _xlsx_response(export_ventas(report, settings_store.load()), f"ventas{suffix}.xlsx")
 
 
 @app.get("/api/sources/{source_id}/export/productos.xlsx")
-def export_productos_xlsx(source_id: str) -> Response:
-    return _xlsx_response(export_productos(_get_source(source_id), settings_store.load()), "productos.xlsx")
+def export_productos_xlsx(source_id: str, mes: str | None = Query(default=None)) -> Response:
+    report = filter_by_period(_get_source(source_id), mes)
+    suffix = f"_{mes}" if mes else ""
+    return _xlsx_response(export_productos(report, settings_store.load()), f"productos{suffix}.xlsx")
 
 
 @app.get("/api/sources/{source_id}/export/ranking.xlsx")
-def export_ranking_xlsx(source_id: str) -> Response:
-    return _xlsx_response(export_ranking(_get_source(source_id)), "ranking.xlsx")
+def export_ranking_xlsx(source_id: str, mes: str | None = Query(default=None)) -> Response:
+    report = filter_by_period(_get_source(source_id), mes)
+    suffix = f"_{mes}" if mes else ""
+    return _xlsx_response(export_ranking(report), f"ranking{suffix}.xlsx")
 
 
 @app.get("/api/sources/{source_id}/export/clientes-punto.xlsx")
-def export_punto_xlsx(source_id: str) -> Response:
-    return _xlsx_response(export_clientes_punto(_get_source(source_id)), "clientes_punto.xlsx")
+def export_punto_xlsx(source_id: str, mes: str | None = Query(default=None)) -> Response:
+    report = filter_by_period(_get_source(source_id), mes)
+    suffix = f"_{mes}" if mes else ""
+    return _xlsx_response(export_clientes_punto(report), f"clientes_punto{suffix}.xlsx")
+
+
+@app.get("/api/sources/{source_id}/export/ventas-general.xlsx")
+def export_ventas_general_xlsx(source_id: str, mes: str | None = Query(default=None)) -> Response:
+    report = filter_by_period(_get_source(source_id), mes)
+    suffix = f"_{mes}" if mes else ""
+    return _xlsx_response(export_ventas_general(report, settings_store.load()), f"ventas_general{suffix}.xlsx")
+
+
+@app.get("/api/sources/{source_id}/export/market.xlsx")
+def export_market_xlsx(source_id: str, mes: str | None = Query(default=None)) -> Response:
+    report = filter_by_period(_get_source(source_id), mes)
+    suffix = f"_{mes}" if mes else ""
+    return _xlsx_response(export_market(report, settings_store.load()), f"market{suffix}.xlsx")
 
 
 @app.get("/api/sources/{source_id}/export/all.xlsx")
-def export_all_xlsx(source_id: str) -> Response:
-    return _xlsx_response(export_all(_get_source(source_id), settings_store.load()), "reporte_completo.xlsx")
+def export_all_xlsx(source_id: str, mes: str | None = Query(default=None)) -> Response:
+    report = filter_by_period(_get_source(source_id), mes)
+    suffix = f"_{mes}" if mes else ""
+    return _xlsx_response(export_all(report, settings_store.load()), f"reporte_completo{suffix}.xlsx")
 
 
 # --------------------------------------------------------------------

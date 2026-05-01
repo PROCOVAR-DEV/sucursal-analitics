@@ -6,10 +6,12 @@ from typing import Any
 
 import pandas as pd
 
+from core.constants import GESTORES_CONFIG, GESTORES_PERMITIDOS
 from services.clientes_punto import compute_clientes_punto
-from services.loader import STD_COLS, ReportData
+from services.loader import STD_COLS, ReportData, only_valid_gestores
 from services.productos import compute_productos
 from services.ranking import compute_ranking
+from services.settings_store import config_for_report
 from services.ventas import compute_ventas
 
 
@@ -635,6 +637,301 @@ def export_clientes_punto(report: ReportData) -> bytes:
     ws.write_number(res_row, 1, data["total_operaciones"],    fmt_kpi)
     ws.write_number(res_row, 2, data["total_clientes_unicos"], fmt_kpi)
     ws.write_number(res_row, 3, round(grand, 2),               fmt_kpi)
+
+    writer.close()
+    return buf.getvalue()
+
+
+_MARKET_CURVA: dict[str, float] = {"S1": 4.0, "S2": 5.0, "S3": 6.5, "S4": 6.5}
+_MARKET_CURVA_SUM: float = sum(_MARKET_CURVA.values())  # 22.0
+
+
+def _week_of_month(dt: Any) -> str | None:
+    """S1..S5 from day-of-month, same logic as automatizar_market."""
+    try:
+        if pd.isna(dt):
+            return None
+        return f"S{min(((int(dt.day) - 1) // 7) + 1, 5)}"
+    except Exception:
+        return None
+
+
+def export_ventas_general(report: ReportData, config: dict | None = None) -> bytes:
+    """Ventas general: todas las transacciones de todos los productos por gestor."""
+    eff = config_for_report(config or {}, report)
+    gestores_cfg = eff["gestores"]
+
+    buf, writer = _writer()
+    wb = writer.book
+
+    color_header = "#1F4E79"
+    color_band   = "#D9E1F2"
+    color_block  = "#FCE4D6"
+    color_title  = "#203864"
+
+    fmt_h         = wb.add_format({"bold": True, "bg_color": color_header,
+                                   "font_color": "white", "border": 1, "align": "center"})
+    fmt_num       = wb.add_format({"num_format": "#,##0.00"})
+    fmt_int       = wb.add_format({"num_format": "0"})
+    fmt_band      = wb.add_format({"bg_color": color_band})
+    fmt_block_txt = wb.add_format({"bg_color": color_block, "border": 1, "bold": True})
+    fmt_block_num = wb.add_format({"bg_color": color_block, "border": 1, "bold": True,
+                                   "num_format": "#,##0.00"})
+    fmt_big_title = wb.add_format({"bold": True, "font_size": 16, "font_color": "white",
+                                   "align": "left", "valign": "vcenter", "bg_color": color_title})
+    fmt_subtitle  = wb.add_format({"italic": True, "font_color": "white",
+                                   "align": "right", "valign": "vcenter", "bg_color": color_title})
+
+    df_raw = only_valid_gestores(report.df).copy()
+    export_cols = [c for c in [
+        STD_COLS["op"], STD_COLS["fecha"], STD_COLS["socio"],
+        STD_COLS["merc"], STD_COLS["cant"], STD_COLS["importe"], STD_COLS["suma"],
+    ] if c in df_raw.columns]
+
+    supervisor_rows: list[dict] = []
+
+    for g in GESTORES_PERMITIDOS:
+        g_cfg = {**GESTORES_CONFIG[g], **(gestores_cfg.get(g) or {})}
+        sub = df_raw[df_raw["GestorDetectado"] == g].copy()
+        if STD_COLS["fecha"] in sub.columns:
+            sub = sub.sort_values([STD_COLS["fecha"]])
+
+        to_write = sub[export_cols].copy()
+        for col_name in to_write.columns:
+            if col_name != STD_COLS["op"] and pd.api.types.is_numeric_dtype(to_write[col_name]):
+                to_write[col_name] = to_write[col_name].round(2)
+
+        sheet = g[:31]
+        to_write.to_excel(writer, sheet_name=sheet, index=False)
+        wsg = writer.sheets[sheet]
+        wsg.freeze_panes(1, 0)
+        _autosize(wsg, to_write, fmt_h)
+
+        for idx, col_name in enumerate(to_write.columns):
+            if col_name == STD_COLS["op"]:
+                wsg.set_column(idx, idx, None, fmt_int)
+            elif pd.api.types.is_numeric_dtype(to_write[col_name]):
+                wsg.set_column(idx, idx, None, fmt_num)
+
+        if len(to_write) > 0:
+            _apply_bands(wsg, 1, len(to_write), fmt_band)
+            wsg.add_table(0, 0, len(to_write), len(to_write.columns) - 1, {
+                "name": f"TablaG_{g.replace(' ', '')[:18]}",
+                "style": "Table Style Medium 2",
+                "columns": [{"header": h} for h in to_write.columns],
+            })
+
+        total_importe = round(
+            float(sub[STD_COLS["importe"]].sum()) if STD_COLS["importe"] in sub.columns else 0.0, 2
+        )
+        kpi_row = len(to_write) + 2
+        wsg.write(kpi_row,     0, "VENTAS TOTALES", fmt_block_txt)
+        wsg.write_number(kpi_row, 1, total_importe, fmt_block_num)
+        wsg.write(kpi_row + 1, 0, "TRANSACCIONES", fmt_block_txt)
+        wsg.write_number(kpi_row + 1, 1, len(sub), fmt_block_num)
+
+        supervisor_rows.append({
+            "Gestor": g,
+            "Nombre": g_cfg["nombre"],
+            "Sector": g_cfg["sector"],
+            "Total Venta": total_importe,
+            "Transacciones": len(sub),
+        })
+
+    # --- Hoja Supervisor ---
+    sup_df = pd.DataFrame(supervisor_rows)
+    sup_df.to_excel(writer, sheet_name="Supervisor", index=False, startrow=5)
+    ws = writer.sheets["Supervisor"]
+    ws.merge_range(0, 0, 1, 4, "Resumen General de Ventas — Todos los Productos", fmt_big_title)
+    ws.merge_range(0, 5, 1, 7, f"Periodo: {report.date_min} → {report.date_max}", fmt_subtitle)
+    ws.set_row(0, 28)
+    ws.set_row(1, 20)
+    ws.freeze_panes(6, 0)
+    _autosize(ws, sup_df, fmt_h)
+    if len(sup_df) > 0:
+        _apply_bands(ws, 6, 5 + len(sup_df), fmt_band)
+        ws.add_table(5, 0, 5 + len(sup_df), len(sup_df.columns) - 1, {
+            "name": "Tabla_Supervisor_General",
+            "style": "Table Style Medium 9",
+            "columns": [{"header": h} for h in sup_df.columns],
+        })
+    total_row = 7 + len(sup_df) + 2
+    ws.write(total_row, 0, "VENTAS TOTALES", fmt_block_txt)
+    ws.write_number(total_row, 1, float(sup_df["Total Venta"].sum()), fmt_block_num)
+    for c in range(6):
+        ws.set_column(c, c, 18)
+    ws.set_column(0, 0, 20)
+
+    writer.close()
+    return buf.getvalue()
+
+
+def export_market(report: ReportData, config: dict | None = None) -> bytes:
+    """Reporte Market: HL y CCC semanales por gestor vs cuota (estilo automatizar_market)."""
+    eff = config_for_report(config or {}, report)
+    gestores_cfg = eff["gestores"]
+    agencia = "Camaguey"
+
+    df = only_valid_gestores(report.df).copy()
+    date_col  = STD_COLS["fecha"]
+    socio_col = STD_COLS["socio"] if STD_COLS["socio"] in df.columns else None
+    weeks = [f"S{i}" for i in range(1, 6)]
+
+    hl_data:  dict[str, dict[str, float]] = {g: {w: 0.0 for w in weeks} for g in GESTORES_PERMITIDOS}
+    ccc_data: dict[str, dict[str, int]]   = {g: {w: 0   for w in weeks} for g in GESTORES_PERMITIDOS}
+
+    if date_col in df.columns:
+        df_tmp = df[df["IsMalta"] | df["IsParranda"]].copy()
+        df_tmp["_wk"] = df_tmp[date_col].apply(_week_of_month)
+        hl_grp = (
+            df_tmp.dropna(subset=["_wk"])
+            .groupby(["GestorDetectado", "_wk"])["Hectolitros"]
+            .sum()
+        )
+        for g in GESTORES_PERMITIDOS:
+            for w in weeks:
+                try:
+                    hl_data[g][w] = round(float(hl_grp.loc[g, w]), 2)
+                except KeyError:
+                    pass
+
+        if socio_col:
+            df_tmp2 = df.copy()
+            df_tmp2["_wk"] = df_tmp2[date_col].apply(_week_of_month)
+            ccc_grp = (
+                df_tmp2.dropna(subset=[socio_col, "_wk"])
+                .groupby(["GestorDetectado", "_wk"])[socio_col]
+                .nunique()
+            )
+            for g in GESTORES_PERMITIDOS:
+                for w in weeks:
+                    try:
+                        ccc_data[g][w] = int(ccc_grp.loc[g, w])
+                    except KeyError:
+                        pass
+
+    buf, writer = _writer()
+    wb = writer.book
+    ws = wb.add_worksheet("Reporte de Ventas")
+
+    fmt_title  = wb.add_format({"bold": True, "font_size": 14, "font_color": "#0891B2"})
+    fmt_cyan   = wb.add_format({"bold": True, "font_size": 9,  "font_color": "#0891B2"})
+    fmt_head   = wb.add_format({
+        "bold": True, "bg_color": "#1F2937", "font_color": "white",
+        "border": 1, "align": "center", "valign": "vcenter", "font_size": 8, "text_wrap": True,
+    })
+    fmt_total  = wb.add_format({
+        "bold": True, "bg_color": "#374151", "font_color": "white",
+        "border": 1, "align": "center", "font_size": 8,
+    })
+    fmt_yellow = wb.add_format({
+        "bold": True, "bg_color": "#FBBF24", "font_color": "#000000",
+        "border": 1, "align": "center", "font_size": 8, "num_format": "0",
+    })
+    fmt_cell = [
+        wb.add_format({"bg_color": "#E5E7EB", "border": 1, "align": "center", "font_size": 8}),
+        wb.add_format({"bg_color": "#F9FAFB", "border": 1, "align": "center", "font_size": 8}),
+    ]
+    fmt_lbl = [
+        wb.add_format({"bg_color": "#E5E7EB", "border": 1, "align": "left", "font_size": 8}),
+        wb.add_format({"bg_color": "#F9FAFB", "border": 1, "align": "left", "font_size": 8}),
+    ]
+    fmt_red   = wb.add_format({"font_color": "#DC2626", "bold": True, "font_size": 10,
+                                "align": "center", "border": 1})
+    fmt_amber = wb.add_format({"font_color": "#D97706", "bold": True, "font_size": 10,
+                                "align": "center", "border": 1})
+    fmt_green = wb.add_format({"font_color": "#16A34A", "bold": True, "font_size": 10,
+                                "align": "center", "border": 1})
+
+    def _ind_fmt(pct: float) -> Any:
+        if pct >= 100: return fmt_green
+        if pct >= 80:  return fmt_amber
+        return fmt_red
+
+    headers = [
+        "Indicador", "Agencia", "Vendedor", "Sector", "Cuota\nMes",
+        "Cuota\nS1", "Real\nS1", "Cuota\nS2", "Real\nS2",
+        "Cuota\nS3", "Real\nS3", "Cuota\nS4", "Real\nS4",
+        "Cuota\nS5", "Real\nS5", "Cuota\nal día", "Real\nMes",
+        "% S3", "●", "% Mes", "●",
+    ]
+
+    def write_section(start: int, indicador: str, data: Any, cuota_key: str) -> int:
+        total_cuota = sum(
+            float((gestores_cfg.get(g) or GESTORES_CONFIG[g]).get(cuota_key, 0))
+            for g in GESTORES_PERMITIDOS
+        )
+        ws.write(start, 0, f"Target {indicador}: {total_cuota:.0f}", fmt_cyan)
+        start += 2
+        for c, h in enumerate(headers):
+            ws.write(start, c, h, fmt_head)
+        ws.set_row(start, 30)
+        start += 1
+
+        tot_cuota = 0.0
+        tot_real  = 0.0
+        tot_sem: dict[str, dict[str, float]] = {w: {"c": 0.0, "r": 0.0} for w in weeks}
+
+        for idx, g in enumerate(GESTORES_PERMITIDOS):
+            g_cfg = {**GESTORES_CONFIG[g], **(gestores_cfg.get(g) or {})}
+            cuota = float(g_cfg.get(cuota_key, 0))
+            w_cuotas = {w: round(cuota * _MARKET_CURVA.get(w, 0) / _MARKET_CURVA_SUM, 0) for w in weeks[:4]}
+            w_cuotas["S5"] = 0.0
+            real_mes = sum(float(v) for v in data[g].values())
+            fc = fmt_cell[idx % 2]
+            fl = fmt_lbl[idx % 2]
+            row = start + idx
+            ws.write(row, 0, indicador,       fc)
+            ws.write(row, 1, agencia,         fl)
+            ws.write(row, 2, g_cfg["nombre"], fl)
+            ws.write(row, 3, g_cfg["sector"], fl)
+            ws.write(row, 4, int(cuota),      fc)
+            col = 5
+            for w in weeks:
+                ws.write(row, col,     int(w_cuotas[w]),     fc); col += 1
+                ws.write(row, col,     int(data[g][w]),       fc); col += 1
+                tot_sem[w]["c"] += w_cuotas[w]
+                tot_sem[w]["r"] += data[g][w]
+            ws.write(row, col, int(cuota),    fmt_yellow); col += 1
+            ws.write(row, col, int(real_mes), fmt_yellow); col += 1
+            pct_s3 = (data[g]["S3"] / w_cuotas["S3"] * 100) if w_cuotas.get("S3", 0) > 0 else 0.0
+            ws.write(row, col, f"{pct_s3:.0f}%", fc); col += 1
+            ws.write(row, col, "●", _ind_fmt(pct_s3)); col += 1
+            pct_mes = (real_mes / cuota * 100) if cuota > 0 else 0.0
+            ws.write(row, col, f"{pct_mes:.0f}%", fc); col += 1
+            ws.write(row, col, "●", _ind_fmt(pct_mes))
+            tot_cuota += cuota
+            tot_real  += real_mes
+
+        end = start + len(GESTORES_PERMITIDOS)
+        ws.write(end, 0, "Total", fmt_total)
+        for c in range(1, 4):
+            ws.write(end, c, "", fmt_total)
+        ws.write(end, 4, int(tot_cuota), fmt_total)
+        col = 5
+        for w in weeks:
+            ws.write(end, col, int(tot_sem[w]["c"]), fmt_total); col += 1
+            ws.write(end, col, int(tot_sem[w]["r"]), fmt_total); col += 1
+        ws.write(end, col, int(tot_cuota), fmt_total); col += 1
+        ws.write(end, col, int(tot_real),  fmt_total)
+        return end + 3
+
+    ws.write(0, 0, "Reporte de Ventas", fmt_title)
+    ws.write(1, 0, "Supervisor:", fmt_cyan)
+    ws.write(1, 1, agencia)
+    ws.write(1, 2, f"Periodo: {report.date_min} → {report.date_max}")
+
+    row = 3
+    row = write_section(row, "HL",  hl_data,  "cuota_hl")
+    row = write_section(row, "CCC", ccc_data, "cuota_ccc")
+
+    ws.set_column(0, 0, 10)
+    ws.set_column(1, 1, 12)
+    ws.set_column(2, 2, 20)
+    ws.set_column(3, 3, 10)
+    for c in range(4, 21):
+        ws.set_column(c, c, 8)
+    ws.freeze_panes(1, 0)
 
     writer.close()
     return buf.getvalue()

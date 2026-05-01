@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
-import { Download } from "lucide-react";
-import { exportUrl, getDashboard } from "../api.js";
+import { getDashboard } from "../api.js";
 import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
 import { BarCard, PieCard } from "./Charts.jsx";
 
-export default function DashboardView({ sourceId }) {
+export default function DashboardView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
     setData(null); setErr(null);
-    getDashboard(sourceId).then(setData).catch((e) => setErr(e?.response?.data?.detail || e.message));
-  }, [sourceId]);
+    getDashboard(sourceId, period).then(setData).catch((e) => setErr(e?.response?.data?.detail || e.message));
+  }, [sourceId, period]);
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!data) return <div className="p-6">Cargando…</div>;
@@ -33,9 +32,6 @@ export default function DashboardView({ sourceId }) {
             Periodo: {data.rango} · {data.filas.toLocaleString("es-CO")} filas
           </p>
         </div>
-        <a className="btn-primary" href={exportUrl(sourceId, "all")}>
-          <Download size={16} /> Exportar todo (.xlsx)
-        </a>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

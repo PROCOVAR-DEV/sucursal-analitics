@@ -208,3 +208,43 @@ def only_valid_gestores(df: pd.DataFrame) -> pd.DataFrame:
     if "GestorDetectado" not in df.columns:
         return df.iloc[0:0].copy()
     return df[df["GestorDetectado"].isin(GESTORES_PERMITIDOS)].copy()
+
+
+def filter_by_period(report: ReportData, mes: str | None) -> ReportData:
+    """Devuelve un nuevo ReportData filtrado al mes indicado (formato YYYY-MM).
+    Si mes es None devuelve el mismo reporte sin cambios."""
+    if mes is None:
+        return report
+    try:
+        year, month = int(mes[:4]), int(mes[5:7])
+    except (ValueError, IndexError):
+        return report
+    fecha_col = STD_COLS["fecha"]
+    if fecha_col not in report.df.columns:
+        return report
+    mask = (
+        (report.df[fecha_col].dt.year == year) &
+        (report.df[fecha_col].dt.month == month)
+    )
+    filtered = report.df[mask].copy()
+    valid = filtered[fecha_col].dropna()
+    return ReportData(
+        df=filtered,
+        date_min=valid.min() if not valid.empty else None,
+        date_max=valid.max() if not valid.empty else None,
+        filename=report.filename,
+    )
+
+
+def available_periods(report: ReportData) -> list[str]:
+    """Devuelve la lista de meses disponibles en el reporte (YYYY-MM), descendente."""
+    fecha_col = STD_COLS["fecha"]
+    if fecha_col not in report.df.columns:
+        return []
+    valid = report.df[fecha_col].dropna()
+    if valid.empty:
+        return []
+    return sorted(
+        {f"{d.year}-{d.month:02d}" for d in valid},
+        reverse=True,
+    )
