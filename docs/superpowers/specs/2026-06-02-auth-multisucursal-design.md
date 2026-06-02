@@ -29,11 +29,19 @@ Add authentication, user management, and multi-branch (sucursal) support to Sucu
 - Sucursal selector in header (admin/general_analytics only)
 - Seed admin user on first boot
 
-### Out of scope
+### Out of scope (this iteration)
 - Email/password reset flows
-- OAuth / SSO
 - Audit logs
 - Per-user notification preferences
+
+### Future: Central Auth Microservice (separate spec)
+The auth layer is intentionally designed for extraction. The planned evolution:
+1. Extract `db/users`, `refresh_tokens`, `services/auth.py`, `routers/auth.py` into a standalone `auth-service`.
+2. Sucursal Analytics becomes an OAuth2 resource server — it validates tokens issued by the central service instead of issuing its own.
+3. Migrate JWT signing from HS256 (shared secret) to RS256 (auth-service holds private key; all resource servers verify with public key).
+4. Any new project in the ecosystem authenticates through the same central auth-service — single login for all apps.
+
+To make this migration easy, this design already: (a) keeps `users`/`refresh_tokens` tables completely separate from analytics data, (b) uses standard JWT payload structure, (c) puts all auth logic in isolated modules with no coupling to analytics services.
 
 ---
 
