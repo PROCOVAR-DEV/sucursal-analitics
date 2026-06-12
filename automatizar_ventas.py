@@ -12,7 +12,7 @@ from datetime import datetime
 
 # =========================
 
-INPUT_FILE = "RV ABRIL 1-17.xls"  # Cambia si corresponde (xlsx/xls)
+INPUT_FILE = "RV JUNIO 1-11.xls"  # Cambia si corresponde (xlsx/xls)
 
 GESTORES_PERMITIDOS = [
 
@@ -24,7 +24,9 @@ GESTORES_PERMITIDOS = [
 
     "JEAN MICHEL",
 
-    "JELEN",
+    "ERNESTO",
+
+    "ANDY",
 
     "MAYLEN",
 
@@ -84,11 +86,13 @@ ALIAS_MAP = {
 
     "MICHEL": "JEAN MICHEL",
 
-    "JELEN": "JELEN",
+    "ERNESTO": "ERNESTO",
 
-    "JELEN.": "JELEN",
+    "ANDY": "ANDY",
 
-    "JELEN_": "JELEN",
+    "ANDY.": "ANDY",
+
+    "ANDY_": "ANDY",
 
     "MAYELEN": "MAYLEN",
 
@@ -136,25 +140,27 @@ UNITS_PER_PALLET = {
 
 META_DINERO = 350000.0
 
-META_HECTOLITROS = 920.0
+META_HECTOLITROS = 1829.0
 
 
 
-# Metas individuales por gestor (hectolitros) - Rellena con los valores reales
+# Metas individuales por gestor (hectolitros)
 
 GESTOR_METAS = {
 
-    "ALEXANDER": 178.5,
+    "ALEXANDER": 260,
 
-    "DEYANIRA": 178.5,
+    "DEYANIRA": 352,
 
-    "GEORLIS": 178.5,
+    "GEORLIS": 260,
 
-    "JEAN MICHEL": 178.5,
+    "JEAN MICHEL": 260,
 
-    "JELEN": 15.0,
+    "ERNESTO": 211,
 
-    "MAYLEN": 178.5,
+    "ANDY": 211,
+
+    "MAYLEN": 260,
 
 }
 
@@ -234,9 +240,22 @@ def normalize_for_match(s: str) -> str:
 
 
 
+def extract_vendor_segment(obs_val: str) -> str:
+
+    txt = str(obs_val) if obs_val else ""
+
+    m = re.search(r'\bV[-:]\s*([^;]+)', txt, re.IGNORECASE)
+
+    if m:
+
+        return m.group(1).strip()
+
+    return txt
+
+
 def detect_gestor_from_obs(obs_val: str):
 
-    txt = normalize_for_match(obs_val)
+    txt = normalize_for_match(extract_vendor_segment(obs_val))
 
     for g in GESTORES_PERMITIDOS:
 

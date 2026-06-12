@@ -20,16 +20,17 @@ FECHA_INICIO_LABORAL = date(2026, 4, 1)
 TRABAJA_SABADO = False
 TRABAJA_DOMINGO = False
 
-ALLOWED_GESTORES = ["ALEXANDER", "DEYANIRA", "GEORLIS", "JEAN MICHEL", "JELEN", "MAYLEN"]
+ALLOWED_GESTORES = ["ALEXANDER", "DEYANIRA", "GEORLIS", "JEAN MICHEL", "ERNESTO", "ANDY", "MAYLEN"]
 
 # Mapa de alias para corregir errores de escritura en las observaciones
 ALIAS_MAP = {
     "ALELEXANDER": "ALEXANDER", "ALENXANDER": "ALEXANDER", "GEORLI": "GEORLIS",
     "MAYELIN": "MAYLEN", "JEANMICHEL": "JEAN MICHEL", "JEAN": "JEAN MICHEL",
-    "MICHEL": "JEAN MICHEL", "MAYLIN": "MAYLEN", "DEIANIRA": "DEYANIRA"
+    "MICHEL": "JEAN MICHEL", "ERNESTO": "ERNESTO", "MAYLIN": "MAYLEN", "DEIANIRA": "DEYANIRA"
 }
 
-file_in = "RV ABRIL 1-17.xls"
+file_in = "RV JUNIO 1-11.xls"
+_engine = "xlrd" if file_in.lower().endswith(".xls") else "openpyxl"
 
 # --- FUNCIONES DE LIMPIEZA ---
 def normalize_text(s):
@@ -38,8 +39,15 @@ def normalize_text(s):
     s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('utf-8').upper()
     return " ".join(s.split())
 
+def extract_vendor_segment(obs_val: str) -> str:
+    txt = str(obs_val) if obs_val else ""
+    m = re.search(r'\bV[-:]\s*([^;]+)', txt, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    return txt
+
 def detect_gestor(obs):
-    txt = normalize_text(obs)
+    txt = normalize_text(extract_vendor_segment(str(obs) if obs else ""))
     # 1. Buscar coincidencia exacta
     for g in ALLOWED_GESTORES:
         if g in txt: return g
@@ -49,7 +57,7 @@ def detect_gestor(obs):
     return "OTRO"
 
 # --- PROCESAMIENTO DE DATOS ---
-df = pd.read_excel(file_in, header=3, engine="xlrd")
+df = pd.read_excel(file_in, header=3, engine=_engine)
 df.columns = [str(c).strip() for c in df.columns]
 
 # Fechas

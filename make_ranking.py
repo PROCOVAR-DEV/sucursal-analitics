@@ -5,13 +5,14 @@ from datetime import datetime
 # =========================
 # CONFIGURACION
 # =========================
-INPUT_FILE = "RV ABRIL 1-17.xls"  # Cambia si corresponde (xlsx/xls)
+INPUT_FILE = "RV JUNIO 1-11.xls"  # Cambia si corresponde (xlsx/xls)
 GESTORES_PERMITIDOS = [
     "ALEXANDER",
     "DEYANIRA",
     "GEORLIS",
     "JEAN MICHEL",
-    "JELEN",
+    "ERNESTO",
+    "ANDY",
     "MAYLEN",
 ]
 
@@ -41,9 +42,10 @@ ALIAS_MAP = {
     "JEAN": "JEAN MICHEL",
     "JAEN": "JEAN MICHEL",
     "MICHEL": "JEAN MICHEL",
-    "JELEN": "JELEN",
-    "JELEN.": "JELEN",
-    "JELEN_": "JELEN",
+    "ERNESTO": "ERNESTO",
+    "ANDY": "ANDY",
+    "ANDY.": "ANDY",
+    "ANDY_": "ANDY",
     "MAYELEN": "MAYLEN",
     "MAYLIN": "MAYLEN",
     "MAYLEN": "MAYLEN",
@@ -89,8 +91,16 @@ def normalize_for_match(s: str) -> str:
     return " ".join(t.split())
 
 
+def extract_vendor_segment(obs_val: str) -> str:
+    txt = str(obs_val) if obs_val else ""
+    m = re.search(r'\bV[-:]\s*([^;]+)', txt, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    return txt
+
+
 def detect_gestor_from_obs(obs_val: str):
-    txt = normalize_for_match(obs_val)
+    txt = normalize_for_match(extract_vendor_segment(obs_val))
     for g in GESTORES_PERMITIDOS:
         if re.search(rf"(^|\b){re.escape(g)}(\b|$)", txt):
             return g
@@ -186,7 +196,7 @@ OUT_FILE = f"RANKING-{fmin.day:02d}-{fmax.day:02d}-{MESES_ES.get(fmin.month,'MES
 general = (
     df.groupby("__GESTOR__")[col_importe]
     .sum()
-    .reindex(GESTORES_PERMITIDOS, fill_value=0.0)  # fuerza exactamente 6 filas
+    .reindex(GESTORES_PERMITIDOS, fill_value=0.0)  # fuerza exactamente las filas de gestores permitidos
     .round(2)
     .sort_values(ascending=False)
     .reset_index()

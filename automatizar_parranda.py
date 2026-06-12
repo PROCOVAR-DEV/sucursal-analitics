@@ -5,13 +5,14 @@ from datetime import datetime
 # =========================
 # CONFIGURACION
 # =========================
-INPUT_FILE = "RV ABRIL 1-17.xls"  # Asegúrate que este sea tu archivo de entrada
+INPUT_FILE = "RV JUNIO 1-5.xls"  # Asegúrate que este sea tu archivo de entrada
 GESTORES_PERMITIDOS = [
     "ALEXANDER",
     "DEYANIRA",
     "GEORLIS",
     "JEAN MICHEL",
-    "JELEN",
+    "ERNESTO",
+    "ANDY",
     "MAYLEN",
 ]
 
@@ -24,8 +25,9 @@ ALIAS_MAP = {
     "DEYANI": "DEYANIRA", "DEY": "DEYANIRA", "GEORLIS": "GEORLIS",
     "GEORLIS_": "GEORLIS", "GEORLIS.": "GEORLIS", "GEORLIS!!": "GEORLIS",
     "GEIRLIS": "GEORLIS", "JEANMIC": "JEAN MICHEL", "JEANMICHE": "JEAN MICHEL",
-    "JEAN": "JEAN MICHEL", "MICHEL": "JEAN MICHEL", "JELEN": "JELEN",
-    "JELEN.": "JELEN", "JELEN_": "JELEN", "MAYELEN": "MAYLEN",
+    "JEAN": "JEAN MICHEL", "JAEN": "JEAN MICHEL", "MICHEL": "JEAN MICHEL",
+    "ERNESTO": "ERNESTO", "ANDY": "ANDY", "ANDY.": "ANDY", "ANDY_": "ANDY",
+    "MAYELEN": "MAYLEN",
     "MAYLIN": "MAYLEN", "MAYLEN": "MAYLEN", "MAYLEN.": "MAYLEN",
     "MAYLEN_": "MAYLEN", "Maylen": "MAYLEN",
 }
@@ -41,10 +43,15 @@ UNITS_PER_PALLET = {
 }
 
 # METAS
-META_HECTOLITROS = 2000.0
+META_HECTOLITROS = 1829.0
 GESTOR_METAS = {
-    "ALEXANDER": 190.0, "DEYANIRA": 1200.0, "GEORLIS": 190.0,
-    "JEAN MICHEL": 190.0, "JELEN": 40.0, "MAYLEN": 190.0,
+    "ALEXANDER": 260,
+    "DEYANIRA": 352,
+    "GEORLIS": 260,
+    "JEAN MICHEL": 260,
+    "ERNESTO": 211,
+    "ANDY": 211,
+    "MAYLEN": 260,
 }
 
 MESES_ES = {
@@ -70,8 +77,16 @@ def normalize_for_match(s: str) -> str:
     t = re.sub(r"[^A-Z ]+", " ", t)
     return " ".join(t.split())
 
+def extract_vendor_segment(obs_val: str) -> str:
+    txt = str(obs_val) if obs_val else ""
+    m = re.search(r'\bV[-:]\s*([^;]+)', txt, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    return txt
+
+
 def detect_gestor_from_obs(obs_val: str):
-    txt = normalize_for_match(obs_val)
+    txt = normalize_for_match(extract_vendor_segment(obs_val))
     for g in GESTORES_PERMITIDOS:
         if re.search(rf"(^|\b){re.escape(g)}(\b|$)", txt):
             return g
