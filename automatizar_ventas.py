@@ -12,7 +12,7 @@ from datetime import datetime
 
 # =========================
 
-INPUT_FILE = "RV JUNIO 1-11.xls"  # Cambia si corresponde (xlsx/xls)
+INPUT_FILE = "RV JUNIO 1-19.xls"  # Cambia si corresponde (xlsx/xls)
 
 GESTORES_PERMITIDOS = [
 
@@ -113,6 +113,78 @@ ALIAS_MAP = {
 # Multiplicadores por tamaño para Hectolitros (electrolitros)
 
 SIZE_MULT = {"330": 0.02, "500": 0.03, "1500": 0.09}
+
+
+
+# Clasificacion de todos los productos por grupo comercial
+
+PRODUCT_GROUPS_KEYWORDS = {
+
+    "PARRANDA": ["PARRANDA", "MALTA GUAJIRA", "MALTA"],
+
+    "IMPORTACIONES": [
+
+        "ACEITE SOYA", "ACEITE",
+
+        "ARROZ CAMIL", "ARROZ ENERGY", "ARROZ PATEKO", "ARROZ RIVIERA", "ARROZ BLANCO", "ARROZ",
+
+        "AZUCAR CAMIL", "AZUCAR ENERGY", "AZUCAR PATEKO", "AZUCAR MORENA", "AZUCAR",
+
+        "QUESO GOUDA", "QUESO", "SANTA ISABEL",
+
+        "REFRESCO SANTA", "REFRESCO",
+
+        "ESPAGUETTI ALLEGRA", "ALLEGRA",
+
+        "SOPA DE POLLO", "CREMA DE POLLO", "CREMA DE LENTEJAS", "DETERGENTE BOW",
+
+    ],
+
+    "CONSIGNACION": [
+
+        "PAPEL HIGIENICO LIRIO", "PAPEL HIGIENICO MANATI", "PAPEL HIGIENICO PROSITO",
+
+        "PAPEL HIGIENICO", "PAPEL LIRIO", "PAPEL MANATI", "PAPEL PROSITO",
+
+        "SERVILLETA PROSITO", "SERVILLETA", "RON SANTIAGO",
+
+        "ENERGIZANTE GO+", "ENERGIZANTE FLASH", "ENERGIZANTE",
+
+    ],
+
+    "TECNOLOGIA Y KAPITAL": [
+
+        "BATERIA INVERSOR HUAN TAI", "BATERIA INVERSOR", "HUAN TAI", "KIT BATERIA",
+
+        "PANEL SOLAR BIFACIAL", "PANEL SOLAR",
+
+        "CONGELADOR HORIZONTAL MILEXUS", "CONGELADOR HORIZONTAL ROYAL",
+
+        "CONGELADOR MILEXUS", "CONGELADOR ROYAL", "CONGELADOR",
+
+        "EXHIBIDOR VERTICAL ICOOL", "EXHIBIDOR ICOOL", "EXHIBIDOR",
+
+        "DETERGENTE KAPITAL",
+
+    ],
+
+}
+
+ALL_GROUPS = list(PRODUCT_GROUPS_KEYWORDS.keys())
+
+GRP_BAR_COLORS = {
+
+    "PARRANDA":             ("#4F81BD", "#2F5597"),
+
+    "IMPORTACIONES":        ("#70AD47", "#38761D"),
+
+    "CONSIGNACION":         ("#FF9900", "#CC7A00"),
+
+    "TECNOLOGIA Y KAPITAL": ("#7030A0", "#4A1080"),
+
+    "OTRO":                 ("#A0A0A0", "#808080"),
+
+}
 
 
 
@@ -329,6 +401,42 @@ def is_parranda(text: str) -> bool:
 
 
 
+def detect_product_group(grupo_val: str, merc_val: str) -> str:
+
+    """Clasifica una transaccion en su grupo comercial."""
+
+    t_g = str(grupo_val).upper().strip() if grupo_val else ""
+
+    t_m = str(merc_val).upper().strip() if merc_val else ""
+
+    if "PROCOVAR" in t_g or "PARRANDA" in t_g:
+
+        return "PARRANDA"
+
+    if "IMPORT" in t_g:
+
+        return "IMPORTACIONES"
+
+    if "CONSIGN" in t_g:
+
+        return "CONSIGNACION"
+
+    if "TECNOLOG" in t_g or "KAPITAL" in t_g:
+
+        return "TECNOLOGIA Y KAPITAL"
+
+    for group, keywords in PRODUCT_GROUPS_KEYWORDS.items():
+
+        for kw in keywords:
+
+            if kw in t_m:
+
+                return group
+
+    return "OTRO"
+
+
+
 def smart_to_numeric(series):
 
     if pd.api.types.is_numeric_dtype(series):
@@ -478,6 +586,24 @@ df["__IS_MALTA__"] = df[col_merc].apply(is_malta) if col_merc in df.columns else
 df["__IS_PARRANDA__"] = (
 
     df[col_merc].apply(is_parranda) if col_merc in df.columns else False
+
+)
+
+
+
+# Grupo comercial para mix de ventas
+
+df["__GRUPO__"] = df.apply(
+
+    lambda r: detect_product_group(
+
+        r.get(col_grupo, "") if col_grupo else "",
+
+        r.get(col_merc, "") if col_merc else "",
+
+    ),
+
+    axis=1,
 
 )
 
@@ -903,127 +1029,43 @@ for gestor in GESTORES_PERMITIDOS:
 
 
 
-    # ========= Nuevo Bloque 1: Mix de Ventas por Grupo (PARRANDA vs CES) =========
+    # ========= Bloque 1: Mix de Ventas por Grupo Comercial =========
 
     grp_row = kpi_row + 7
 
-    ws.merge_range(
+    ws.merge_range(grp_row, 0, grp_row, 5, "Mix de Ventas por Grupo Comercial", fmt_kpi_text)
 
-        grp_row,
+    tot_gestor = float(sub[col_importe].sum()) if col_importe in sub.columns else 0.0
 
-        0,
+    for _i, _grp in enumerate(ALL_GROUPS):
 
-        grp_row,
+        _bar_color, _border_color = GRP_BAR_COLORS.get(_grp, GRP_BAR_COLORS["OTRO"])
 
-        5,
+        _g_total = (
 
-        "Mix de Ventas por Grupo (PARRANDA vs CES)",
+            round(float(sub.loc[sub["__GRUPO__"] == _grp, col_importe].sum()), 2)
 
-        fmt_kpi_text,
-
-    )
-
-
-
-    # Totales por grupo del gestor
-
-    if col_grupo in sub.columns and col_importe in sub.columns:
-
-        tot_gestor = sub[col_importe].sum()
-
-        g_parranda = float(
-
-            sub.loc[
-
-                sub[col_grupo]
-
-                .astype(str)
-
-                .str.upper()
-
-                .str.contains("PARRANDA", na=False),
-
-                col_importe,
-
-            ].sum()
+            if col_importe in sub.columns else 0.0
 
         )
 
-        g_ces = float(
+        _pct_grp = 0.0 if tot_gestor == 0 else _g_total / tot_gestor
 
-            sub.loc[
+        _r_off = grp_row + 2 + _i
 
-                ~sub[col_grupo]
+        ws.write(_r_off, 0, _grp, fmt_block_text)
 
-                .astype(str)
+        ws.merge_range(_r_off, 1, _r_off, 3, _pct_grp, percent_hidden)
 
-                .str.upper()
+        ws.write(_r_off, 4, _pct_grp, percent_fmt_center)
 
-                .str.contains("PARRANDA", na=False),
+        ws.write(_r_off, 5, _g_total, fmt_num)
 
-                col_importe,
-
-            ].sum()
-
-        )
-
-    else:
-
-        tot_gestor, g_parranda, g_ces = 0.0, 0.0, 0.0
-
-
-
-    pct_parranda = 0.0 if tot_gestor == 0 else g_parranda / tot_gestor
-
-    pct_ces = 0.0 if tot_gestor == 0 else g_ces / tot_gestor
-
-
-
-    # Fila PARRANDA
-
-    ws.write(grp_row + 2, 0, "PARRANDA", fmt_block_text)
-
-    ws.merge_range(
-
-        grp_row + 2, 1, grp_row + 2, 3, pct_parranda, percent_hidden
-
-    )  # celda para barra
-
-    ws.write(grp_row + 2, 4, pct_parranda, percent_fmt_center)  # etiqueta %
-
-    ws.write(grp_row + 2, 5, g_parranda, fmt_num)  # monto
-
-
-
-    # Fila CES
-
-    ws.write(grp_row + 3, 0, "CES", fmt_block_text)
-
-    ws.merge_range(grp_row + 3, 1, grp_row + 3, 3, pct_ces, percent_hidden)
-
-    ws.write(grp_row + 3, 4, pct_ces, percent_fmt_center)
-
-    ws.write(grp_row + 3, 5, g_ces, fmt_num)
-
-
-
-    # Barras de datos como progreso 0-100% (sin números dentro)
-
-    ws.conditional_format(
-
-        grp_row + 2,
-
-        1,
-
-        grp_row + 2,
-
-        3,
-
-        {
+        ws.conditional_format(_r_off, 1, _r_off, 3, {
 
             "type": "data_bar",
 
-            "bar_color": "#4F81BD",
+            "bar_color": _bar_color,
 
             "min_type": "num",
 
@@ -1035,59 +1077,23 @@ for gestor in GESTORES_PERMITIDOS:
 
             "bar_only": True,
 
-            "bar_border_color": "#2F5597",
+            "bar_border_color": _border_color,
 
-        },
+        })
 
-    )
+    ws.set_column(0, 0, 14)
 
-    ws.conditional_format(
+    ws.set_column(1, 3, 20)
 
-        grp_row + 3,
+    ws.set_column(4, 4, 10)
 
-        1,
-
-        grp_row + 3,
-
-        3,
-
-        {
-
-            "type": "data_bar",
-
-            "bar_color": "#70AD47",
-
-            "min_type": "num",
-
-            "min_value": 0,
-
-            "max_type": "num",
-
-            "max_value": 1,
-
-            "bar_only": True,
-
-            "bar_border_color": "#38761D",
-
-        },
-
-    )
+    ws.set_column(5, 5, 14)
 
 
 
-    ws.set_column(0, 0, 14)  # etiqueta
+    # ========= Bloque 2: Blisters y Pallets por Producto/Tamaño =========
 
-    ws.set_column(1, 3, 20)  # barra
-
-    ws.set_column(4, 4, 10)  # %
-
-    ws.set_column(5, 5, 14)  # monto
-
-
-
-    # ========= Nuevo Bloque 2: Blisters y Pallets por Producto/Tamaño =========
-
-    conv_row = grp_row + 6
+    conv_row = grp_row + 8
 
     ws.merge_range(
 
@@ -1361,7 +1367,23 @@ for gestor in GESTORES_PERMITIDOS:
 
 
 
-    # Guardar para Supervisor (solo guardamos la comisión real para sumar)
+    # Guardar para Supervisor
+
+    _grp_ventas = {
+
+        grp: round(
+
+            float(sub.loc[sub["__GRUPO__"] == grp, col_importe].sum())
+
+            if col_importe in sub.columns else 0.0,
+
+            2,
+
+        )
+
+        for grp in ALL_GROUPS
+
+    }
 
     supervisor_rows.append(
 
@@ -1371,7 +1393,15 @@ for gestor in GESTORES_PERMITIDOS:
 
             "Total Venta": total_importe,
 
-            "Comisión Gestor": netas,  # 1% que gana el gestor
+            "Comisión Gestor": netas,
+
+            "PARRANDA $": _grp_ventas.get("PARRANDA", 0.0),
+
+            "IMPORTACIONES $": _grp_ventas.get("IMPORTACIONES", 0.0),
+
+            "CONSIGNACION $": _grp_ventas.get("CONSIGNACION", 0.0),
+
+            "TECNOLOGIA $": _grp_ventas.get("TECNOLOGIA Y KAPITAL", 0.0),
 
             "M330": M330,
 
@@ -1410,6 +1440,14 @@ super_df = super_df[
         "Total Venta",
 
         "Comisión Gestor",
+
+        "PARRANDA $",
+
+        "IMPORTACIONES $",
+
+        "CONSIGNACION $",
+
+        "TECNOLOGIA $",
 
         "M330",
 
@@ -1755,7 +1793,7 @@ ws.conditional_format(
 
 # Ajuste final de anchos de columna
 
-for c in range(0, 12):
+for c in range(0, 16):
 
     ws.set_column(c, c, 14)
 

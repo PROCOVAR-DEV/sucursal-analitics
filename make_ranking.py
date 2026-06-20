@@ -5,7 +5,7 @@ from datetime import datetime
 # =========================
 # CONFIGURACION
 # =========================
-INPUT_FILE = "RV JUNIO 1-11.xls"  # Cambia si corresponde (xlsx/xls)
+INPUT_FILE = "RV JUNIO 1-19.xls"  # Cambia si corresponde (xlsx/xls)
 GESTORES_PERMITIDOS = [
     "ALEXANDER",
     "DEYANIRA",

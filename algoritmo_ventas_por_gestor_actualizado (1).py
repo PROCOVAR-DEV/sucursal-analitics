@@ -7,7 +7,7 @@ from calendar import monthrange
 # ==========================================================
 # CONFIGURACION
 # ==========================================================
-INPUT_FILE = "RV JUNIO 1-11.xls"
+INPUT_FILE = "RV JUNIO 1-19.xls"
 OUT_FILE = None  # Si queda en None, se genera automaticamente
 
 GESTORES_PERMITIDOS = [
