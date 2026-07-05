@@ -39,8 +39,8 @@ export default function DashboardView({ sourceId, period }) {
         <Kpi label="% Cumplimiento" value={`${formatNumber(kpis.cumplimiento_pct, 1)} %`}
           tone={kpis.cumplimiento_pct >= 100 ? "green" : kpis.cumplimiento_pct >= 80 ? "amber" : "red"} />
         <Kpi label="Venta Total" value={formatMoney(kpis.total_importe)} tone="slate" />
-        <Kpi label="Clientes Punto" value={formatInt(kpis.total_clientes_punto)}
-          hint={`${formatInt(kpis.operaciones_punto)} ops.`} tone="brand" />
+        <Kpi label="Clientes" value={formatInt(kpis.total_clientes)}
+          hint={`${formatInt(kpis.total_skus)} SKUs vendidos`} tone="brand" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -49,12 +49,13 @@ export default function DashboardView({ sourceId, period }) {
       </div>
 
       <div className="card">
-        <h3 className="font-semibold mb-3">Cumplimiento de productos CES</h3>
+        <h3 className="font-semibold mb-3">Cumplimiento de metas por producto</h3>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
                 <th className="px-3 py-2 text-left">Producto</th>
+                <th className="px-3 py-2 text-left">Grupo</th>
                 <th className="px-3 py-2 text-right">Meta</th>
                 <th className="px-3 py-2 text-right">Real</th>
                 <th className="px-3 py-2 text-right">% Cumpl.</th>
@@ -68,6 +69,7 @@ export default function DashboardView({ sourceId, period }) {
               {data.cumplimiento_productos.map((p) => (
                 <tr key={p.producto} className="border-t border-slate-100">
                   <td className="px-3 py-2 font-medium">{p.producto}</td>
+                  <td className="px-3 py-2">{p.grupo ? <span className="badge-slate">{p.grupo}</span> : <span className="text-slate-300">—</span>}</td>
                   <td className="px-3 py-2 text-right">{formatNumber(p.meta, 0)}</td>
                   <td className="px-3 py-2 text-right">{formatNumber(p.real, 2)}</td>
                   <td className="px-3 py-2 text-right">{formatNumber(p.cumplimiento_pct, 1)}%</td>

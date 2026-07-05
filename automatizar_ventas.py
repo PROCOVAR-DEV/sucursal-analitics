@@ -12,7 +12,7 @@ from datetime import datetime
 
 # =========================
 
-INPUT_FILE = "RV JUNIO 1-19.xls"  # Cambia si corresponde (xlsx/xls)
+INPUT_FILE = "RV JULIO 1-3.xls"  # Cambia si corresponde (xlsx/xls)
 
 GESTORES_PERMITIDOS = [
 
@@ -210,9 +210,9 @@ UNITS_PER_PALLET = {
 
 # METAS (referencia supervisor)
 
-META_DINERO = 350000.0
+META_DINERO = 400000.0
 
-META_HECTOLITROS = 1829.0
+META_HECTOLITROS = 1709.0
 
 
 
@@ -220,19 +220,19 @@ META_HECTOLITROS = 1829.0
 
 GESTOR_METAS = {
 
-    "ALEXANDER": 260,
+    "ALEXANDER": 235,
 
-    "DEYANIRA": 352,
+    "DEYANIRA": 321,
 
-    "GEORLIS": 260,
+    "GEORLIS": 235,
 
-    "JEAN MICHEL": 260,
+    "JEAN MICHEL": 235,
 
-    "ERNESTO": 211,
+    "ERNESTO": 224,
 
-    "ANDY": 211,
+    "ANDY": 224,
 
-    "MAYLEN": 260,
+    "MAYLEN": 235,
 
 }
 
@@ -939,69 +939,17 @@ for gestor in GESTORES_PERMITIDOS:
 
     sheet_name = gestor[:31]
 
-    to_write.to_excel(writer, sheet_name=sheet_name, index=False)
+    # Pre-crear la hoja para poder escribir el resumen antes que las facturas
 
-    ws = writer.sheets[sheet_name]
+    ws = wb.add_worksheet(sheet_name)
 
-    ws.freeze_panes(1, 0)
+    writer.sheets[sheet_name] = ws
 
-    autosize_worksheet(ws, to_write, fmt_header)
+    # =========================================================
+    # 1. RESUMEN / KPIs (arriba)
+    # =========================================================
 
-
-
-    for idx, c in enumerate(to_write.columns):
-
-        if c == col_op:
-
-            ws.set_column(idx, idx, None, fmt_int)
-
-        elif pd.api.types.is_numeric_dtype(to_write[c]):
-
-            ws.set_column(idx, idx, None, fmt_num)
-
-
-
-    if len(to_write) > 0:
-
-        apply_bands(ws, 1, len(to_write), 0, len(to_write.columns) - 1, fmt_band)
-
-
-
-    last_row = len(to_write)
-
-    last_col = len(to_write.columns) - 1
-
-    if len(to_write) >= 1:
-
-        tabla_name = "Tabla_" + gestor.replace(" ", "")[:20]
-
-        ws.add_table(
-
-            0,
-
-            0,
-
-            last_row,
-
-            last_col,
-
-            {
-
-                "name": tabla_name,
-
-                "style": "Table Style Medium 2",
-
-                "columns": [{"header": h} for h in to_write.columns],
-
-            },
-
-        )
-
-
-
-    # KPIs limpios: solo Ventas y Comisión (1%) que ganan los gestores
-
-    kpi_row = len(to_write) + 2
+    kpi_row = 0
 
     ws.write(kpi_row, 0, "VENTAS", fmt_block_text)
 
@@ -1009,27 +957,21 @@ for gestor in GESTORES_PERMITIDOS:
 
     ws.write(kpi_row + 1, 0, "COMISIÓN", fmt_block_text)
 
-    ws.write_number(kpi_row + 1, 1, comision_real, fmt_block)  # Aquí netas = 1%
-
-
-
-    # Aquí escribimos Total Hectolitros y al lado el % de cumplimiento de la meta individual
+    ws.write_number(kpi_row + 1, 1, comision_real, fmt_block)
 
     meta_gestor = GESTOR_METAS.get(gestor, META_HECTOLITROS)
 
     cumplimiento_hecto_gestor = 0.0 if meta_gestor == 0 else (total_hecto / meta_gestor)
 
-
-
     ws.write(kpi_row + 3, 0, "Total Hectolitros", fmt_block_text)
 
     ws.write_number(kpi_row + 3, 1, total_hecto, fmt_block)
 
-    ws.write(kpi_row + 3, 3, cumplimiento_hecto_gestor, percent_fmt_center)  # % al lado
+    ws.write(kpi_row + 3, 3, cumplimiento_hecto_gestor, percent_fmt_center)
 
-
-
-    # ========= Bloque 1: Mix de Ventas por Grupo Comercial =========
+    # =========================================================
+    # 2. Mix de Ventas por Grupo Comercial
+    # =========================================================
 
     grp_row = kpi_row + 7
 
@@ -1089,9 +1031,9 @@ for gestor in GESTORES_PERMITIDOS:
 
     ws.set_column(5, 5, 14)
 
-
-
-    # ========= Bloque 2: Blisters y Pallets por Producto/Tamaño =========
+    # =========================================================
+    # 3. Conversión de Cantidad a Blisters y Pallets
+    # =========================================================
 
     conv_row = grp_row + 8
 
@@ -1111,10 +1053,6 @@ for gestor in GESTORES_PERMITIDOS:
 
     )
 
-
-
-    # Prepara agregación
-
     sub["_SIZE_"] = sub["Hectolitros_SIZE"].fillna("")
 
     sub["_PROD_"] = sub.apply(
@@ -1133,10 +1071,6 @@ for gestor in GESTORES_PERMITIDOS:
 
     )
 
-
-
-    # Filtramos solo Malta/Parranda y tamaños conocidos
-
     conv = sub[
 
         (sub["_PROD_"] != "") & (sub["_SIZE_"].isin(["330", "500", "1500"]))
@@ -1151,10 +1085,6 @@ for gestor in GESTORES_PERMITIDOS:
 
         conv["Blisters"] = 0.0
 
-
-
-    # Pallets = Blisters / unidades_por_pallet
-
     def calc_pallets(row):
 
         key = (row["_PROD_"], row["_SIZE_"])
@@ -1167,21 +1097,13 @@ for gestor in GESTORES_PERMITIDOS:
 
         return float(row["Blisters"]) / float(units)
 
-
-
     conv["Pallets"] = conv.apply(calc_pallets, axis=1)
-
-
-
-    # Resumen por filas requeridas
 
     def sum_cond(prod, size, col):
 
         m = (conv["_PROD_"] == prod) & (conv["_SIZE_"] == size)
 
         return round(float(conv.loc[m, col].sum()), 2)
-
-
 
     rows = [
 
@@ -1277,10 +1199,6 @@ for gestor in GESTORES_PERMITIDOS:
 
     )
 
-
-
-    # Escribir tabla ordenada y formateada
-
     start_r = conv_row + 2
 
     start_c = 0
@@ -1291,15 +1209,9 @@ for gestor in GESTORES_PERMITIDOS:
 
     )
 
-    # Encabezado de la subtabla
-
     for j, coln in enumerate(conv_df.columns):
 
         ws.write(start_r, start_c + j, coln, fmt_header)
-
-
-
-    # Formatos
 
     for j, coln in enumerate(conv_df.columns):
 
@@ -1316,10 +1228,6 @@ for gestor in GESTORES_PERMITIDOS:
         elif coln == "Tamaño":
 
             ws.set_column(colx, colx, 10)
-
-
-
-    # Banding de esa subtabla
 
     if len(conv_df) > 0:
 
@@ -1338,10 +1246,6 @@ for gestor in GESTORES_PERMITIDOS:
             fmt_band,
 
         )
-
-
-
-    # Tabla con estilo
 
     ws.add_table(
 
@@ -1365,7 +1269,91 @@ for gestor in GESTORES_PERMITIDOS:
 
     )
 
+    # =========================================================
+    # 4. Facturas al final — para verificar errores
+    # =========================================================
 
+    facturas_label_row = start_r + len(conv_df) + 2
+
+    ws.merge_range(
+
+        facturas_label_row, 0,
+
+        facturas_label_row, len(to_write.columns) - 1,
+
+        f"DETALLE DE FACTURAS — {gestor}",
+
+        fmt_kpi_text,
+
+    )
+
+    facturas_start_row = facturas_label_row + 1
+
+    to_write.to_excel(
+
+        writer, sheet_name=sheet_name, index=False, startrow=facturas_start_row
+
+    )
+
+    autosize_worksheet(ws, to_write, fmt_header)
+
+    ws.set_row(facturas_start_row, 20, fmt_header)
+
+    for idx, c in enumerate(to_write.columns):
+
+        if c == col_op:
+
+            ws.set_column(idx, idx, None, fmt_int)
+
+        elif pd.api.types.is_numeric_dtype(to_write[c]):
+
+            ws.set_column(idx, idx, None, fmt_num)
+
+    if len(to_write) > 0:
+
+        apply_bands(
+
+            ws,
+
+            facturas_start_row + 1,
+
+            facturas_start_row + len(to_write),
+
+            0, len(to_write.columns) - 1,
+
+            fmt_band,
+
+        )
+
+    last_row = facturas_start_row + len(to_write)
+
+    last_col = len(to_write.columns) - 1
+
+    if len(to_write) >= 1:
+
+        tabla_name = "Tabla_" + gestor.replace(" ", "")[:20]
+
+        ws.add_table(
+
+            facturas_start_row,
+
+            0,
+
+            last_row,
+
+            last_col,
+
+            {
+
+                "name": tabla_name,
+
+                "style": "Table Style Medium 2",
+
+                "columns": [{"header": h} for h in to_write.columns],
+
+            },
+
+        )
 
     # Guardar para Supervisor
 

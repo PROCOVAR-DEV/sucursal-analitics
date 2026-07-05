@@ -63,20 +63,34 @@ npm run dev
 
 Abre `http://localhost:5173`, carga tu archivo `Reporte de Venta` y listo.
 
+## Autenticación y multi-sucursal
+
+La app tiene **login por roles**. Usuario admin por defecto: **admin / admin**
+(cámbialo tras el primer acceso). El `admin` ve **todas** las sucursales y
+administra usuarios; un `user` solo ve las sucursales que se le asignen.
+
+Toda la configuración es **dinámica por sucursal**: gestores (agregar / editar /
+eliminar, con sus alias), metas mensuales, factores de conversión, grupos
+comerciales, comisiones, curva de venta, etc. Se arranca con una sucursal
+sembrada (**Camagüey**, 7 gestores), pero se pueden crear más.
+
 ## Endpoints principales
 
-| Método | Ruta                                              | Descripción                                |
-| ------ | ------------------------------------------------- | ------------------------------------------ |
-| POST   | `/api/upload`                                     | Sube el reporte y crea la sesión           |
-| GET    | `/api/accumulated/status`                         | Estado del acumulado diario persistente    |
-| POST   | `/api/accumulated/reset`                          | Reinicia el acumulado diario               |
-| GET    | `/api/session/{sid}/dashboard`                    | KPIs + datos del resumen                   |
-| GET    | `/api/session/{sid}/ventas`                       | Ventas/Supervisor (hectolitros)            |
-| GET    | `/api/session/{sid}/productos`                    | CES/PROCOVAR + cumplimiento                |
-| GET    | `/api/session/{sid}/ranking`                      | General, semanal, acumulado diario         |
-| GET    | `/api/session/{sid}/clientes-punto`               | Clientes punto                             |
-| GET    | `/api/session/{sid}/export/{modulo}.xlsx`         | Excel por módulo (ventas, productos, …)    |
-| GET    | `/api/session/{sid}/export/all.xlsx`              | Excel consolidado con todo                 |
+| Método | Ruta                                                        | Descripción                          |
+| ------ | ----------------------------------------------------------- | ------------------------------------ |
+| POST   | `/api/auth/login`                                           | Devuelve `{token, user}`             |
+| GET    | `/api/auth/me`                                              | Usuario actual                       |
+| *      | `/api/users`                                                | Gestión de usuarios (admin)          |
+| GET/POST | `/api/sucursales`                                         | Listar / crear sucursales            |
+| GET/PUT/DELETE | `/api/sucursales/{sid}`                            | Config completa / editar / borrar    |
+| *      | `/api/sucursales/{sid}/gestores[/{clave}]`                  | CRUD de gestores                     |
+| POST/GET/DELETE | `/api/sucursales/{sid}/uploads[/{id}]`            | Reportes crudos (aislados)           |
+| GET    | `/api/sucursales/{sid}/sources/{src}/dashboard`             | KPIs + resumen                       |
+| GET    | `/api/sucursales/{sid}/sources/{src}/{ventas\|productos\|market\|ranking\|clientes-analisis\|vendedores}` | Datos por módulo |
+| GET    | `/api/sucursales/{sid}/sources/{src}/export/{modulo}.xlsx`  | Excel (ventas/productos/market/ranking/clientes-analisis/all) |
+
+`{src}` = UUID de un archivo subido o `accumulated` (histórico de la sucursal).
+Todas las rutas (salvo login/health) requieren cabecera `Authorization: Bearer <token>`.
 
 ## Producción
 

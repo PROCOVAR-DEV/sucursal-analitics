@@ -7,7 +7,7 @@ from calendar import monthrange
 # ==========================================================
 # CONFIGURACION
 # ==========================================================
-INPUT_FILE = "RV JUNIO 1-19.xls"
+INPUT_FILE = "RV JULIO 1-3.xls"
 OUT_FILE = None  # Si queda en None, se genera automaticamente
 
 GESTORES_PERMITIDOS = [
@@ -76,31 +76,31 @@ UNITS_PER_PALLET = {
 PRODUCT_COLS = ["P1500", "P500", "P330", "M1500", "M500", "M330"]
 
 # METAS (referencia supervisor)
-META_DINERO = 350000.0
-META_HECTOLITROS = 1829.0
+META_DINERO = 400000.0
+META_HECTOLITROS = 1709.0
 
 # Metas individuales por gestor en hectolitros
 GESTOR_METAS = {
-    "ALEXANDER": 260.0,
-    "DEYANIRA": 352.0,
-    "GEORLIS": 260.0,
-    "JEAN MICHEL": 260.0,
-    "ERNESTO": 211.0,
-    "ANDY": 211.0,
-    "MAYLEN": 260.0,
+    "ALEXANDER": 235.0,
+    "DEYANIRA": 321.0,
+    "GEORLIS": 235.0,
+    "JEAN MICHEL": 235.0,
+    "ERNESTO": 224.0,
+    "ANDY": 224.0,
+    "MAYLEN": 235.0,
 }
 
 # Opcional: metas mensuales por gestor y producto.
 # Si no tienes metas por producto, deja este diccionario vacio.
 # El TOTAL siempre se toma de GESTOR_METAS.
 METAS_GESTOR_PRODUCTO = {
-    "ALEXANDER":   {"P1500": 59.4,  "P500": 40.32,  "P330": 49.6,   "M1500": 55.935, "M330": 55.552},
-    "DEYANIRA":    {"P1500": 75.24, "P500": 82.656, "P330": 82.336, "M1500": 55.935, "M330": 55.552},
-    "GEORLIS":     {"P1500": 59.4,  "P500": 40.32,  "P330": 49.6,   "M1500": 55.935, "M330": 55.552},
-    "JEAN MICHEL": {"P1500": 59.4,  "P500": 40.32,  "P330": 49.6,   "M1500": 55.935, "M330": 55.552},
-    "ERNESTO":     {"P1500": 39.6,  "P500": 30.24,  "P330": 29.76,  "M1500": 55.935, "M330": 55.552},
-    "ANDY":        {"P1500": 39.6,  "P500": 30.24,  "P330": 29.76,  "M1500": 55.935, "M330": 55.552},
-    "MAYLEN":      {"P1500": 59.4,  "P500": 40.32,  "P330": 49.6,   "M1500": 55.935, "M330": 55.552},
+    "ALEXANDER":   {"P1500": 91.08,  "P500": 20.16,  "P330": 39.68,  "M1500": 36.8775, "M330": 44.64},
+    "DEYANIRA":    {"P1500": 118.8,  "P500": 27.216, "P330": 71.424, "M1500": 36.8775, "M330": 66.464},
+    "GEORLIS":     {"P1500": 91.08,  "P500": 20.16,  "P330": 39.68,  "M1500": 36.8775, "M330": 44.64},
+    "JEAN MICHEL": {"P1500": 91.08,  "P500": 20.16,  "P330": 39.68,  "M1500": 36.8775, "M330": 44.64},
+    "ERNESTO":     {"P1500": 91.08,  "P500": 10.08,  "P330": 39.68,  "M1500": 36.8775, "M330": 44.64},
+    "ANDY":        {"P1500": 91.08,  "P500": 10.08,  "P330": 39.68,  "M1500": 36.8775, "M330": 44.64},
+    "MAYLEN":      {"P1500": 91.08,  "P500": 20.16,  "P330": 39.68,  "M1500": 36.8775, "M330": 44.64},
 }
 
 # Si tienes stock por gestor y producto, puedes ponerlo aqui.

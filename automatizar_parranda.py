@@ -5,7 +5,7 @@ from datetime import datetime
 # =========================
 # CONFIGURACION
 # =========================
-INPUT_FILE = "RV JUNIO 1-19.xls"  # Asegúrate que este sea tu archivo de entrada
+INPUT_FILE = "RV JULIO 1-3.xls"  # Asegúrate que este sea tu archivo de entrada
 GESTORES_PERMITIDOS = [
     "ALEXANDER",
     "DEYANIRA",
@@ -43,15 +43,15 @@ UNITS_PER_PALLET = {
 }
 
 # METAS
-META_HECTOLITROS = 1829.0
+META_HECTOLITROS = 1709.0
 GESTOR_METAS = {
-    "ALEXANDER": 260,
-    "DEYANIRA": 352,
-    "GEORLIS": 260,
-    "JEAN MICHEL": 260,
-    "ERNESTO": 211,
-    "ANDY": 211,
-    "MAYLEN": 260,
+    "ALEXANDER": 235,
+    "DEYANIRA": 321,
+    "GEORLIS": 235,
+    "JEAN MICHEL": 235,
+    "ERNESTO": 224,
+    "ANDY": 224,
+    "MAYLEN": 235,
 }
 
 MESES_ES = {

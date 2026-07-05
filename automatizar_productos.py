@@ -14,7 +14,7 @@ METAS_MENSUALES = {
 }
 
 # --- CONFIGURACIÓN DE CALENDARIO LABORAL ---
-FECHA_INICIO_LABORAL = date(2026, 4, 1)
+FECHA_INICIO_LABORAL = date(2026, 7, 1)
 TRABAJA_SABADO = False
 TRABAJA_DOMINGO = False
 
@@ -102,7 +102,7 @@ def detect_product_group(group_val: str, merc_val: str) -> str:
     return "OTRO"
 
 
-file_in = "RV JUNIO 1-19.xls"
+file_in = "RV JULIO 1-3.xls"
 _engine = "xlrd" if file_in.lower().endswith(".xls") else "openpyxl"
 
 

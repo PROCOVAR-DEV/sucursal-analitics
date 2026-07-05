@@ -73,3 +73,8 @@ Thumbs.db
 *.log
 logs/
 .superpowers/
+
+# ==========================================
+# Datos de runtime del backend (secretos / confidenciales)
+# ==========================================
+app/backend/data/

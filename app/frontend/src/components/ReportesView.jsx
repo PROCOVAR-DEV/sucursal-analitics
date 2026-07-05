@@ -1,5 +1,6 @@
-import { BarChart2, Download, FileSpreadsheet, Package, TrendingUp, Trophy, Users } from "lucide-react";
-import { exportUrl } from "../api.js";
+import { Download, FileSpreadsheet, Package, TrendingUp, Trophy, Users } from "lucide-react";
+import { useState } from "react";
+import { downloadExport } from "../api.js";
 
 const MONTHS_ES = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -26,20 +27,6 @@ const REPORTS = [
       "KPIs: hectolitros totales, cuota, % cumplimiento",
       "Tabla de conversión a blisters y pallets",
       "Hoja Supervisor con resumen de todos los gestores",
-    ],
-  },
-  {
-    id: "ventas-general",
-    title: "Ventas General (Todos los productos)",
-    icon: BarChart2,
-    color: "text-sky-600",
-    bg: "bg-sky-50",
-    border: "border-sky-100",
-    desc: [
-      "Incluye TODAS las transacciones, no solo Malta/Parranda",
-      "Una hoja por vendedor con el detalle completo de sus ventas",
-      "Columnas: operación, fecha, socio, mercancía, cantidad, importe",
-      "Hoja Supervisor con total de ventas y transacciones por gestor",
     ],
   },
   {
@@ -85,17 +72,18 @@ const REPORTS = [
     ],
   },
   {
-    id: "clientes-punto",
-    title: "Clientes Punto (!!)",
+    id: "clientes-analisis",
+    title: "Análisis de Clientes por Vendedor",
     icon: Users,
     color: "text-purple-600",
     bg: "bg-purple-50",
     border: "border-purple-100",
     desc: [
-      "Listado de clientes que vinieron por su cuenta (!! en Nota)",
-      "Tabla con todas las operaciones identificadas",
-      "Resumen por gestor: operaciones, clientes únicos, importe",
-      "Total oficina al final",
+      "Clientes rankeados por volumen de ventas ($) de mayor a menor",
+      "Una columna por cada SKU que el cliente compró (en $)",
+      "Total por cliente y # de SKUs que compra cada uno",
+      "Hoja Oficina (total) + una hoja por vendedor",
+      "Identifica clientes más valiosos y oportunidades de venta cruzada",
     ],
   },
 ];
@@ -134,14 +122,27 @@ export default function ReportesView({ sourceId, period }) {
             Un único archivo .xlsx con todas las hojas anteriores combinadas. Ideal para compartir o archivar.
           </p>
         </div>
-        <a
-          href={exportUrl(sourceId, "all", period)}
-          className="btn-primary shrink-0 text-base px-6 py-2.5"
-        >
-          <Download size={18} /> Descargar todo
-        </a>
+        <DownloadBtn sourceId={sourceId} modulo="all" period={period} className="btn-primary shrink-0 text-base px-6 py-2.5" label="Descargar todo" size={18} />
       </div>
     </div>
+  );
+}
+
+function DownloadBtn({ sourceId, modulo, period, className, label, size = 15 }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      className={className}
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try { await downloadExport(sourceId, modulo, period); }
+        catch (e) { alert(e?.response?.data?.detail || "No se pudo descargar"); }
+        finally { setBusy(false); }
+      }}
+    >
+      <Download size={size} /> {busy ? "Generando…" : label}
+    </button>
   );
 }
 
@@ -165,12 +166,7 @@ function ReportCard({ report, sourceId, period }) {
           </li>
         ))}
       </ul>
-      <a
-        href={exportUrl(sourceId, report.id, period)}
-        className="btn-primary self-end mt-auto"
-      >
-        <Download size={15} /> Descargar .xlsx
-      </a>
+      <DownloadBtn sourceId={sourceId} modulo={report.id} period={period} className="btn-primary self-end mt-auto" label="Descargar .xlsx" />
     </div>
   );
 }

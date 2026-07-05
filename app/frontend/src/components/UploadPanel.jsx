@@ -6,6 +6,7 @@ export default function UploadPanel({ sourceId, onSelect, onRefresh }) {
   const [uploads, setUploads] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
 
   async function refresh() {
@@ -68,23 +69,32 @@ export default function UploadPanel({ sourceId, onSelect, onRefresh }) {
   return (
     <aside className="w-72 shrink-0 border-r border-slate-200 bg-white flex flex-col">
       <div className="p-4 border-b border-slate-200">
-        <label
-          htmlFor="file-input"
-          className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg p-4 cursor-pointer hover:border-brand-500 hover:bg-brand-50/40 transition"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]); }}
+        <div
+          role="button"
+          onClick={() => inputRef.current?.click()}
+          onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(true); }}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!dragging) setDragging(true); }}
+          onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); }}
+          onDrop={(e) => {
+            e.preventDefault(); e.stopPropagation(); setDragging(false);
+            const f = e.dataTransfer?.files?.[0];
+            if (f) handleFile(f);
+          }}
+          className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-4 cursor-pointer transition ${
+            dragging ? "border-brand-500 bg-brand-50 ring-2 ring-brand-300" : "border-slate-300 hover:border-brand-500 hover:bg-brand-50/40"
+          }`}
         >
           {loading ? (
             <Loader2 className="animate-spin text-brand-600" size={24} />
           ) : (
-            <Upload size={24} className="text-slate-400" />
+            <Upload size={24} className={dragging ? "text-brand-600" : "text-slate-400"} />
           )}
-          <p className="mt-2 text-xs text-slate-600 text-center">
-            {loading ? "Procesando…" : "Arrastra o haz clic para subir (.xls/.xlsx)"}
+          <p className="mt-2 text-xs text-slate-600 text-center pointer-events-none">
+            {loading ? "Procesando…" : dragging ? "Suelta el archivo aquí" : "Arrastra o haz clic para subir (.xls/.xlsx)"}
           </p>
           <input id="file-input" ref={inputRef} type="file" accept=".xls,.xlsx" className="hidden"
             onChange={(e) => handleFile(e.target.files?.[0])} />
-        </label>
+        </div>
         {error && <div className="mt-2 p-2 text-xs bg-red-50 text-red-700 rounded border border-red-200">{error}</div>}
       </div>
 

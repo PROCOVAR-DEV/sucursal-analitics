@@ -8,22 +8,22 @@ import os
 # CONFIGURACIÓN
 # =========================
 # NOMBRE EXACTO DE TU ARCHIVO EXCEL
-ARCHIVO_ENTRADA = "Venta Vendedores 01-19 JUNIO.xlsx"
+ARCHIVO_ENTRADA = "Venta Vendedores 01-03 JULIO.xlsx"
 
 SUPERVISOR_NOMBRE = "Camaguey"
-DIAS_LABORABLES = 20
-TARGETS = {"HL": 1829, "CCC": 500}
-CURVA_VENTA = {"S1": 4, "S2": 5, "S3": 6.5, "S4": 6.5}
-FRECUENCIA = {"S1": 1, "S2": 1, "S3": 1, "S4": 1}
+DIAS_LABORABLES = 23
+TARGETS = {"HL": 1709, "CCC": 500}
+CURVA_VENTA = {"S1": 3, "S2": 5, "S3": 5, "S4": 5, "S5": 5}
+FRECUENCIA = {"S1": 1, "S2": 1, "S3": 1, "S4": 1, "S5": 5}
 
 GESTORES_CONFIG = {
-    "ALEXANDER": {"nombre_completo": "Alexander Padron", "agencia": "Camaguey", "sector": "Zona 1", "cuota_hl": 260, "cuota_ccc": 100, "incluir_ccc": True},
-    "DEYANIRA": {"nombre_completo": "Deyanira Zaldivar", "agencia": "Camaguey", "sector": "Zona 2", "cuota_hl": 352, "cuota_ccc": 100, "incluir_ccc": True},
-    "GEORLIS": {"nombre_completo": "Georlis Cardenas", "agencia": "Camaguey", "sector": "Zona 3", "cuota_hl": 260, "cuota_ccc": 100, "incluir_ccc": True},
-    "JEAN MICHEL": {"nombre_completo": "Jean Ramos", "agencia": "Camaguey", "sector": "Zona 4", "cuota_hl": 260, "cuota_ccc": 100, "incluir_ccc": True},
-    "ERNESTO": {"nombre_completo": "Ernesto", "agencia": "Camaguey", "sector": "Zona 5", "cuota_hl": 211, "cuota_ccc": 100, "incluir_ccc": True},
-    "ANDY": {"nombre_completo": "Andy", "agencia": "Camaguey", "sector": "Zona 7", "cuota_hl": 211, "cuota_ccc": 100, "incluir_ccc": True},
-    "MAYLEN": {"nombre_completo": "Maylen Remon", "agencia": "Camaguey", "sector": "Zona 6", "cuota_hl": 260, "cuota_ccc": 100, "incluir_ccc": True},
+    "ALEXANDER": {"nombre_completo": "Alexander Padron", "agencia": "Camaguey", "sector": "Zona 1", "cuota_hl": 235, "cuota_ccc": 100, "incluir_ccc": True},
+    "DEYANIRA": {"nombre_completo": "Deyanira Zaldivar", "agencia": "Camaguey", "sector": "Zona 2", "cuota_hl": 321, "cuota_ccc": 100, "incluir_ccc": True},
+    "GEORLIS": {"nombre_completo": "Georlis Cardenas", "agencia": "Camaguey", "sector": "Zona 3", "cuota_hl": 235, "cuota_ccc": 100, "incluir_ccc": True},
+    "JEAN MICHEL": {"nombre_completo": "Jean Ramos", "agencia": "Camaguey", "sector": "Zona 4", "cuota_hl": 235, "cuota_ccc": 100, "incluir_ccc": True},
+    "ERNESTO": {"nombre_completo": "Ernesto", "agencia": "Camaguey", "sector": "Zona 5", "cuota_hl": 224, "cuota_ccc": 100, "incluir_ccc": True},
+    "ANDY": {"nombre_completo": "Andy", "agencia": "Camaguey", "sector": "Zona 7", "cuota_hl": 224, "cuota_ccc": 100, "incluir_ccc": True},
+    "MAYLEN": {"nombre_completo": "Maylen Remon", "agencia": "Camaguey", "sector": "Zona 6", "cuota_hl": 235, "cuota_ccc": 100, "incluir_ccc": True},
 }
 GESTORES_ORDEN = ["ALEXANDER", "DEYANIRA", "GEORLIS", "JEAN MICHEL", "ERNESTO", "ANDY", "MAYLEN"]
 
@@ -330,5 +330,5 @@ for i in range(1,6):
 ws.cell(row, 18, safe_int(totales_ccc["cuota"])).fill=fill_yellow; ws.cell(row, 18).font=font_yellow; ws.cell(row, 18).alignment=align_c
 ws.cell(row, 19, safe_int(totales_ccc["real"])).fill=fill_yellow; ws.cell(row, 19).font=font_yellow; ws.cell(row, 19).alignment=align_c
 
-wb.save("Reporte_Ventas_Final_1-12.xlsx")
+wb.save("Reporte_Ventas_Final_JULIO_2026.xlsx")
 print("¡Reporte generado correctamente: Reporte_Ventas_Final.xlsx!")

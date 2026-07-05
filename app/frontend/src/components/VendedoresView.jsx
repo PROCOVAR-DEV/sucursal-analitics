@@ -110,6 +110,15 @@ function VendorDetail({ vendor }) {
         <Kpi label="Clientes Únicos" value={formatInt(vendor.num_clientes)} tone="slate" />
       </div>
 
+      {/* Comisión individual del vendedor */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Kpi label="Comisión" value={formatMoney(vendor.comision)} tone="green" />
+        <Kpi label="Ventas sin pedido" value={formatInt(vendor.sin_pedido || 0)} tone="slate" />
+        <Kpi label="Descuento sin pedido" value={vendor.descuento ? "-" + formatMoney(vendor.descuento) : formatMoney(0)}
+          tone={vendor.descuento > 0 ? "red" : "slate"} />
+        <Kpi label="Comisión neta" value={formatMoney(vendor.comision_neta)} tone="brand" />
+      </div>
+
       {/* HL breakdown table */}
       <div className="card">
         <h4 className="font-semibold mb-3">Desglose Hectolitros (Malta / Parranda)</h4>
