@@ -1,18 +1,21 @@
 import { UserCheck } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getVendedores } from "../api.js";
+import { getMetasGestor, getVendedores } from "../api.js";
 import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
+import { VendorFormatoTables } from "./MetasGestorReport.jsx";
 
 export default function VendedoresView({ sourceId, period }) {
   const [data, setData] = useState(null);
+  const [metas, setMetas] = useState(null);
   const [err, setErr] = useState(null);
   const [selGestor, setSelGestor] = useState(null);
 
   useEffect(() => {
-    setData(null); setErr(null); setSelGestor(null);
+    setData(null); setMetas(null); setErr(null); setSelGestor(null);
     getVendedores(sourceId, period)
       .then(setData)
       .catch((e) => setErr(e?.response?.data?.detail || e.message));
+    getMetasGestor(sourceId, period).then(setMetas).catch(() => {});
   }, [sourceId, period]);
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;
@@ -20,6 +23,7 @@ export default function VendedoresView({ sourceId, period }) {
 
   const activeGestor = selGestor ?? data.vendedores[0]?.gestor ?? null;
   const vendor = data.vendedores.find((v) => v.gestor === activeGestor);
+  const metasBlock = metas?.por_gestor?.find((g) => g.gestor === activeGestor) || null;
 
   return (
     <div className="space-y-6">
@@ -62,12 +66,12 @@ export default function VendedoresView({ sourceId, period }) {
       </div>
 
       {/* Vendor detail */}
-      {vendor && <VendorDetail vendor={vendor} />}
+      {vendor && <VendorDetail vendor={vendor} metasBlock={metasBlock} formatos={metas?.formatos} reportDate={metas?.report_date} />}
     </div>
   );
 }
 
-function VendorDetail({ vendor }) {
+function VendorDetail({ vendor, metasBlock, formatos, reportDate }) {
   const pct = vendor.cumplimiento_pct;
   const barPct = Math.min(pct, 100);
   const barColor = pct >= 100 ? "bg-emerald-500" : pct >= 80 ? "bg-amber-500" : "bg-red-500";
@@ -109,6 +113,17 @@ function VendorDetail({ vendor }) {
         <Kpi label="Operaciones" value={formatInt(vendor.num_operaciones)} tone="slate" />
         <Kpi label="Clientes Únicos" value={formatInt(vendor.num_clientes)} tone="slate" />
       </div>
+
+      {/* Estudio diario/mensual por formato (individual) — como el reporte */}
+      {metasBlock && (
+        <div className="card space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h4 className="font-semibold">Cumplimiento por formato · {vendor.gestor}</h4>
+            {reportDate && <span className="text-xs text-slate-400">Último día: {reportDate}</span>}
+          </div>
+          <VendorFormatoTables block={metasBlock} formatos={formatos} />
+        </div>
+      )}
 
       {/* Comisión individual del vendedor */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

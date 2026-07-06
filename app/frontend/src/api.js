@@ -94,6 +94,11 @@ export async function getMarket(id, mes = null)     { return (await api.get(`${s
 export async function getRanking(id, mes = null)    { return (await api.get(`${src(id)}/ranking${q(mes)}`)).data; }
 export async function getClientesAnalisis(id, mes = null) { return (await api.get(`${src(id)}/clientes-analisis${q(mes)}`)).data; }
 export async function getVendedores(id, mes = null) { return (await api.get(`${src(id)}/vendedores${q(mes)}`)).data; }
+export async function getDiario(id, mes = null, gestor = null) {
+  const qs = [mes ? `mes=${encodeURIComponent(mes)}` : "", gestor ? `gestor=${encodeURIComponent(gestor)}` : ""].filter(Boolean).join("&");
+  return (await api.get(`${src(id)}/diario${qs ? "?" + qs : ""}`)).data;
+}
+export async function getMetasGestor(id, mes = null){ return (await api.get(`${src(id)}/metas-gestor${q(mes)}`)).data; }
 export async function getPeriods(id)                { return (await api.get(`${src(id)}/periods`)).data; }
 
 // ---- Descarga de export (con auth → blob) ----

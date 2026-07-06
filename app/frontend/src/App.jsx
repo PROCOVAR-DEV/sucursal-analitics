@@ -1,4 +1,4 @@
-import { BarChart3, Calendar, FileSpreadsheet, LogOut, Package, Settings as SettingsIcon, ShoppingCart, Target, Trophy, UserCheck, Users } from "lucide-react";
+import { BarChart3, CalendarDays, Calendar, FileSpreadsheet, LogOut, Package, Settings as SettingsIcon, ShoppingCart, Target, Trophy, UserCheck, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import AdminPanel from "./components/AdminPanel.jsx";
 import ClientesAnalisisView from "./components/ClientesAnalisisView.jsx";

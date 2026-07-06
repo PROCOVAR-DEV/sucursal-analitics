@@ -24,6 +24,8 @@ from fastapi.responses import JSONResponse, Response
 
 from services.auth_store import auth_store
 from services.clientes_analisis import compute_clientes_analisis
+from services.diario import compute_diario
+from services.metas_gestor import compute_metas_gestor
 from services.excel_export import (
     export_all, export_clientes_analisis, export_market, export_productos,
     export_ranking, export_ventas,
@@ -330,6 +332,36 @@ def src_clientes_analisis(sid: str, source_id: str, mes: str | None = Query(defa
 def src_vendedores(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     report = filter_by_period(_get_source(sid, source_id), mes)
     return compute_vendedores(report, _eff_scoped(suc, report, mes, user))
+
+
+@app.get("/api/sucursales/{sid}/sources/{source_id}/diario")
+def src_diario(sid: str, source_id: str, mes: str | None = Query(default=None), gestor: str | None = Query(default=None),
+               suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    # Reporte COMPLETO (sin filtrar por periodo) para poder comparar el día 1 con el
+    # último día del mes anterior. El mes objetivo se pasa aparte.
+    report = _get_source(sid, source_id)
+    target = mes
+    if not target and report is not None and getattr(report, "date_max", None) is not None:
+        d = report.date_max
+        target = f"{d.year}-{d.month:02d}"
+    if target:
+        y, m = int(target[:4]), int(target[5:7])
+        eff = _scope_for_user(config_for_period(suc, y, m), user)
+    else:
+        eff = _eff_scoped(suc, report, mes, user)
+    return compute_diario(report, eff, mes=target, gestor=gestor)
+
+
+@app.get("/api/sucursales/{sid}/sources/{source_id}/metas-gestor")
+def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    report = filter_by_period(_get_source(sid, source_id), mes)
+    # El estudio es del último día subido: se usa la meta de SU mes (no la suma multi-mes).
+    if report is not None and getattr(report, "date_max", None) is not None:
+        d = report.date_max
+        eff = _scope_for_user(config_for_period(suc, d.year, d.month), user)
+    else:
+        eff = _eff_scoped(suc, report, mes, user)
+    return compute_metas_gestor(report, eff)
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/dashboard")
