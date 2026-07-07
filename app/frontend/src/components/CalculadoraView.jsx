@@ -139,8 +139,8 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
 
   async function saveVendor(k) {
     try {
-      const g = { cuota_hl: round2(vendorHL(k)), cuota_ccc: Number(quickCcc[k]) || 0 };
-      if (mode === "detalle") g.metas_formato = vendorFormato(k);
+      // Siempre guardamos el desglose por formato (lo usan Vendedores y el reporte).
+      const g = { cuota_hl: round2(vendorHL(k)), cuota_ccc: Number(quickCcc[k]) || 0, metas_formato: vendorFormato(k) };
       const fresh = await updateSucursal(sid, { metas_mensuales: { [pkey]: { gestores: { [k]: g } } } });
       setCfg(fresh);
       flash("ok", `Meta de ${k} guardada en ${MESES[ym.m - 1]} ${ym.y}: ${formatNumber(vendorHL(k), 2)} HL.`);
@@ -152,7 +152,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
       const gestoresPayload = {};
       gestores.forEach(([k]) => {
         if (!enMes(k)) return;   // no incluir en el roster del mes
-        gestoresPayload[k] = { cuota_hl: round2(vendorHL(k)), cuota_ccc: Number(quickCcc[k]) || 0, ...(mode === "detalle" ? { metas_formato: vendorFormato(k) } : {}) };
+        gestoresPayload[k] = { cuota_hl: round2(vendorHL(k)), cuota_ccc: Number(quickCcc[k]) || 0, metas_formato: vendorFormato(k) };
       });
       // Reemplaza el roster del mes por los vendedores incluidos.
       const fresh = await updateSucursal(sid, { metas_mensuales: { [pkey]: null } })
