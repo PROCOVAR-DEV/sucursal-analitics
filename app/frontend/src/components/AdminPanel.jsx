@@ -37,8 +37,6 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
   function flash(t, m) { setMsg({ t, m }); setTimeout(() => setMsg(null), 3500); }
   const reload = async () => setCfg(await getSucursal(sid));
 
-  if (!cfg) return <div className="p-6 text-slate-500 animate-pulse">Cargando configuración…</div>;
-
   const ALL_TABS = [
     { id: "sucursal", label: "Sucursal", icon: Building2 },
     { id: "gestores", label: "Gestores", icon: Users },
@@ -52,9 +50,14 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
   // Supervisor solo configura metas de su sucursal.
   const TABS = isSup ? ALL_TABS.filter((t) => t.id === "metas" || t.id === "calculadora") : ALL_TABS;
   // Si la sección actual no está permitida para el rol, ir a la primera válida.
+  // OJO: este useEffect debe ir ANTES de cualquier return temprano; si queda
+  // después de `if (!cfg) return`, el nº de hooks cambia entre renders y React
+  // revienta ("Rendered more hooks…") dejando la pantalla en blanco.
   useEffect(() => {
     if (TABS.length && !TABS.some((t) => t.id === tab)) onSection?.(TABS[0].id);
   }, [tab, isSup, isAdmin]);
+
+  if (!cfg) return <div className="p-6 text-slate-500 animate-pulse">Cargando configuración…</div>;
 
   return (
     <div className="space-y-5 animate-fade-in">
