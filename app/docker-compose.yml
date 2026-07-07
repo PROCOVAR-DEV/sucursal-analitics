@@ -5,6 +5,11 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
+    environment:
+      # Conexión con la app PEDIDO para la columna "pedidos" en Análisis de Clientes.
+      # Best-effort: si no se define, la columna simplemente no muestra conteo.
+      - PEDIDO_API_URL=${PEDIDO_API_URL:-}
+      - SERVICE_API_KEY=${SERVICE_API_KEY:-}
     volumes:
       - backend-data:/app/data
 

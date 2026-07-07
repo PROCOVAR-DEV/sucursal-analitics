@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import pandas as pd
 
+from core.utils import normalize_text
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
+from services.pedidos import fetch_order_counts
 
 SIN_NOMBRE = "(sin nombre)"
 SIN_SKU = "(sin producto)"
@@ -21,7 +23,7 @@ def _clean_text(series: pd.Series, fallback: str) -> pd.Series:
     return s.mask(s.eq("") | s.str.upper().eq("NAN") | s.eq("<NA>"), fallback)
 
 
-def _pivot(sub: pd.DataFrame, imp: str, socio: str, merc: str, with_gestor: bool) -> dict:
+def _pivot(sub: pd.DataFrame, imp: str, socio: str, merc: str, with_gestor: bool, pedidos_map: dict | None = None) -> dict:
     """Pivote clientes×SKU en dólares, ordenado por total de cliente (desc)."""
     empty = {"skus": [], "clientes": [], "total": 0.0, "num_clientes": 0, "num_skus": 0}
     if sub.empty or imp not in sub.columns or socio not in sub.columns or merc not in sub.columns:
@@ -57,6 +59,7 @@ def _pivot(sub: pd.DataFrame, imp: str, socio: str, merc: str, with_gestor: bool
             "cliente": str(cli),
             "total": round(float(cli_tot[cli]), 2),
             "num_skus": int((row != 0).sum()),
+            "pedidos": (pedidos_map or {}).get(normalize_text(str(cli)), 0),
             "sku_montos": montos,
         }
         if with_gestor:
@@ -77,10 +80,13 @@ def compute_clientes_analisis(report, eff: dict) -> dict:
     df = only_valid(enrich_for_sucursal(report, eff), keys)
     imp, socio, merc = STD_COLS["importe"], STD_COLS["socio"], STD_COLS["merc"]
 
+    # Cantidad de pedidos por cliente desde PEDIDO (best-effort; {} si no responde).
+    pedidos_map = fetch_order_counts()
+
     gestores_cfg = eff.get("gestores") or {}
     por_gestor = []
     for g in keys:
-        piv = _pivot(df[df["GestorDetectado"] == g], imp, socio, merc, with_gestor=False)
+        piv = _pivot(df[df["GestorDetectado"] == g], imp, socio, merc, with_gestor=False, pedidos_map=pedidos_map)
         por_gestor.append({
             "gestor": g,
             "nombre": (gestores_cfg.get(g) or {}).get("nombre", g),
@@ -90,6 +96,6 @@ def compute_clientes_analisis(report, eff: dict) -> dict:
     return {
         "rango": report.rango_str,
         "periodo": eff.get("_period"),
-        "oficina": _pivot(df, imp, socio, merc, with_gestor=True),
+        "oficina": _pivot(df, imp, socio, merc, with_gestor=True, pedidos_map=pedidos_map),
         "por_gestor": por_gestor,
     }

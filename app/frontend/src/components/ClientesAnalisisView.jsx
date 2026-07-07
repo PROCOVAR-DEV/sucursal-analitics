@@ -88,6 +88,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                   {isOficina && <th className="bg-slate-100 text-slate-500 text-[11px] font-semibold uppercase px-3 py-2 text-left border-b border-slate-200 min-w-[100px]">Gestor</th>}
                   <th className="bg-slate-200/70 text-slate-600 text-[11px] font-semibold uppercase px-3 py-2 text-right border-b border-slate-200 min-w-[110px]">Total $</th>
                   <th className="bg-slate-100 text-slate-500 text-[11px] font-semibold uppercase px-2 py-2 text-center border-b border-slate-200 w-14">#SKUs</th>
+                  <th className="bg-slate-100 text-slate-500 text-[11px] font-semibold uppercase px-2 py-2 text-center border-b border-slate-200 w-16" title="Cantidad de pedidos en la app PEDIDO">Pedidos</th>
                   {skus.map((s) => (
                     <th key={s.sku} title={s.sku}
                       className="bg-slate-100 text-slate-500 text-[10px] font-semibold px-2 py-2 text-right border-b border-l border-slate-200 align-bottom w-[120px] min-w-[120px] max-w-[120px]">
@@ -104,6 +105,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                     {isOficina && <td className="px-3 py-2 border-b border-slate-100"><span className="badge-slate">{c.gestor}</span></td>}
                     <td className="px-3 py-2 text-right font-semibold text-slate-900 bg-slate-50/60 border-b border-slate-100 tabular-nums">{formatMoney(c.total)}</td>
                     <td className="px-2 py-2 text-center text-slate-500 border-b border-slate-100 tabular-nums">{c.num_skus}</td>
+                    <td className="px-2 py-2 text-center text-slate-600 font-medium border-b border-slate-100 tabular-nums">{c.pedidos ? formatInt(c.pedidos) : "·"}</td>
                     {skus.map((s) => {
                       const v = c.sku_montos[s.sku];
                       return (
@@ -121,6 +123,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                   <td className="sticky left-10 z-30 bg-slate-800 text-white font-semibold px-3 py-2.5 border-r border-slate-700 whitespace-nowrap">TOTAL POR SKU</td>
                   {isOficina && <td className="bg-slate-800" />}
                   <td className="bg-slate-900 text-white font-bold px-3 py-2.5 text-right tabular-nums">{formatMoney(block.total)}</td>
+                  <td className="bg-slate-800" />
                   <td className="bg-slate-800" />
                   {skus.map((s) => (
                     <td key={s.sku} className="bg-slate-800 text-white font-semibold px-2 py-2.5 text-right border-l border-slate-700 tabular-nums">{formatInt(Math.round(s.total))}</td>
