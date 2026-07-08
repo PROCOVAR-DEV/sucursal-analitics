@@ -32,9 +32,35 @@ function Menu({ triggerRef, menuRef, open, onClose, align = "left", children }) 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const r = triggerRef.current.getBoundingClientRect();
+    const GAP = 6, MIN = 140, PAD = 8;
+
+    // Vertical: si abajo no cabe (última fila de una tabla, p. ej.) se voltea
+    // hacia arriba. La altura máxima se ajusta al hueco real que haya.
+    const below = window.innerHeight - r.bottom - GAP;
+    const above = r.top - GAP;
+    const flip = below < MIN && above > below;
+    const maxHeight = Math.max(MIN, (flip ? above : below) - PAD);
+
+    // Horizontal: no dejar que se salga por los bordes de la ventana.
+    const width = Math.round(r.width);
+    let horizontal;
+    if (align === "right") {
+      horizontal = { right: Math.max(PAD, Math.round(window.innerWidth - r.right)) };
+    } else {
+      const maxLeft = window.innerWidth - width - PAD;
+      horizontal = { left: Math.round(Math.min(Math.max(PAD, r.left), Math.max(PAD, maxLeft))) };
+    }
+
     setStyle({
-      position: "fixed", top: Math.round(r.bottom + 6), minWidth: Math.round(r.width), zIndex: 1000,
-      ...(align === "right" ? { right: Math.round(window.innerWidth - r.right) } : { left: Math.round(r.left) }),
+      position: "fixed",
+      ...(flip
+        ? { bottom: Math.round(window.innerHeight - r.top + GAP) }
+        : { top: Math.round(r.bottom + GAP) }),
+      minWidth: width,
+      maxWidth: Math.round(window.innerWidth - PAD * 2),
+      maxHeight: Math.round(maxHeight),
+      zIndex: 1000,
+      ...horizontal,
     });
   }, [open, align, triggerRef]);
   useEffect(() => {
@@ -67,6 +93,64 @@ export function Select({ value, options, onChange, placeholder = "Seleccionar", 
       </button>
       <Menu triggerRef={triggerRef} menuRef={menuRef} open={open} onClose={() => setOpen(false)} align={align}>
         {options.map((o) => (
+          <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }}
+            className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-left transition whitespace-nowrap",
+              o.value === value ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-700 hover:bg-slate-100")}>
+            <Check size={14} className={cn("shrink-0", o.value === value ? "opacity-100" : "opacity-0")} />
+            {o.label}
+          </button>
+        ))}
+      </Menu>
+    </div>
+  );
+}
+
+// Select con BARRA DE BÚSQUEDA. Para listas largas donde escribir a mano es
+// incómodo y propenso a errores (ej. la clave del gestor de una sucursal).
+export function SearchSelect({
+  value, options, onChange,
+  placeholder = "Seleccionar", searchPlaceholder = "Buscar…",
+  emptyText = "Sin opciones", disabled = false,
+  className, width = "w-full", align = "left",
+}) {
+  const { open, setOpen, triggerRef, menuRef } = useDropdown();
+  const [q, setQ] = useState("");
+  const inputRef = useRef(null);
+  const current = options.find((o) => o.value === value);
+
+  // Al abrir: limpia la búsqueda y enfoca el campo (se puede teclear de una).
+  useEffect(() => {
+    if (!open) return;
+    setQ("");
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  const needle = q.trim().toLowerCase();
+  const shown = needle
+    ? options.filter((o) =>
+        String(o.label).toLowerCase().includes(needle) || String(o.value).toLowerCase().includes(needle))
+    : options;
+
+  return (
+    <div className={cn("relative", width, className)}>
+      <button ref={triggerRef} type="button" disabled={disabled}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        className={cn("input flex items-center justify-between gap-2 w-full text-left",
+          disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer")}>
+        <span className={cn("truncate", !current && "text-slate-400")}>{current?.label || placeholder}</span>
+        <ChevronsUpDown size={15} className="text-slate-400 shrink-0" />
+      </button>
+      <Menu triggerRef={triggerRef} menuRef={menuRef} open={open} onClose={() => setOpen(false)} align={align}>
+        <div className="sticky top-0 p-1 -m-1 mb-1 bg-white">
+          <input ref={inputRef} className="input input-sm w-full" placeholder={searchPlaceholder}
+            value={q} onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && shown.length === 1) { onChange(shown[0].value); setOpen(false); }
+            }} />
+        </div>
+        {shown.length === 0 && <div className="px-2.5 py-2 text-xs text-slate-400">{emptyText}</div>}
+        {shown.map((o) => (
           <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }}
             className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-left transition whitespace-nowrap",
               o.value === value ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-700 hover:bg-slate-100")}>

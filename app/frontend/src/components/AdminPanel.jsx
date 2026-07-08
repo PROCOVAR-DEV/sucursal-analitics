@@ -8,7 +8,7 @@ import {
   getSucursal, listUsers, resetSucursal, updateGestor, updateSucursal, updateUser,
 } from "../api.js";
 import CalculadoraView from "./CalculadoraView.jsx";
-import { Badge, Button, Field, IconButton, MultiSelect, Panel, PanelHeader, Select, Toast, cn } from "./ui.jsx";
+import { Badge, Button, Field, IconButton, MultiSelect, Panel, PanelHeader, SearchSelect, Select, Toast, cn } from "./ui.jsx";
 
 const ROLE_OPTS = [
   { value: "admin", label: "Admin (todo)" },
@@ -506,14 +506,48 @@ function Sucursales({ sucursales, onChanged, flash }) {
 // ---------------- Usuarios (admin)
 const emptyUser = { username: "", nombre: "", password: "", role: "usuario", sucursales: [], gestor: "" };
 
-// Input de gestor con estado interno; confirma al salir del campo (blur/Enter).
-function GestorInput({ initial, onCommit }) {
-  const [v, setV] = useState(initial || "");
-  useEffect(() => setV(initial || ""), [initial]);
+// Selector del gestor: en vez de escribir la clave a mano, se eligen SOLO los
+// gestores de la(s) sucursal(es) marcadas en esa misma fila, con buscador.
+function GestorSelect({ sucursalIds = [], value, onCommit }) {
+  const [opts, setOpts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const key = sucursalIds.join(",");
+
+  useEffect(() => {
+    const ids = sucursalIds.filter(Boolean);
+    if (!ids.length) { setOpts([]); return; }
+    let cancelado = false;
+    setLoading(true);
+    Promise.all(ids.map((id) => getSucursal(id).catch(() => null)))
+      .then((cfgs) => {
+        if (cancelado) return;
+        const vistos = new Map();
+        cfgs.filter(Boolean).forEach((cfg) => {
+          Object.entries(cfg.gestores || {}).forEach(([clave, g]) => {
+            if (g?.activo === false || vistos.has(clave)) return;
+            vistos.set(clave, { value: clave, label: g?.nombre ? `${clave} — ${g.nombre}` : clave });
+          });
+        });
+        setOpts([...vistos.values()]);
+      })
+      .finally(() => { if (!cancelado) setLoading(false); });
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  if (!sucursalIds.length) {
+    return <span className="text-xs text-slate-400">Elige la sucursal primero</span>;
+  }
   return (
-    <input className="input input-sm w-40" placeholder="Clave del gestor (ej. ALEXANDER)"
-      value={v} onChange={(e) => setV(e.target.value.toUpperCase())}
-      onBlur={() => onCommit(v)} onKeyDown={(e) => { if (e.key === "Enter") onCommit(v); }} />
+    <SearchSelect
+      width="w-40"
+      value={value || ""}
+      options={opts}
+      onChange={onCommit}
+      placeholder={loading ? "Cargando…" : "Clave del gestor"}
+      searchPlaceholder="Buscar gestor…"
+      emptyText="Esta sucursal no tiene gestores"
+    />
   );
 }
 
@@ -523,7 +557,7 @@ function ScopeCell({ role, sucursales, value, gestor, onSucursales, onGestor }) 
   return (
     <div className="space-y-1">
       <MultiSelect value={value} options={sucOpts(sucursales)} onChange={onSucursales} placeholder="Elegir sucursal" width="w-40" />
-      {role === "gestor" && <GestorInput initial={gestor} onCommit={onGestor} />}
+      {role === "gestor" && <GestorSelect sucursalIds={value || []} value={gestor} onCommit={onGestor} />}
     </div>
   );
 }
