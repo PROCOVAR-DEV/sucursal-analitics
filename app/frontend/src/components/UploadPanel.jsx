@@ -1,4 +1,4 @@
-import { Upload, FileSpreadsheet, Loader2, Trash2, FileText, Layers } from "lucide-react";
+import { Upload, FileSpreadsheet, Loader2, Trash2, FileText, Layers, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { deleteAllUploads, deleteUpload, listUploads, uploadFile } from "../api.js";
 
@@ -6,6 +6,9 @@ export default function UploadPanel({ sourceId, onSelect, onRefresh }) {
   const [uploads, setUploads] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // En móvil el panel arranca colapsado para no empujar el contenido hacia abajo.
+  // En md+ el wrapper es `md:flex`, así que este estado no lo afecta.
+  const [openMobile, setOpenMobile] = useState(false);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
 
@@ -67,7 +70,26 @@ export default function UploadPanel({ sourceId, onSelect, onRefresh }) {
   }
 
   return (
-    <aside className="w-72 shrink-0 border-r border-slate-200 bg-white flex flex-col">
+    <aside className="w-full md:w-72 md:shrink-0 border-b md:border-b-0 md:border-r border-slate-200 bg-white flex flex-col md:overflow-y-auto">
+      {/* Cabecera solo móvil: colapsa el panel de archivos. */}
+      <button
+        type="button"
+        onClick={() => setOpenMobile((v) => !v)}
+        aria-expanded={openMobile}
+        className="md:hidden flex items-center justify-between w-full px-4 py-3 text-sm font-semibold text-slate-700"
+      >
+        <span className="flex items-center gap-2">
+          <FileText size={16} className="text-slate-500" /> Archivos
+          {uploads.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+              {uploads.length}
+            </span>
+          )}
+        </span>
+        <ChevronDown size={18} className={`transition-transform ${openMobile ? "rotate-180" : ""}`} />
+      </button>
+
+      <div className={`${openMobile ? "flex" : "hidden"} md:flex flex-col min-w-0`}>
       <div className="p-4 border-b border-slate-200">
         <div
           role="button"
@@ -152,6 +174,7 @@ export default function UploadPanel({ sourceId, onSelect, onRefresh }) {
             })}
           </ul>
         )}
+      </div>
       </div>
     </aside>
   );

@@ -83,6 +83,7 @@ export default function RankingView({ sourceId, period }) {
       {/* General ranking */}
       <div className="card">
         <h3 className="font-semibold mb-3">General (acumulado total)</h3>
+        <div className="overflow-x-auto scroll-thin">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-100">
             <tr>
@@ -101,6 +102,7 @@ export default function RankingView({ sourceId, period }) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Daily evolution chart */}

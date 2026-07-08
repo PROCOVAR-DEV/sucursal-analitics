@@ -47,6 +47,7 @@ function CumplTable({ title, subtitle, tone, rows }) {
         <div className="font-semibold text-sm">{title}</div>
         {subtitle && <div className="text-[11px] text-white/80">{subtitle}</div>}
       </div>
+      <div className="overflow-x-auto scroll-thin">
       <table className="tbl">
         <thead>
           <tr>
@@ -89,6 +90,7 @@ function CumplTable({ title, subtitle, tone, rows }) {
           </tr>
         </tfoot>
       </table>
+      </div>
     </div>
   );
 }

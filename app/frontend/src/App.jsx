@@ -108,9 +108,9 @@ export default function App() {
   return (
     <div className="h-screen flex flex-col">
       <header className="bg-gradient-to-r from-brand-900 via-brand-700 to-brand-500 text-white shadow shrink-0">
-        <div className="px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div className="px-3 sm:px-6 py-3 flex items-center justify-between gap-3 sm:gap-4 flex-wrap">
           <div className="min-w-0">
-            <h1 className="text-lg font-bold leading-tight">Sucursal Analytics</h1>
+            <h1 className="text-base sm:text-lg font-bold leading-tight">Sucursal Analytics</h1>
             {/* Breadcrumb: dónde estás */}
             <p className="text-xs text-brand-100/90 flex items-center gap-1.5 truncate">
               <span className="opacity-80">{currentSuc?.nombre || "—"}</span>
@@ -139,19 +139,22 @@ export default function App() {
       </header>
 
       {!isConfig && (
-        <div className="bg-white border-b border-slate-200 px-6 py-2 flex items-center gap-3 text-sm shrink-0">
+        <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-2 flex items-center gap-2 sm:gap-3 text-sm shrink-0 flex-wrap">
           <Calendar size={15} className="text-slate-400 shrink-0" />
           <span className="text-slate-500 font-medium shrink-0">Periodo:</span>
-          <Select width="w-56" value={period || ""} onChange={(v) => setPeriod(v || null)}
+          <Select width="flex-1 min-w-[10rem] sm:flex-none sm:w-56" value={period || ""} onChange={(v) => setPeriod(v || null)}
             options={[{ value: "", label: "Todo (acumulado)" }, ...periods.map((p) => ({ value: p, label: fmtPeriod(p) }))]} />
           {period && <span className="ml-1 px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold">{fmtPeriod(period)}</span>}
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
+      {/* En móvil el panel de archivos se apila arriba y scrollea toda la página;
+          desde md+ vuelve a ser sidebar lateral y solo scrollea el <main>.
+          min-w-0 en <main> evita que las tablas anchas estiren el flex. */}
+      <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
         {!isConfig && <UploadPanel sourceId={sourceId} onSelect={setSourceId} onRefresh={setUploads} key={sid} />}
-        <main className="flex-1 overflow-y-auto bg-slate-50">
-          <div className="max-w-7xl mx-auto p-6">
+        <main className="flex-1 min-w-0 md:overflow-y-auto bg-slate-50">
+          <div className="max-w-7xl mx-auto p-3 sm:p-6">
             {isConfig ? (
               sid ? (
                 <AdminPanel sid={sid} user={user} sucursales={sucursales} onSucursalesChanged={loadSucursales}
