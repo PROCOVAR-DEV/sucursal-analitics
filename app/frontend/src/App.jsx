@@ -89,8 +89,17 @@ export default function App() {
 
   useEffect(() => {
     if (!sid) return;
-    setPeriod(null); setPeriods([]);
-    getPeriods(sourceId).then((d) => setPeriods(d.periods || [])).catch(() => setPeriods([]));
+    setPeriods([]);
+    getPeriods(sourceId).then((d) => {
+      const ps = d.periods || [];
+      setPeriods(ps);
+      // Por defecto: el MES ACTUAL si tiene datos; si no, el mes más reciente con datos;
+      // y solo si no hay ningún mes, cae en el acumulado global (null).
+      const now = new Date();
+      const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const latest = ps.slice().sort().reverse()[0];
+      setPeriod(ps.includes(cur) ? cur : (latest || null));
+    }).catch(() => { setPeriods([]); setPeriod(null); });
   }, [sourceId, sid]);
 
   if (booting) return <div className="h-screen flex items-center justify-center text-slate-400">Cargando…</div>;
