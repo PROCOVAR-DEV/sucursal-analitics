@@ -17,6 +17,18 @@ export default function VentasView({ sourceId, period }) {
 
   const gestoresBar = data.gestores.map((g) => ({ gestor: g.gestor, hectolitros: g.total_hectolitros }));
 
+  // Totales por SKU (hectolitros) sumando todos los gestores — para ver el HL total de cada SKU.
+  const tot = data.gestores.reduce((a, g) => ({
+    malta_330: a.malta_330 + (g.malta_330 || 0),
+    malta_500: a.malta_500 + (g.malta_500 || 0),
+    malta_1500: a.malta_1500 + (g.malta_1500 || 0),
+    parranda_330: a.parranda_330 + (g.parranda_330 || 0),
+    parranda_500: a.parranda_500 + (g.parranda_500 || 0),
+    parranda_1500: a.parranda_1500 + (g.parranda_1500 || 0),
+    total_hectolitros: a.total_hectolitros + (g.total_hectolitros || 0),
+    total_importe: a.total_importe + (g.total_importe || 0),
+  }), { malta_330: 0, malta_500: 0, malta_1500: 0, parranda_330: 0, parranda_500: 0, parranda_1500: 0, total_hectolitros: 0, total_importe: 0 });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -63,6 +75,21 @@ export default function VentasView({ sourceId, period }) {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="font-bold bg-slate-100">
+                <td className="sticky left-0 z-10 bg-slate-100 px-3 py-2.5 text-slate-800 border-t-2 border-slate-300 whitespace-nowrap">TOTAL HL por SKU</td>
+                <td className="px-3 py-2.5 text-right border-t-2 border-slate-300 tabular-nums">{formatNumber(tot.malta_330, 2)}</td>
+                <td className="px-3 py-2.5 text-right border-t-2 border-slate-300 tabular-nums">{formatNumber(tot.malta_500, 2)}</td>
+                <td className="px-3 py-2.5 text-right border-t-2 border-slate-300 tabular-nums">{formatNumber(tot.malta_1500, 2)}</td>
+                <td className="px-3 py-2.5 text-right border-t-2 border-slate-300 tabular-nums">{formatNumber(tot.parranda_330, 2)}</td>
+                <td className="px-3 py-2.5 text-right border-t-2 border-slate-300 tabular-nums">{formatNumber(tot.parranda_500, 2)}</td>
+                <td className="px-3 py-2.5 text-right border-t-2 border-slate-300 tabular-nums">{formatNumber(tot.parranda_1500, 2)}</td>
+                <td className="px-3 py-2.5 text-right border-t-2 border-slate-300 tabular-nums text-brand-700">{formatNumber(tot.total_hectolitros, 2)}</td>
+                <td className="px-3 py-2.5 border-t-2 border-slate-300"></td>
+                <td className="px-3 py-2.5 border-t-2 border-slate-300"></td>
+                <td className="px-3 py-2.5 text-right border-t-2 border-slate-300 tabular-nums">{formatMoney(tot.total_importe)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
