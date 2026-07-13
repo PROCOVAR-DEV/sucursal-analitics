@@ -58,8 +58,13 @@ export default function MarketView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
+    // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
+    let cancelled = false;
     setData(null); setErr(null);
-    getMarket(sourceId, period).then(setData).catch((e) => setErr(e?.response?.data?.detail || e.message));
+    getMarket(sourceId, period)
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch((e) => { if (!cancelled) setErr(e?.response?.data?.detail || e.message); });
+    return () => { cancelled = true; };
   }, [sourceId, period]);
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;

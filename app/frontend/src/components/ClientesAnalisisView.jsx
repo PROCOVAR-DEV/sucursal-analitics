@@ -11,10 +11,13 @@ export default function ClientesAnalisisView({ sourceId, period }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
+    let cancelled = false;
     setData(null); setErr(null); setSel("__oficina__");
     getClientesAnalisis(sourceId, period)
-      .then(setData)
-      .catch((e) => setErr(e?.response?.data?.detail || e.message));
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch((e) => { if (!cancelled) setErr(e?.response?.data?.detail || e.message); });
+    return () => { cancelled = true; };
   }, [sourceId, period]);
 
   const block = useMemo(() => {

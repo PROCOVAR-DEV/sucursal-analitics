@@ -3,10 +3,9 @@ replicando las tablas del algoritmo por gestor: resumen mensual (acumulado) y
 resumen diario (meta día vs venta día). Sirve para sacar y seguir metas diarias."""
 from __future__ import annotations
 
-import calendar
-
 import pandas as pd
 
+from services.calendario import working_days, working_days_elapsed
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 
@@ -71,8 +70,12 @@ def compute_metas_gestor(report, eff: dict) -> dict:
         return empty
 
     report_date = df[fec].max().normalize()
-    dias_mes = calendar.monthrange(report_date.year, report_date.month)[1]
-    factor = round(report_date.day / dias_mes, 6)
+    # La meta de cada SKU se reparte entre los DÍAS LABORALES (los de la calculadora: 23 en
+    # julio), no entre los 31 del calendario. La meta ACUMULADA es la meta diaria del SKU
+    # por los días laborales YA TRANSCURRIDOS (9 de 23) -> así se ve cómo van en el mes.
+    dias_mes = working_days(report_date.year, report_date.month, eff)
+    dias_corridos = working_days_elapsed(report_date, eff)
+    factor = round(dias_corridos / dias_mes, 6)
 
     # Código de formato por fila; solo bebidas (Malta/Parranda), como el reporte.
     df["__code__"] = [_fmt_code(m, s) for m, s in zip(df[merc], df.get(STD_COLS["size"], pd.Series([None] * len(df), index=df.index)))]
@@ -180,7 +183,7 @@ def compute_metas_gestor(report, eff: dict) -> dict:
         "rango": report.rango_str, "periodo": eff.get("_period"), "formatos": formatos,
         "report_date": report_date.strftime("%Y-%m-%d"),
         "report_date_ant": prev_date.strftime("%Y-%m-%d") if prev_date is not None else None,
-        "dias_mes": dias_mes, "factor": factor,
+        "dias_mes": dias_mes, "dias_corridos": dias_corridos, "factor": factor,
         "por_gestor": por_gestor, "general": general_rows, "total_general": total_general,
         "desglose_dia": desglose_dia,
     }

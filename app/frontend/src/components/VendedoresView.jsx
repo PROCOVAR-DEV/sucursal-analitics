@@ -11,11 +11,16 @@ export default function VendedoresView({ sourceId, period }) {
   const [selGestor, setSelGestor] = useState(null);
 
   useEffect(() => {
+    // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
+    let cancelled = false;
     setData(null); setMetas(null); setErr(null); setSelGestor(null);
     getVendedores(sourceId, period)
-      .then(setData)
-      .catch((e) => setErr(e?.response?.data?.detail || e.message));
-    getMetasGestor(sourceId, period).then(setMetas).catch(() => {});
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch((e) => { if (!cancelled) setErr(e?.response?.data?.detail || e.message); });
+    getMetasGestor(sourceId, period)
+      .then((d) => { if (!cancelled) setMetas(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [sourceId, period]);
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;

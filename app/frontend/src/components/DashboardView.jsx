@@ -8,8 +8,15 @@ export default function DashboardView({ sourceId, period }) {
   const [err, setErr] = useState(null);
 
   useEffect(() => {
+    // `cancelled` descarta respuestas VIEJAS: al abrir, el periodo aún es null y se pide el
+    // acumulado (lento, muchas filas); cuando entra el mes se pide lo filtrado (rápido). Sin
+    // esta guarda, la respuesta lenta del acumulado llegaba después y PISABA a la del mes.
+    let cancelled = false;
     setData(null); setErr(null);
-    getDashboard(sourceId, period).then(setData).catch((e) => setErr(e?.response?.data?.detail || e.message));
+    getDashboard(sourceId, period)
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch((e) => { if (!cancelled) setErr(e?.response?.data?.detail || e.message); });
+    return () => { cancelled = true; };
   }, [sourceId, period]);
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;

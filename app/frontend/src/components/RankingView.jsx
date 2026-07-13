@@ -25,10 +25,13 @@ export default function RankingView({ sourceId, period }) {
   const [selWeek, setSelWeek] = useState(null);
 
   useEffect(() => {
+    // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
+    let cancelled = false;
     setData(null); setErr(null); setSelMonth(null); setSelWeek(null);
     getRanking(sourceId, period)
-      .then(setData)
-      .catch((e) => setErr(e?.response?.data?.detail || e.message));
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch((e) => { if (!cancelled) setErr(e?.response?.data?.detail || e.message); });
+    return () => { cancelled = true; };
   }, [sourceId, period]);
 
   const diarioChart = useMemo(() => {
