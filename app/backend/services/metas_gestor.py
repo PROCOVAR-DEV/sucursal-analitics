@@ -43,7 +43,11 @@ def _pct(n, d):
     return round((n / d * 100), 2) if d else 0.0
 
 
-def compute_metas_gestor(report, eff: dict) -> dict:
+def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
+    """`dia` (YYYY-MM-DD): día "de corte" del estudio. Por defecto, el último con datos.
+    Al elegir un día anterior, el ACUMULADO se recalcula hasta ese día (y su meta acumulada
+    con los días laborales transcurridos hasta ahí), y el DIARIO compara ese día contra el
+    día anterior con datos. Así se puede mirar atrás y ver cómo iban."""
     keys = gestor_keys(eff)
     df = only_valid(enrich_for_sucursal(report, eff), keys)
     imp, fec, cant, merc = STD_COLS["importe"], STD_COLS["fecha"], STD_COLS["cant"], STD_COLS["merc"]
@@ -69,7 +73,15 @@ def compute_metas_gestor(report, eff: dict) -> dict:
     if df.empty:
         return empty
 
+    # Día de corte: el elegido (si existe y hay datos hasta él) o el último con datos.
     report_date = df[fec].max().normalize()
+    if dia:
+        try:
+            pedido = pd.Timestamp(dia).normalize()
+            if pedido <= report_date:
+                report_date = pedido
+        except (ValueError, TypeError):
+            pass
     # La meta de cada SKU se reparte entre los DÍAS LABORALES (los de la calculadora: 23 en
     # julio), no entre los 31 del calendario. La meta ACUMULADA es la meta diaria del SKU
     # por los días laborales YA TRANSCURRIDOS (9 de 23) -> así se ve cómo van en el mes.
@@ -86,6 +98,8 @@ def compute_metas_gestor(report, eff: dict) -> dict:
         return {**empty, "report_date": report_date.strftime("%Y-%m-%d"), "dias_mes": dias_mes, "factor": factor}
     month_mask = df[fec].dt.normalize() <= report_date
     day_mask = df[fec].dt.normalize() == report_date
+    # Días del mes CON datos: los que se pueden elegir como día de corte (selector).
+    dias_disponibles = [pd.Timestamp(d).strftime("%Y-%m-%d") for d in sorted(df[fec].dt.normalize().unique())]
     # Día anterior con datos (para la comparativa).
     prev_days = sorted(d for d in df[fec].dt.normalize().unique() if d < report_date)
     prev_date = prev_days[-1] if prev_days else None
@@ -184,6 +198,9 @@ def compute_metas_gestor(report, eff: dict) -> dict:
         "report_date": report_date.strftime("%Y-%m-%d"),
         "report_date_ant": prev_date.strftime("%Y-%m-%d") if prev_date is not None else None,
         "dias_mes": dias_mes, "dias_corridos": dias_corridos, "factor": factor,
+        # Días del mes con datos: el selector de "día de corte" del frontend.
+        "dias_disponibles": dias_disponibles,
+        "dia_anterior": prev_date.strftime("%Y-%m-%d") if prev_date is not None else None,
         "por_gestor": por_gestor, "general": general_rows, "total_general": total_general,
         "desglose_dia": desglose_dia,
     }

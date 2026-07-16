@@ -98,7 +98,11 @@ export async function getDiario(id, mes = null, gestor = null) {
   const qs = [mes ? `mes=${encodeURIComponent(mes)}` : "", gestor ? `gestor=${encodeURIComponent(gestor)}` : ""].filter(Boolean).join("&");
   return (await api.get(`${src(id)}/diario${qs ? "?" + qs : ""}`)).data;
 }
-export async function getMetasGestor(id, mes = null){ return (await api.get(`${src(id)}/metas-gestor${q(mes)}`)).data; }
+// `dia` = día de corte elegido (para mirar días anteriores). Sin él, el último con datos.
+export async function getMetasGestor(id, mes = null, dia = null) {
+  const qs = [mes ? `mes=${encodeURIComponent(mes)}` : "", dia ? `dia=${encodeURIComponent(dia)}` : ""].filter(Boolean).join("&");
+  return (await api.get(`${src(id)}/metas-gestor${qs ? "?" + qs : ""}`)).data;
+}
 export async function getPeriods(id)                { return (await api.get(`${src(id)}/periods`)).data; }
 
 // ---- Descarga de export (con auth → blob) ----

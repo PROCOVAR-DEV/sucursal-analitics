@@ -353,7 +353,8 @@ def src_diario(sid: str, source_id: str, mes: str | None = Query(default=None), 
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/metas-gestor")
-def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=None), dia: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    # `dia` = día de corte elegido (para mirar atrás). Sin él, el último con datos.
     report = filter_by_period(_get_source(sid, source_id), mes)
     # El estudio es del último día subido: se usa la meta de SU mes (no la suma multi-mes).
     if report is not None and getattr(report, "date_max", None) is not None:
@@ -361,7 +362,7 @@ def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=N
         eff = _scope_for_user(config_for_period(suc, d.year, d.month), user)
     else:
         eff = _eff_scoped(suc, report, mes, user)
-    return compute_metas_gestor(report, eff)
+    return compute_metas_gestor(report, eff, dia)
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/dashboard")

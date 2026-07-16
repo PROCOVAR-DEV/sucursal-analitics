@@ -9,19 +9,28 @@ export default function VendedoresView({ sourceId, period }) {
   const [metas, setMetas] = useState(null);
   const [err, setErr] = useState(null);
   const [selGestor, setSelGestor] = useState(null);
+  // Día de corte elegido (null = el último con datos). Permite mirar días anteriores.
+  const [selDia, setSelDia] = useState(null);
 
   useEffect(() => {
     // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
     let cancelled = false;
-    setData(null); setMetas(null); setErr(null); setSelGestor(null);
+    setData(null); setErr(null); setSelGestor(null); setSelDia(null);
     getVendedores(sourceId, period)
       .then((d) => { if (!cancelled) setData(d); })
       .catch((e) => { if (!cancelled) setErr(e?.response?.data?.detail || e.message); });
-    getMetasGestor(sourceId, period)
+    return () => { cancelled = true; };
+  }, [sourceId, period]);
+
+  // Las tablas de cumplimiento se recargan solas al cambiar el día de corte.
+  useEffect(() => {
+    let cancelled = false;
+    setMetas(null);
+    getMetasGestor(sourceId, period, selDia)
       .then((d) => { if (!cancelled) setMetas(d); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [sourceId, period]);
+  }, [sourceId, period, selDia]);
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!data) return <div className="p-6">Cargando…</div>;
@@ -71,12 +80,23 @@ export default function VendedoresView({ sourceId, period }) {
       </div>
 
       {/* Vendor detail */}
-      {vendor && <VendorDetail vendor={vendor} metasBlock={metasBlock} formatos={metas?.formatos} reportDate={metas?.report_date} />}
+      {vendor && (
+        <VendorDetail
+          vendor={vendor}
+          metasBlock={metasBlock}
+          formatos={metas?.formatos}
+          reportDate={metas?.report_date}
+          diasDisponibles={metas?.dias_disponibles || []}
+          diaAnterior={metas?.dia_anterior}
+          selDia={selDia}
+          onSelDia={setSelDia}
+        />
+      )}
     </div>
   );
 }
 
-function VendorDetail({ vendor, metasBlock, formatos, reportDate }) {
+function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia }) {
   const pct = vendor.cumplimiento_pct;
   const barPct = Math.min(pct, 100);
   const barColor = pct >= 100 ? "bg-emerald-500" : pct >= 80 ? "bg-amber-500" : "bg-red-500";
@@ -124,7 +144,24 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate }) {
         <div className="card space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h4 className="font-semibold">Cumplimiento por formato · {vendor.gestor}</h4>
-            {reportDate && <span className="text-xs text-slate-400">Último día: {reportDate}</span>}
+            {/* Día de corte: el acumulado se recalcula HASTA ese día y el diario lo compara
+                contra el día anterior con datos. Sirve para mirar atrás y ver cómo iban. */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-slate-500">Día:</label>
+              <select
+                className="input text-xs py-1 px-2 w-auto"
+                value={selDia ?? ""}
+                onChange={(e) => onSelDia(e.target.value || null)}
+              >
+                <option value="">Último ({reportDate || "—"})</option>
+                {[...(diasDisponibles || [])].reverse().map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+              {diaAnterior && (
+                <span className="text-xs text-slate-400">vs {diaAnterior}</span>
+              )}
+            </div>
           </div>
           <VendorFormatoTables block={metasBlock} formatos={formatos} />
         </div>
