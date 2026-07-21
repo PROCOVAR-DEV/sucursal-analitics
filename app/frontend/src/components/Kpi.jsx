@@ -15,19 +15,18 @@ export function Kpi({ label, value, hint, tone = "brand" }) {
   );
 }
 
-export function formatNumber(n, digits = 2) {
+// NÚMEROS SIN DECIMALES en toda la app: se redondea a entero (más fácil de leer).
+// El 2º argumento se ignora a propósito — antes se pasaban decimales; ahora todo es entero.
+export function formatNumber(n /*, digits */) {
   if (n === null || n === undefined || isNaN(n)) return "–";
-  return Number(n).toLocaleString("es-CO", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
+  return Number(n).toLocaleString("es-CO", { maximumFractionDigits: 0 });
 }
 
 export function formatInt(n) {
   if (n === null || n === undefined || isNaN(n)) return "–";
-  return Number(n).toLocaleString("es-CO");
+  return Number(n).toLocaleString("es-CO", { maximumFractionDigits: 0 });
 }
 
 export function formatMoney(n) {
-  return `$ ${formatNumber(n, 2)}`;
+  return `$ ${formatNumber(n)}`;
 }

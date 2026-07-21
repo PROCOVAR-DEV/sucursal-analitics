@@ -55,6 +55,48 @@ export default function DashboardView({ sourceId, period }) {
         <PieCard title="Ranking general de ventas" subtitle="Participación por vendedor" data={rankingPie} nameKey="name" valueKey="value" />
       </div>
 
+      {/* Desglose GENERAL por formato (hectolitros, no dinero) — cada SKU de Parranda y Malta */}
+      {Array.isArray(data.desglose_formato) && data.desglose_formato.length > 0 && (
+        <div className="card">
+          <h3 className="font-semibold mb-1">Desglose general por formato</h3>
+          <p className="text-sm text-slate-500 mb-3">
+            Hectolitros por SKU de Cerveza Parranda y Malta Guajira (todos los vendedores)
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {["Parranda", "Malta"].map((prod) => {
+              const rows = data.desglose_formato.filter((r) => r.producto === prod);
+              const subtotal = rows.reduce((s, r) => s + (r.hectolitros || 0), 0);
+              return (
+                <div key={prod} className="rounded-xl border border-slate-200 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-slate-700 text-white flex items-center justify-between">
+                    <span className="font-semibold">{prod}</span>
+                    <span className="text-sm tabular-nums">{formatNumber(subtotal, 2)} HL</span>
+                  </div>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {rows.map((r) => (
+                        <tr key={r.formato} className="border-t border-slate-100">
+                          <td className="px-4 py-2 text-slate-700">{r.tamano}</td>
+                          <td className="px-4 py-2 text-right font-mono tabular-nums text-slate-900">
+                            {formatNumber(r.hectolitros, 2)} HL
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-600">Total (Malta + Parranda)</span>
+            <span className="text-lg font-bold text-brand-700 tabular-nums">
+              {formatNumber(data.desglose_formato.reduce((s, r) => s + (r.hectolitros || 0), 0), 2)} HL
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <h3 className="font-semibold mb-3">Cumplimiento de metas por producto</h3>
         <div className="overflow-x-auto">

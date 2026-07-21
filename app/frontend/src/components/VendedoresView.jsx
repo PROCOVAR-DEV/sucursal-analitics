@@ -58,8 +58,9 @@ export default function VendedoresView({ sourceId, period }) {
         <Kpi label="Total Operaciones" value={formatInt(data.total_operaciones)} tone="slate" />
       </div>
 
-      {/* Vendor tab selector */}
-      <div className="flex gap-2 flex-wrap border-b border-slate-200 pb-3">
+      {/* Vendor tab selector — fijo (sticky) al hacer scroll para cambiar de vendedor
+          sin perderlo de vista mientras miras las tablas de abajo. */}
+      <div className="sticky top-0 z-20 -mx-3 sm:-mx-6 px-3 sm:px-6 py-3 bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-sm flex gap-2 flex-wrap">
         {data.vendedores.map((v) => {
           const active = v.gestor === activeGestor;
           const pct = v.cumplimiento_pct;
@@ -72,7 +73,7 @@ export default function VendedoresView({ sourceId, period }) {
             >
               <span className="font-semibold">{v.nombre || v.gestor}</span>
               {!active && (
-                <span className={`text-[10px] font-bold ${tone}`}>{pct.toFixed(1)}% HL</span>
+                <span className={`text-[10px] font-bold ${tone}`}>{Math.round(pct)}% HL</span>
               )}
             </button>
           );
@@ -112,7 +113,7 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
             <p className="text-sm text-slate-500">{vendor.sector} · {vendor.gestor}</p>
           </div>
           <span className={`px-3 py-1 rounded-full text-sm font-bold ${badgeBg}`}>
-            {pct.toFixed(1)}% cumplimiento HL
+            {Math.round(pct)}% cumplimiento HL
           </span>
         </div>
 
@@ -176,58 +177,8 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
         <Kpi label="Comisión neta" value={formatMoney(vendor.comision_neta)} tone="brand" />
       </div>
 
-      {/* HL breakdown table */}
-      <div className="card">
-        <h4 className="font-semibold mb-3">Desglose Hectolitros (Malta / Parranda)</h4>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="px-3 py-2 text-left">Producto</th>
-                <th className="px-3 py-2 text-right">330 ml</th>
-                <th className="px-3 py-2 text-right">500 ml</th>
-                <th className="px-3 py-2 text-right">1500 ml</th>
-                <th className="px-3 py-2 text-right font-bold">Total HL</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-t border-slate-100">
-                <td className="px-3 py-2 font-medium">Malta</td>
-                <td className="px-3 py-2 text-right">{formatNumber(vendor.malta_330, 2)}</td>
-                <td className="px-3 py-2 text-right">{formatNumber(vendor.malta_500, 2)}</td>
-                <td className="px-3 py-2 text-right">{formatNumber(vendor.malta_1500, 2)}</td>
-                <td className="px-3 py-2 text-right font-semibold">
-                  {formatNumber(vendor.malta_330 + vendor.malta_500 + vendor.malta_1500, 2)}
-                </td>
-              </tr>
-              <tr className="border-t border-slate-100">
-                <td className="px-3 py-2 font-medium">Parranda</td>
-                <td className="px-3 py-2 text-right">{formatNumber(vendor.parranda_330, 2)}</td>
-                <td className="px-3 py-2 text-right">{formatNumber(vendor.parranda_500, 2)}</td>
-                <td className="px-3 py-2 text-right">{formatNumber(vendor.parranda_1500, 2)}</td>
-                <td className="px-3 py-2 text-right font-semibold">
-                  {formatNumber(vendor.parranda_330 + vendor.parranda_500 + vendor.parranda_1500, 2)}
-                </td>
-              </tr>
-              <tr className="border-t-2 border-slate-300 bg-slate-50">
-                <td className="px-3 py-2 font-bold">Total</td>
-                <td className="px-3 py-2 text-right font-bold">
-                  {formatNumber(vendor.malta_330 + vendor.parranda_330, 2)}
-                </td>
-                <td className="px-3 py-2 text-right font-bold">
-                  {formatNumber(vendor.malta_500 + vendor.parranda_500, 2)}
-                </td>
-                <td className="px-3 py-2 text-right font-bold">
-                  {formatNumber(vendor.malta_1500 + vendor.parranda_1500, 2)}
-                </td>
-                <td className="px-3 py-2 text-right font-bold text-brand-700">
-                  {formatNumber(vendor.total_hectolitros, 2)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* HL breakdown table — con selector de SEMANA (mismo desglose, filtrado por semana) */}
+      <HLBreakdown vendor={vendor} />
 
       {/* Top products */}
       {vendor.top_productos?.length > 0 && (
@@ -239,6 +190,7 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
                 <tr>
                   <th className="px-3 py-2 text-left">#</th>
                   <th className="px-3 py-2 text-left">Producto</th>
+                  <th className="px-3 py-2 text-right">Empaques</th>
                   <th className="px-3 py-2 text-right">Importe</th>
                   <th className="px-3 py-2 text-right">% del total</th>
                 </tr>
@@ -246,12 +198,13 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
               <tbody>
                 {vendor.top_productos.map((p, i) => {
                   const pctProd = vendor.total_importe > 0
-                    ? ((p.total / vendor.total_importe) * 100).toFixed(1)
+                    ? Math.round((p.total / vendor.total_importe) * 100)
                     : "0.0";
                   return (
                     <tr key={i} className="border-t border-slate-100">
                       <td className="px-3 py-2 text-slate-400">{i + 1}</td>
                       <td className="px-3 py-2 font-medium">{p.producto}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{formatNumber(p.cantidad ?? 0, 0)}</td>
                       <td className="px-3 py-2 text-right">{formatMoney(p.total)}</td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -272,6 +225,78 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Desglose de HL (Malta/Parranda × 330/500/1500) con selector de SEMANA. "Todo el mes"
+// usa los totales del vendedor; una semana usa el desglose semanal (sku_semanal).
+function HLBreakdown({ vendor }) {
+  const [semana, setSemana] = useState("");
+  const weeks = vendor.weeks_disponibles || [];
+  const single = semana && weeks.includes(semana);
+  const sku = vendor.sku_semanal || [];
+  const sizeLabel = { "330": "330 ml", "500": "500 ml", "1500": "1.5 L" };
+  const hlOf = (prod, size) => {
+    if (!single) return vendor[`${prod.toLowerCase()}_${size}`] || 0;
+    const row = sku.find((r) => r.formato === `${prod} ${sizeLabel[size]}`);
+    return row ? (row.semanal[semana] || 0) : 0;
+  };
+  const rowTot = (prod) => hlOf(prod, "330") + hlOf(prod, "500") + hlOf(prod, "1500");
+  const colTot = (size) => hlOf("Malta", size) + hlOf("Parranda", size);
+  const grand = rowTot("Malta") + rowTot("Parranda");
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <h4 className="font-semibold">
+          Desglose Hectolitros (Malta / Parranda){single ? ` · ${semana}` : ""}
+        </h4>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-slate-500">Semana:</label>
+          <select
+            className="input text-xs py-1 px-2 w-auto"
+            value={semana}
+            onChange={(e) => setSemana(e.target.value)}
+          >
+            <option value="">Todo el mes</option>
+            {weeks.map((w) => (
+              <option key={w} value={w}>{w}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-100">
+            <tr>
+              <th className="px-3 py-2 text-left">Producto</th>
+              <th className="px-3 py-2 text-right">330 ml</th>
+              <th className="px-3 py-2 text-right">500 ml</th>
+              <th className="px-3 py-2 text-right">1500 ml</th>
+              <th className="px-3 py-2 text-right font-bold">Total HL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {["Malta", "Parranda"].map((prod) => (
+              <tr key={prod} className="border-t border-slate-100">
+                <td className="px-3 py-2 font-medium">{prod}</td>
+                <td className="px-3 py-2 text-right">{formatNumber(hlOf(prod, "330"))}</td>
+                <td className="px-3 py-2 text-right">{formatNumber(hlOf(prod, "500"))}</td>
+                <td className="px-3 py-2 text-right">{formatNumber(hlOf(prod, "1500"))}</td>
+                <td className="px-3 py-2 text-right font-semibold">{formatNumber(rowTot(prod))}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-slate-300 bg-slate-50">
+              <td className="px-3 py-2 font-bold">Total</td>
+              <td className="px-3 py-2 text-right font-bold">{formatNumber(colTot("330"))}</td>
+              <td className="px-3 py-2 text-right font-bold">{formatNumber(colTot("500"))}</td>
+              <td className="px-3 py-2 text-right font-bold">{formatNumber(colTot("1500"))}</td>
+              <td className="px-3 py-2 text-right font-bold text-brand-700">{formatNumber(grand)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

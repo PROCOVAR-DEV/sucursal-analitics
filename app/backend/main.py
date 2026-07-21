@@ -30,7 +30,8 @@ from services.excel_export import (
     export_all, export_clientes_analisis, export_market, export_productos,
     export_ranking, export_ventas,
 )
-from services.loader import ReportData, available_periods, filter_by_period, load_report
+from services.loader import ReportData, STD_COLS, available_periods, filter_by_period, load_report
+from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.market import compute_market
 from services.productos import compute_productos
 from services.ranking import compute_ranking
@@ -365,6 +366,31 @@ def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=N
     return compute_metas_gestor(report, eff, dia)
 
 
+# Desglose GENERAL (todos los vendedores) por formato de cerveza Parranda y Malta Guajira.
+# HL total de cada SKU/tamaño, no por vendedor. Para el Resumen del dashboard.
+_FORMATOS_DESGLOSE = [
+    ("Parranda", "IsParranda", "1500", "1.5 L"),
+    ("Parranda", "IsParranda", "500", "500 ml"),
+    ("Parranda", "IsParranda", "330", "330 ml"),
+    ("Malta", "IsMalta", "1500", "1.5 L"),
+    ("Malta", "IsMalta", "500", "500 ml"),
+    ("Malta", "IsMalta", "330", "330 ml"),
+]
+
+
+def _desglose_formato_general(report, eff) -> list[dict]:
+    dfx = only_valid(enrich_for_sucursal(report, eff), gestor_keys(eff))
+    size_col = STD_COLS["size"]
+    out: list[dict] = []
+    for prod, flag, size, label in _FORMATOS_DESGLOSE:
+        hl = 0.0
+        if not dfx.empty and "Hectolitros" in dfx.columns and flag in dfx.columns and size_col in dfx.columns:
+            mask = dfx[flag].fillna(False) & (dfx[size_col] == size)
+            hl = round(float(dfx.loc[mask, "Hectolitros"].sum()), 2)
+        out.append({"producto": prod, "tamano": label, "formato": f"{prod} {label}", "hectolitros": hl})
+    return out
+
+
 @app.get("/api/sucursales/{sid}/sources/{source_id}/dashboard")
 def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     report = repository.accumulated(sid) if source_id == "accumulated" else repository.get(sid, source_id)
@@ -380,6 +406,9 @@ def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None
                 {"producto": k, "meta": v, "real": 0.0, "cumplimiento_pct": 0.0, "deberia": 0.0,
                  "delta": -v, "necesario_por_dia": 0.0, "estado": "critico"}
                 for k, v in eff["metas_productos_ces"].items()],
+            "desglose_formato": [
+                {"producto": p, "tamano": lbl, "formato": f"{p} {lbl}", "hectolitros": 0.0}
+                for p, _f, _s, lbl in _FORMATOS_DESGLOSE],
         }
     report = filter_by_period(report, mes)
     eff = _eff_scoped(suc, report, mes, user)
@@ -397,6 +426,8 @@ def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None
             "dias_laborales_totales": productos["dias_laborales_totales"]},
         "gestores_ventas": ventas["gestores"], "ranking_general": ranking["general"],
         "ranking_semanal": ranking["semanal"], "cumplimiento_productos": productos["cumplimiento"],
+        # Desglose GENERAL por formato (HL, no dinero): cada SKU de Parranda y Malta.
+        "desglose_formato": _desglose_formato_general(report, eff),
     }
 
 

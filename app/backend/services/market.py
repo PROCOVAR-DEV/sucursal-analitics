@@ -18,7 +18,11 @@ def _semaforo(pct: float) -> str:
 
 
 def _week_of(ts: pd.Timestamp) -> str:
-    return WEEKS[min(((ts.day - 1) // 7), 4)]
+    # Semana de CALENDARIO (Lun-Dom) dentro del mes, no bloques fijos de 7 días desde el 1.
+    # Cada bloque Lun-Dom es una semana: así el lunes cae SIEMPRE en una semana nueva
+    # (ej. lunes 20-jul = S4, no S3) y una semana completa = sus 5 días laborales.
+    first_weekday = ts.replace(day=1).weekday()  # 0 = lunes
+    return WEEKS[min(((ts.day + first_weekday - 1) // 7), 4)]
 
 
 def compute_market(report, eff: dict) -> dict:
@@ -82,11 +86,43 @@ def compute_market(report, eff: dict) -> dict:
         tot_real_hl += real_hl_mes
         tot_real_ccc += real_ccc_mes
 
+    # Desglose por SKU (formato) SEMANAL: HL de cada formato de Cerveza Parranda y Malta
+    # Guajira por semana (S1-S5), general (todos los vendedores). Para elegir una semana.
+    size_col = STD_COLS["size"]
+    FORMATOS = [
+        ("Parranda", "IsParranda", "1500", "Parranda 1.5 L"),
+        ("Parranda", "IsParranda", "500", "Parranda 500 ml"),
+        ("Parranda", "IsParranda", "330", "Parranda 330 ml"),
+        ("Malta", "IsMalta", "1500", "Malta 1.5 L"),
+        ("Malta", "IsMalta", "500", "Malta 500 ml"),
+        ("Malta", "IsMalta", "330", "Malta 330 ml"),
+    ]
+    sku_semanal: list[dict] = []
+    semanas_con_datos: set[str] = set()
+    if not df.empty and fec in df.columns and "Hectolitros" in df.columns:
+        dv = df.dropna(subset=[fec]).copy()
+        dv["__w__"] = dv[fec].apply(_week_of)
+        semanas_con_datos = set(dv["__w__"].unique())
+        for prod, flag, size, label in FORMATOS:
+            mask = dv[flag].fillna(False) & (dv[size_col] == size)
+            by_week = {w: 0.0 for w in WEEKS}
+            if mask.any():
+                grp = dv.loc[mask].groupby("__w__")["Hectolitros"].sum()
+                for w, v in grp.items():
+                    if w in by_week:
+                        by_week[w] = round(float(v), 2)
+            sku_semanal.append({
+                "producto": prod, "formato": label,
+                "semanal": by_week, "total": round(sum(by_week.values()), 2),
+            })
+    weeks_disponibles = [w for w in WEEKS if w in semanas_con_datos]
+
     return {
         "rango": report.rango_str, "periodo": eff.get("_period"),
         "supervisor_nombre": eff.get("supervisor_nombre"),
         "meta_hl": float(eff["meta_hectolitros_total"]), "meta_ccc": float(eff["meta_ccc_total"]),
         "weeks": WEEKS, "hl": filas_hl, "ccc": filas_ccc,
+        "sku_semanal": sku_semanal, "weeks_disponibles": weeks_disponibles,
         "totales": {
             "hl_semanal": {w: round(tot_hl[w], 2) for w in WEEKS},
             "ccc_semanal": {w: int(tot_ccc[w]) for w in WEEKS},

@@ -18,7 +18,7 @@ const PALETTE = ["#2563eb", "#16a34a", "#f59e0b", "#db2777", "#7c3aed", "#0891b2
 
 function fmt(v) {
   if (v === null || v === undefined || isNaN(v)) return "–";
-  return Number(v).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Number(v).toLocaleString("es-CO", { maximumFractionDigits: 0 });
 }
 
 function CustomBarTooltip({ active, payload, label }) {
