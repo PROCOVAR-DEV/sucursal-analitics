@@ -2,6 +2,9 @@ import axios from "axios";
 
 const api = axios.create({ baseURL: "/api" });
 
+// Sucursal "virtual" = vista combinada de TODAS las sucursales permitidas.
+export const ALL_SID = "__all__";
+
 // ---- Estado de sesión (token + sucursal activa) ----
 let _sucursal = null;
 
@@ -71,7 +74,11 @@ export async function updateGestor(sid, clave, payload) { return (await api.put(
 export async function deleteGestor(sid, clave) { await api.delete(`/sucursales/${sid}/gestores/${encodeURIComponent(clave)}`); }
 
 // ---- Uploads (sucursal activa) ----
-function base() { return `/sucursales/${getSucursalId()}`; }
+// En modo "Todas las sucursales" las consultas van a /all/... (agregado en el backend).
+function base() {
+  const sid = getSucursalId();
+  return sid === ALL_SID ? "/all" : `/sucursales/${sid}`;
+}
 export async function uploadFile(file, { force = false } = {}) {
   const form = new FormData();
   form.append("file", file);

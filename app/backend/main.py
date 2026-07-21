@@ -391,9 +391,9 @@ def _desglose_formato_general(report, eff) -> list[dict]:
     return out
 
 
-@app.get("/api/sucursales/{sid}/sources/{source_id}/dashboard")
-def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
-    report = repository.accumulated(sid) if source_id == "accumulated" else repository.get(sid, source_id)
+def _compute_dashboard(suc: dict, source_id: str, mes: str | None, user: dict) -> dict:
+    """Payload del Resumen para UNA sucursal (fuente = upload uuid o 'accumulated')."""
+    report = repository.accumulated(suc["id"]) if source_id == "accumulated" else repository.get(suc["id"], source_id)
     if report is None:
         eff = _scope_for_user(config_for_period(suc, None, None), user)
         return {
@@ -429,6 +429,125 @@ def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None
         # Desglose GENERAL por formato (HL, no dinero): cada SKU de Parranda y Malta.
         "desglose_formato": _desglose_formato_general(report, eff),
     }
+
+
+@app.get("/api/sucursales/{sid}/sources/{source_id}/dashboard")
+def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    return _compute_dashboard(suc, source_id, mes, user)
+
+
+def _aggregate_dashboards(items: list[dict]) -> dict:
+    """Combina los payloads de Resumen de varias sucursales en UNO solo.
+    - KPIs se SUMAN; % cumplimiento se recalcula = suma(HL) / suma(meta).
+    - Gestores y vendedores se fusionan por NOMBRE (sumando).
+    - Desglose por formato y cumplimiento por producto se suman por clave.
+    Cada item ya viene calculado con la config propia de su sucursal, así que
+    no hay cruce de gestores entre sucursales.
+    """
+    k = {"total_hectolitros": 0.0, "meta_hectolitros": 0.0, "total_importe": 0.0,
+         "total_clientes": 0, "total_skus": 0,
+         "dias_laborales_transcurridos": 0, "dias_laborales_totales": 0}
+    for it in items:
+        kp = it.get("kpis") or {}
+        k["total_hectolitros"] += kp.get("total_hectolitros") or 0
+        k["meta_hectolitros"] += kp.get("meta_hectolitros") or 0
+        k["total_importe"] += kp.get("total_importe") or 0
+        k["total_clientes"] += kp.get("total_clientes") or 0
+        k["total_skus"] += kp.get("total_skus") or 0
+        k["dias_laborales_transcurridos"] = max(k["dias_laborales_transcurridos"], kp.get("dias_laborales_transcurridos") or 0)
+        k["dias_laborales_totales"] = max(k["dias_laborales_totales"], kp.get("dias_laborales_totales") or 0)
+    k["total_hectolitros"] = round(k["total_hectolitros"], 2)
+    k["meta_hectolitros"] = round(k["meta_hectolitros"], 2)
+    k["total_importe"] = round(k["total_importe"], 2)
+    k["cumplimiento_pct"] = round(k["total_hectolitros"] / k["meta_hectolitros"] * 100, 1) if k["meta_hectolitros"] else 0.0
+
+    gest: dict[str, dict] = {}
+    for it in items:
+        for g in it.get("gestores_ventas") or []:
+            e = gest.setdefault(str(g.get("gestor", "")).upper(), {"gestor": g.get("gestor", ""), "total_hectolitros": 0.0})
+            e["total_hectolitros"] += g.get("total_hectolitros") or 0
+    gestores = sorted(({"gestor": e["gestor"], "total_hectolitros": round(e["total_hectolitros"], 2)} for e in gest.values()),
+                      key=lambda x: -x["total_hectolitros"])
+
+    rk: dict[str, dict] = {}
+    for it in items:
+        for r in it.get("ranking_general") or []:
+            e = rk.setdefault(str(r.get("vendedor", "")).upper(), {"vendedor": r.get("vendedor", ""), "ventas": 0.0})
+            e["ventas"] += r.get("ventas") or 0
+    ranking = sorted(({"vendedor": e["vendedor"], "ventas": round(e["ventas"], 2)} for e in rk.values()),
+                     key=lambda x: -x["ventas"])
+    tot_v = sum(r["ventas"] for r in ranking)
+    for i, r in enumerate(ranking, 1):
+        r["posicion"] = i
+        r["participacion_pct"] = round(r["ventas"] / tot_v * 100, 1) if tot_v else 0.0
+
+    dg: dict[tuple, dict] = {}
+    dg_order: list[tuple] = []
+    for it in items:
+        for d in it.get("desglose_formato") or []:
+            key = (d.get("producto"), d.get("formato"))
+            if key not in dg:
+                dg[key] = {"producto": d.get("producto"), "tamano": d.get("tamano"), "formato": d.get("formato"), "hectolitros": 0.0}
+                dg_order.append(key)
+            dg[key]["hectolitros"] += d.get("hectolitros") or 0
+    desglose = [{**dg[key], "hectolitros": round(dg[key]["hectolitros"], 2)} for key in dg_order]
+
+    cp: dict[str, dict] = {}
+    cp_order: list[str] = []
+    for it in items:
+        for p in it.get("cumplimiento_productos") or []:
+            key = p.get("producto")
+            if key not in cp:
+                cp[key] = {"producto": key, "grupo": p.get("grupo"), "meta": 0.0, "real": 0.0, "deberia": 0.0, "necesario_por_dia": 0.0}
+                cp_order.append(key)
+            e = cp[key]
+            if not e.get("grupo"):
+                e["grupo"] = p.get("grupo")
+            e["meta"] += p.get("meta") or 0
+            e["real"] += p.get("real") or 0
+            e["deberia"] += p.get("deberia") or 0
+            e["necesario_por_dia"] += p.get("necesario_por_dia") or 0
+    cumplimiento = []
+    for key in cp_order:
+        e = cp[key]
+        meta, real, deb = round(e["meta"], 2), round(e["real"], 2), round(e["deberia"], 2)
+        pct = round(real / meta * 100, 1) if meta else 0.0
+        cumplimiento.append({"producto": key, "grupo": e["grupo"], "meta": meta, "real": real,
+                             "cumplimiento_pct": pct, "deberia": deb, "delta": round(real - deb, 2),
+                             "necesario_por_dia": round(e["necesario_por_dia"], 2),
+                             "estado": "ok" if pct >= 100 else ("alerta" if pct >= 80 else "critico")})
+
+    return {
+        "id": "all", "filename": "Todas las sucursales", "rango": "—",
+        "filas": sum(int(it.get("filas") or 0) for it in items),
+        "sucursales": len(items), "kpis": k,
+        "gestores_ventas": gestores, "ranking_general": ranking, "ranking_semanal": [],
+        "cumplimiento_productos": cumplimiento, "desglose_formato": desglose,
+    }
+
+
+def _allowed_sucursales_full(user: dict) -> list[dict]:
+    ids = auth_store.allowed_sucursales(user, [s["id"] for s in sucursal_store.list_summary()])
+    return [s for s in (sucursal_store.get(i) for i in ids) if s is not None]
+
+
+# Vista COMBINADA de todas las sucursales permitidas (admin/analitico ven todas).
+@app.get("/api/all/sources/{source_id}/dashboard")
+def all_dashboard(source_id: str, mes: str | None = Query(default=None), user: dict = Depends(current_user)) -> dict:
+    sucs = _allowed_sucursales_full(user)
+    agg = _aggregate_dashboards([_compute_dashboard(suc, source_id, mes, user) for suc in sucs])
+    agg["rango"] = mes or "Todo (acumulado)"
+    return agg
+
+
+@app.get("/api/all/sources/{source_id}/periods")
+def all_periods(source_id: str, user: dict = Depends(current_user)) -> dict:
+    ps: set[str] = set()
+    for suc in _allowed_sucursales_full(user):
+        rep = repository.accumulated(suc["id"]) if source_id == "accumulated" else repository.get(suc["id"], source_id)
+        if rep is not None:
+            ps.update(available_periods(rep))
+    return {"periods": sorted(ps)}
 
 
 # --------------------------------------------------------------- exports

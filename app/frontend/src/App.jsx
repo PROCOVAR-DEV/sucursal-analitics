@@ -11,7 +11,7 @@ import ReportesView from "./components/ReportesView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import VendedoresView from "./components/VendedoresView.jsx";
 import VentasView from "./components/VentasView.jsx";
-import { getPeriods, getToken, listSucursales, logout, me, setSucursal } from "./api.js";
+import { ALL_SID, getPeriods, getToken, listSucursales, logout, me, setSucursal } from "./api.js";
 import { Picker, Select } from "./components/ui.jsx";
 
 const MONTHS_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -73,6 +73,7 @@ export default function App() {
   const loadSucursales = () => listSucursales().then((items) => {
     setSucursales(items);
     setSid((cur) => {
+      if (cur === ALL_SID) { setSucursal(cur); return cur; }  // mantener "Todas las sucursales"
       const next = cur && items.find((s) => s.id === cur) ? cur : items[0]?.id || null;
       setSucursal(next);
       return next;
@@ -110,7 +111,9 @@ export default function App() {
   const currentSuc = sucursales.find((s) => s.id === sid);
   const viewLabel = TABS.find((t) => t.id === view)?.label;
   const canConfig = user.role === "admin" || user.role === "supervisor";
-  if (isConfig && !canConfig) { go("dashboard"); }
+  const canSeeAll = user.role === "admin" || user.role === "analitico";  // ven todas las sucursales
+  const isAll = sid === ALL_SID;
+  if (isConfig && (!canConfig || isAll)) { go("dashboard"); }  // config es por-sucursal, no en modo "Todas"
 
   function doLogout() { logout(); setUser(null); setSucursales([]); setSid(null); }
 
@@ -122,7 +125,7 @@ export default function App() {
             <h1 className="text-base sm:text-lg font-bold leading-tight">Sucursal Analytics</h1>
             {/* Breadcrumb: dónde estás */}
             <p className="text-xs text-brand-100/90 flex items-center gap-1.5 truncate">
-              <span className="opacity-80">{currentSuc?.nombre || "—"}</span>
+              <span className="opacity-80">{isAll ? "Todas las sucursales" : (currentSuc?.nombre || "—")}</span>
               <span className="opacity-50">›</span>
               {isConfig ? (
                 <><span className="opacity-80">Configuración</span><span className="opacity-50">›</span><span className="font-semibold">{CONFIG_LABELS[configSection] || configSection}</span></>
@@ -133,8 +136,11 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Picker value={sid || ""} onChange={(v) => { setSucursal(v); setSid(v); }}
-              options={sucursales.map((s) => ({ value: s.id, label: s.nombre, hint: `${s.gestores ?? ""}${s.gestores ? " gestores" : ""}` }))} />
-            {canConfig && (
+              options={[
+                ...(canSeeAll ? [{ value: ALL_SID, label: "🏢 Todas las sucursales" }] : []),
+                ...sucursales.map((s) => ({ value: s.id, label: s.nombre, hint: `${s.gestores ?? ""}${s.gestores ? " gestores" : ""}` })),
+              ]} />
+            {canConfig && !isAll && (
               <button className={`btn ${isConfig ? "bg-white text-brand-700" : "bg-white/10 hover:bg-white/20 text-white"}`} onClick={() => go(isConfig ? "dashboard" : (user.role === "supervisor" ? "config/metas" : "config/sucursal"))}>
                 <SettingsIcon size={16} /> {isConfig ? "Tablero" : "Config"}
               </button>
@@ -161,7 +167,7 @@ export default function App() {
           desde md+ vuelve a ser sidebar lateral y solo scrollea el <main>.
           min-w-0 en <main> evita que las tablas anchas estiren el flex. */}
       <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
-        {!isConfig && <UploadPanel sourceId={sourceId} onSelect={setSourceId} onRefresh={setUploads} key={sid} />}
+        {!isConfig && !isAll && <UploadPanel sourceId={sourceId} onSelect={setSourceId} onRefresh={setUploads} key={sid} />}
         <main className="flex-1 min-w-0 md:overflow-y-auto bg-slate-50">
           <div className="max-w-7xl mx-auto p-3 sm:p-6">
             {isConfig ? (
@@ -180,12 +186,18 @@ export default function App() {
                     </button>
                   ))}
                 </nav>
-                {uploads.length === 0 && (
+                {!isAll && uploads.length === 0 && (
                   <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
                     Sube un Reporte de Venta (.xls/.xlsx) para ver datos reales de {currentSuc?.nombre}.
                   </div>
                 )}
-                {sid && <Current sourceId={sourceId} period={period} />}
+                {sid && (isAll && view !== "dashboard" ? (
+                  <div className="p-8 text-center text-slate-400">
+                    Elige una sucursal específica para ver «{viewLabel}». La vista combinada solo está disponible en el <b>Resumen</b>.
+                  </div>
+                ) : (
+                  <Current sourceId={sourceId} period={period} />
+                ))}
               </>
             )}
           </div>
