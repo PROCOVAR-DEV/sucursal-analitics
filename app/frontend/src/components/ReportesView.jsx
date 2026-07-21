@@ -1,4 +1,4 @@
-import { Download, FileSpreadsheet, Package, TrendingUp, Trophy, Users } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, Package, TrendingUp, Trophy, Users } from "lucide-react";
 import { useState } from "react";
 import { downloadExport } from "../api.js";
 
@@ -14,6 +14,21 @@ function formatPeriod(p) {
 }
 
 const REPORTS = [
+  {
+    id: "parranda-facturas",
+    title: "Ventas por Factura (Parranda / Malta)",
+    icon: FileText,
+    color: "text-rose-600",
+    bg: "bg-rose-50",
+    border: "border-rose-100",
+    desc: [
+      "Una hoja por vendedor con CADA factura (No. Operación, Fecha, Cliente, Mercancía)",
+      "Cantidad (empaques), Importe, Suma Total y Hectolitros por factura",
+      "Solo Parranda y Malta, ordenado por fecha — para revisar factura por factura",
+      "KPIs (ventas, HL, % cumplimiento) y conversión a blisters/pallets",
+      "Hoja Supervisor con el resumen de todos los vendedores",
+    ],
+  },
   {
     id: "ventas",
     title: "Parranda y Malta (HL)",

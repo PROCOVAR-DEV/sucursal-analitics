@@ -27,8 +27,8 @@ from services.clientes_analisis import compute_clientes_analisis
 from services.diario import compute_diario
 from services.metas_gestor import compute_metas_gestor
 from services.excel_export import (
-    export_all, export_clientes_analisis, export_market, export_productos,
-    export_ranking, export_ventas,
+    export_all, export_clientes_analisis, export_market, export_parranda_facturas,
+    export_productos, export_ranking, export_ventas,
 )
 from services.loader import ReportData, STD_COLS, available_periods, filter_by_period, load_report
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
@@ -435,6 +435,8 @@ def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None
 _EXPORTERS = {
     "ventas": export_ventas, "productos": export_productos, "market": export_market,
     "ranking": export_ranking, "clientes-analisis": export_clientes_analisis, "all": export_all,
+    # Parranda/Malta por FACTURA (reproduce el script automatizar_parranda.py).
+    "parranda-facturas": export_parranda_facturas,
 }
 
 

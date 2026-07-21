@@ -10,6 +10,8 @@ import io
 import pandas as pd
 
 from core.constants import COLORS, GROUP_BG_COLORS
+from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
+from services.loader import STD_COLS
 from services.market import WEEKS, compute_market
 from services.productos import compute_productos
 from services.ranking import compute_ranking
@@ -370,6 +372,153 @@ def export_clientes_analisis(report, eff: dict) -> bytes:
     for g in data["por_gestor"]:
         titulo = f"Clientes de {g['gestor']}"
         _sheet_clientes(wb, f, g["gestor"], titulo, g)
+    wb.close()
+    return bio.getvalue()
+
+
+# ------------------------------------------------ PARRANDA/MALTA POR FACTURA
+# Reproduce el script `automatizar_parranda.py`: una hoja por vendedor con CADA
+# factura (No. Operación, Fecha, Cliente, Mercancía, Cantidad, Importe, Suma Total,
+# Hectolitros) SOLO de Parranda/Malta, KPIs y conversión a Blisters/Pallets; más una
+# hoja Supervisor con el resumen. Sirve para revisar factura por factura.
+_UNITS_PP = {"330": 496, "500": 336, "1500": 110}  # unidades por pallet (fallback del script)
+# (columna en el df normalizado, encabezado, tipo de formato)
+_INV_COLS = [
+    ("__op__", "No. Operación", "int"),
+    ("__fecha__", "Fecha", "date"),
+    ("__socio__", "Cliente", "text"),
+    ("__merc__", "Mercancía", "text"),
+    ("__cant__", "Cantidad (empaques)", "int"),
+    ("__importe__", "Importe", "money"),
+    ("__suma__", "Suma Total", "money"),
+    ("Hectolitros", "Hectolitros", "num"),
+]
+
+
+def export_parranda_facturas(report, eff: dict) -> bytes:
+    bio, wb = _new_wb()
+    f = _formats(wb)
+    date_fmt = wb.add_format({"num_format": "dd/mm/yyyy", "border": 1})
+    pct_ctr = wb.add_format({"num_format": "0%", "border": 1, "align": "center", "bold": True, "bg_color": COLORS["kpi"]})
+
+    keys = gestor_keys(eff)
+    gestores_cfg = eff.get("gestores") or {}
+    upp_cfg = {str(k): float(v) for k, v in (eff.get("units_per_pallet") or {}).items()}
+
+    df = only_valid(enrich_for_sucursal(report, eff), keys)
+    if not df.empty:
+        df = df[df["IsMalta"] | df["IsParranda"]].copy()
+
+    fec, merc, cant = STD_COLS["fecha"], STD_COLS["merc"], STD_COLS["cant"]
+    imp, socio, op, suma, size_col = (
+        STD_COLS["importe"], STD_COLS["socio"], STD_COLS["op"], STD_COLS["suma"], STD_COLS["size"],
+    )
+    # Mapa columna-real por clave lógica; solo las que existen en el df.
+    real = {"__op__": op, "__fecha__": fec, "__socio__": socio, "__merc__": merc,
+            "__cant__": cant, "__importe__": imp, "__suma__": suma, "Hectolitros": "Hectolitros"}
+    inv = [(k, h, t) for (k, h, t) in _INV_COLS if real[k] in df.columns or k == "Hectolitros"]
+
+    def hl(sub, is_col, size):
+        if sub.empty or "Hectolitros" not in sub.columns:
+            return 0.0
+        return round(float(sub.loc[sub[is_col] & (sub[size_col] == size), "Hectolitros"].sum()), 2)
+
+    meta_total = float(eff.get("meta_hectolitros_total", 0.0) or 0.0)
+    supervisor = []
+
+    for g in keys:
+        nombre = str(gestores_cfg.get(g, {}).get("nombre", g))
+        sub = df[df["GestorDetectado"] == g].copy() if not df.empty else df.copy()
+        if not sub.empty and fec in sub.columns:
+            by = [fec] + ([merc] if merc in sub.columns else [])
+            sub = sub.sort_values(by=by)
+
+        ws = wb.add_worksheet(nombre[:31])
+        ws.freeze_panes(1, 0)
+        for j, (k, h, t) in enumerate(inv):
+            ws.write(0, j, h, f["header"])
+            ws.set_column(j, j, 30 if t == "text" else 14)
+
+        r = 1
+        for _, row in sub.iterrows():
+            for j, (k, h, t) in enumerate(inv):
+                v = row.get(real[k])
+                if t == "date":
+                    if pd.notna(v):
+                        ws.write_datetime(r, j, pd.Timestamp(v).to_pydatetime(), date_fmt)
+                    else:
+                        ws.write(r, j, "", f["num"])
+                elif t == "int":
+                    ws.write_number(r, j, float(v) if pd.notna(v) else 0.0, f["int"])
+                elif t == "money":
+                    ws.write_number(r, j, float(v) if pd.notna(v) else 0.0, f["money"])
+                elif t == "num":
+                    ws.write_number(r, j, float(v) if pd.notna(v) else 0.0, f["num"])
+                else:
+                    ws.write(r, j, "" if (v is None or pd.isna(v)) else str(v))
+            r += 1
+
+        total_importe = round(float(sub[imp].sum()) if imp in sub.columns and not sub.empty else 0.0, 2)
+        M330, M500, M1500 = hl(sub, "IsMalta", "330"), hl(sub, "IsMalta", "500"), hl(sub, "IsMalta", "1500")
+        P330, P500, P1500 = hl(sub, "IsParranda", "330"), hl(sub, "IsParranda", "500"), hl(sub, "IsParranda", "1500")
+        total_hl = round(M330 + M500 + M1500 + P330 + P500 + P1500, 2)
+        cuota = float(gestores_cfg.get(g, {}).get("cuota_hl", 0.0) or 0.0)
+
+        kr = r + 1
+        ws.write(kr, 0, "VENTAS", f["block_txt"]); ws.write_number(kr, 1, total_importe, f["money_b"])
+        ws.write(kr + 1, 0, "Total Hectolitros", f["block_txt"]); ws.write_number(kr + 1, 1, total_hl, f["block"])
+        ws.write(kr + 1, 2, "Cumplimiento", f["block_txt"])
+        ws.write(kr + 1, 3, (total_hl / cuota) if cuota else 0.0, pct_ctr)
+
+        # Conversión a Blisters/Pallets por producto (como el script)
+        cr = kr + 3
+        ws.merge_range(cr, 0, cr, 4, "Conversión Cantidad → Blisters y Pallets", f["kpi_txt"])
+        conv_hdr = ["Producto", "Tamaño", "Blisters", "Pallets", "Hectolitros"]
+        for j, h in enumerate(conv_hdr):
+            ws.write(cr + 1, j, h, f["header"])
+        conv_rows = [("Malta", "330", M330), ("Parranda", "330", P330),
+                     ("Parranda", "500", P500), ("Parranda", "1500", P1500)]
+        for i, (prod, size, hlv) in enumerate(conv_rows):
+            iscol = "IsMalta" if prod == "Malta" else "IsParranda"
+            bl = 0.0
+            if not sub.empty and cant in sub.columns:
+                bl = round(float(sub.loc[sub[iscol] & (sub[size_col] == size), cant].sum()), 2)
+            upp = upp_cfg.get(size, _UNITS_PP.get(size, 0))
+            pal = round(bl / upp, 2) if upp else 0.0
+            rr = cr + 2 + i
+            ws.write(rr, 0, prod, f["band"]); ws.write(rr, 1, size, f["band"])
+            ws.write_number(rr, 2, bl, f["num"]); ws.write_number(rr, 3, pal, f["num"])
+            ws.write_number(rr, 4, hlv, f["num"])
+
+        supervisor.append({"gestor": nombre, "venta": total_importe,
+                           "M330": M330, "P330": P330, "P500": P500, "P1500": P1500, "hl": total_hl})
+
+    # ---- Hoja Supervisor ----
+    ws = wb.add_worksheet("Supervisor")
+    ws.merge_range(0, 0, 1, 6, "Resumen de Ventas — Supervisor (Parranda / Malta)", f["title"])
+    ws.merge_range(0, 7, 1, 8, f"Rango: {report.rango_str}", f["subtitle"])
+    hdr = ["Gestor", "Total Venta", "M330", "P330", "P500", "P1500", "Total HL"]
+    for j, h in enumerate(hdr):
+        ws.write(3, j, h, f["header"])
+        ws.set_column(j, j, 18 if j == 0 else 13)
+    r = 4
+    for s in supervisor:
+        ws.write(r, 0, s["gestor"], f["band"])
+        ws.write_number(r, 1, s["venta"], f["money"])
+        for j, key in enumerate(["M330", "P330", "P500", "P1500", "hl"]):
+            ws.write_number(r, 2 + j, s[key], f["num"])
+        r += 1
+    # Totales
+    ws.write(r, 0, "TOTAL", f["block_txt"])
+    ws.write_number(r, 1, round(sum(s["venta"] for s in supervisor), 2), f["money_b"])
+    for j, key in enumerate(["M330", "P330", "P500", "P1500", "hl"]):
+        ws.write_number(r, 2 + j, round(sum(s[key] for s in supervisor), 2), f["block"])
+    # Meta y cumplimiento
+    total_hl_all = round(sum(s["hl"] for s in supervisor), 2)
+    ws.write(r + 2, 0, "META HECTOLITROS", f["block_txt"]); ws.write_number(r + 2, 1, meta_total, f["block"])
+    ws.write(r + 3, 0, "% CUMPLIMIENTO", f["block_txt"])
+    ws.write(r + 3, 1, (total_hl_all / meta_total) if meta_total else 0.0, pct_ctr)
+
     wb.close()
     return bio.getvalue()
 
