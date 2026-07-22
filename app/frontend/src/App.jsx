@@ -137,7 +137,7 @@ export default function App() {
           <div className="flex items-center gap-2 text-sm">
             <Picker value={sid || ""} onChange={(v) => { setSucursal(v); setSid(v); }}
               options={[
-                ...(canSeeAll ? [{ value: ALL_SID, label: "🏢 Todas las sucursales" }] : []),
+                ...(canSeeAll ? [{ value: ALL_SID, label: "Todas las sucursales" }] : []),
                 ...sucursales.map((s) => ({ value: s.id, label: s.nombre, hint: `${s.gestores ?? ""}${s.gestores ? " gestores" : ""}` })),
               ]} />
             {canConfig && !isAll && (
