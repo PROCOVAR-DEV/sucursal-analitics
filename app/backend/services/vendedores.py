@@ -85,7 +85,9 @@ def compute_vendedores(report, eff: dict) -> dict:
             aggs = {"total": (imp, "sum")}
             if cant in sub_all.columns:
                 aggs["cantidad"] = (cant, "sum")  # cantidad vendida por producto
-            agg = sub_all.groupby(merc).agg(**aggs).nlargest(10, "total").reset_index()
+            # TODOS los productos (antes era top 10): el vendedor tiene que ver todo lo
+            # que vende, no solo la cabeza. La tabla del front scrollea por dentro.
+            agg = sub_all.groupby(merc).agg(**aggs).sort_values("total", ascending=False).reset_index()
             top_productos = [
                 {
                     "producto": str(r[merc]),

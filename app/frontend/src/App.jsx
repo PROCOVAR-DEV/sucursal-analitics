@@ -196,7 +196,7 @@ export default function App() {
                     Elige una sucursal específica para ver «{viewLabel}». La vista combinada solo está disponible en el <b>Resumen</b>.
                   </div>
                 ) : (
-                  <Current sourceId={sourceId} period={period} />
+                  <Current sourceId={sourceId} period={period} user={user} />
                 ))}
               </>
             )}

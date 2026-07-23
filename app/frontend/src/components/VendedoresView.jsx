@@ -180,19 +180,26 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
       {/* HL breakdown table — con selector de SEMANA (mismo desglose, filtrado por semana) */}
       <HLBreakdown vendor={vendor} />
 
-      {/* Top products */}
+      {/* TODOS los productos (ya no es un top): scroll interno + cabecera fija, para
+          que la tarjeta no crezca sin límite pero se pueda ver todo lo vendido. */}
       {vendor.top_productos?.length > 0 && (
         <div className="card">
-          <h4 className="font-semibold mb-3">Top Productos (por importe)</h4>
-          <div className="overflow-x-auto">
+          <h4 className="font-semibold mb-3">
+            Productos (por importe){" "}
+            <span className="font-normal text-sm text-slate-400">
+              — {vendor.top_productos.length} en total
+            </span>
+          </h4>
+          {/* max-h ≈ cabecera + 10 filas: el scroll se activa a partir de 10 productos */}
+          <div className="overflow-auto scroll-thin max-h-[26rem] rounded-lg border border-slate-200">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-100">
+              <thead className="sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-2 text-left">#</th>
-                  <th className="px-3 py-2 text-left">Producto</th>
-                  <th className="px-3 py-2 text-right">Empaques</th>
-                  <th className="px-3 py-2 text-right">Importe</th>
-                  <th className="px-3 py-2 text-right">% del total</th>
+                  <th className="px-3 py-2 text-left bg-slate-100">#</th>
+                  <th className="px-3 py-2 text-left bg-slate-100">Producto</th>
+                  <th className="px-3 py-2 text-right bg-slate-100">Empaques</th>
+                  <th className="px-3 py-2 text-right bg-slate-100">Importe</th>
+                  <th className="px-3 py-2 text-right bg-slate-100">% del total</th>
                 </tr>
               </thead>
               <tbody>

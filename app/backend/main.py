@@ -320,7 +320,11 @@ def src_market(sid: str, source_id: str, mes: str | None = Query(default=None), 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/ranking")
 def src_ranking(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     report = filter_by_period(_get_source(sid, source_id), mes)
-    return compute_ranking(report, _eff_scoped(suc, report, mes, user))
+    # OJO: aquí NO se aplica _scope_for_user a propósito. El ranking es COMPARATIVO:
+    # un usuario 'gestor' debe ver a TODOS sus compañeros para saber en qué puesto va
+    # (si se recorta a lo suyo, siempre sale 1º y el ranking no le dice nada).
+    # El resto de vistas sí siguen recortadas para el rol 'gestor'.
+    return compute_ranking(report, _eff(suc, report, mes))
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/clientes-analisis")

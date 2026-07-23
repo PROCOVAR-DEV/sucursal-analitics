@@ -18,7 +18,11 @@ function weekMonth(semana) {
   return parseInt(end.split("/")[1], 10);
 }
 
-export default function RankingView({ sourceId, period }) {
+export default function RankingView({ sourceId, period, user }) {
+  // El ranking es COMPARATIVO: un gestor ve a todos sus compañeros. Resaltamos su
+  // propia fila para que ubique de un vistazo en qué puesto va.
+  const miClave = String(user?.gestor || "").trim().toUpperCase();
+  const esMio = (nombre) => !!miClave && String(nombre || "").trim().toUpperCase() === miClave;
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [selMonth, setSelMonth] = useState(null);
@@ -97,9 +101,17 @@ export default function RankingView({ sourceId, period }) {
           </thead>
           <tbody>
             {data.general.map((r) => (
-              <tr key={r.vendedor} className="border-t border-slate-100">
+              <tr
+                key={r.vendedor}
+                className={`border-t border-slate-100 ${esMio(r.vendedor) ? "bg-brand-50 ring-1 ring-inset ring-brand-200" : ""}`}
+              >
                 <td className="px-3 py-2 text-xl">{MEDAL[r.posicion] || r.posicion}</td>
-                <td className="px-3 py-2 font-medium">{r.vendedor}</td>
+                <td className={`px-3 py-2 font-medium ${esMio(r.vendedor) ? "text-brand-700" : ""}`}>
+                  {r.vendedor}
+                  {esMio(r.vendedor) && (
+                    <span className="ml-2 px-1.5 py-0.5 rounded-full bg-brand-600 text-white text-[10px] font-semibold uppercase">tú</span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-right font-semibold">{formatMoney(r.ventas)}</td>
               </tr>
             ))}
