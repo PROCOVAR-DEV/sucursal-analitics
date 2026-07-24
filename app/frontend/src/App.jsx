@@ -1,6 +1,6 @@
 import { BarChart3, CalendarDays, Calendar, FileSpreadsheet, LogOut, Package, Settings as SettingsIcon, ShoppingCart, Target, Trophy, UserCheck, Users } from "lucide-react";
 import { useEffect, useState } from "react";
-import AdminPanel from "./components/AdminPanel.jsx";
+import AdminPanel, { TodasSucursalesConfig } from "./components/AdminPanel.jsx";
 import ClientesAnalisisView from "./components/ClientesAnalisisView.jsx";
 import DashboardView from "./components/DashboardView.jsx";
 import Login from "./components/Login.jsx";
@@ -113,7 +113,7 @@ export default function App() {
   const canConfig = user.role === "admin" || user.role === "supervisor";
   const canSeeAll = user.role === "admin" || user.role === "analitico";  // ven todas las sucursales
   const isAll = sid === ALL_SID;
-  if (isConfig && (!canConfig || isAll)) { go("dashboard"); }  // config es por-sucursal, no en modo "Todas"
+  if (isConfig && !canConfig) { go("dashboard"); }
 
   function doLogout() { logout(); setUser(null); setSucursales([]); setSid(null); }
 
@@ -140,8 +140,12 @@ export default function App() {
                 ...(canSeeAll ? [{ value: ALL_SID, label: "Todas las sucursales" }] : []),
                 ...sucursales.map((s) => ({ value: s.id, label: s.nombre, hint: `${s.gestores ?? ""}${s.gestores ? " gestores" : ""}` })),
               ]} />
-            {canConfig && !isAll && (
-              <button className={`btn ${isConfig ? "bg-white text-brand-700" : "bg-white/10 hover:bg-white/20 text-white"}`} onClick={() => go(isConfig ? "dashboard" : (user.role === "supervisor" ? "config/metas" : "config/sucursal"))}>
+            {canConfig && (
+              <button className={`btn ${isConfig ? "bg-white text-brand-700" : "bg-white/10 hover:bg-white/20 text-white"}`} onClick={() => {
+                if (isConfig) { go("dashboard"); return; }
+                if (user.role === "supervisor") { go("config/metas"); return; }
+                go("config/sucursal");
+              }}>
                 <SettingsIcon size={16} /> {isConfig ? "Tablero" : "Config"}
               </button>
             )}
@@ -171,7 +175,9 @@ export default function App() {
         <main className="flex-1 min-w-0 md:overflow-y-auto bg-slate-50">
           <div className="max-w-7xl mx-auto p-3 sm:p-6">
             {isConfig ? (
-              sid ? (
+              isAll ? (
+                <TodasSucursalesConfig sucursales={sucursales} onSelectSucursal={(id) => { setSid(id); setSucursal(id); go("config/sucursal"); }} />
+              ) : sid ? (
                 <AdminPanel sid={sid} user={user} sucursales={sucursales} onSucursalesChanged={loadSucursales}
                   section={configSection} onSection={(id) => go("config/" + id)} />
               ) : (

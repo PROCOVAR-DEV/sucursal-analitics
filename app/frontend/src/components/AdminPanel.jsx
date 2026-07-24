@@ -28,25 +28,32 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
   const role = user?.role;
   const isAdmin = role === "admin";
   const isSup = role === "supervisor";
+  const isAll = sid === "__all__";
 
-  const load = () => getSucursal(sid).then(setCfg).catch((e) => flash("err", e?.response?.data?.detail || e.message));
-  useEffect(() => { if (!sid) return; setCfg(null); load(); }, [sid]);
+  const load = () => { if (isAll) return; getSucursal(sid).then(setCfg).catch((e) => flash("err", e?.response?.data?.detail || e.message)); };
+  useEffect(() => { if (!sid || isAll) return; setCfg(null); load(); }, [sid]);
   // Refresca la config al cambiar de pestaña: cada pestaña siempre ve lo último
   // guardado en otra (sin tener que refrescar la página).
-  useEffect(() => { if (sid) getSucursal(sid).then(setCfg).catch(() => {}); }, [section]);
+  useEffect(() => { if (sid && !isAll) getSucursal(sid).then(setCfg).catch(() => {}); }, [section]);
   function flash(t, m) { setMsg({ t, m }); setTimeout(() => setMsg(null), 3500); }
-  const reload = async () => setCfg(await getSucursal(sid));
+  const reload = async () => { if (!isAll) setCfg(await getSucursal(sid)); };
 
-  const ALL_TABS = [
-    { id: "sucursal", label: "Sucursal", icon: Building2 },
-    { id: "gestores", label: "Gestores", icon: Users },
-    { id: "metas", label: "Metas", icon: Target },
-    { id: "calculadora", label: "Calculadora de metas", icon: Calculator },
-    { id: "grupos", label: "Grupos y productos", icon: Layers },
-    { id: "parametros", label: "Parámetros", icon: SlidersHorizontal },
-    ...(isAdmin ? [{ id: "sucursales", label: "Sucursales", icon: Building2 }] : []),
-    ...(isAdmin ? [{ id: "usuarios", label: "Usuarios", icon: UserPlus }] : []),
-  ];
+  // En modo "Todas", solo pestañas globales (usuarios y sucursales).
+  const ALL_TABS = isAll
+    ? [
+        ...(isAdmin ? [{ id: "usuarios", label: "Usuarios", icon: UserPlus }] : []),
+        ...(isAdmin ? [{ id: "sucursales", label: "Sucursales", icon: Building2 }] : []),
+      ]
+    : [
+        { id: "sucursal", label: "Sucursal", icon: Building2 },
+        { id: "gestores", label: "Gestores", icon: Users },
+        { id: "metas", label: "Metas", icon: Target },
+        { id: "calculadora", label: "Calculadora de metas", icon: Calculator },
+        { id: "grupos", label: "Grupos y productos", icon: Layers },
+        { id: "parametros", label: "Parámetros", icon: SlidersHorizontal },
+        ...(isAdmin ? [{ id: "sucursales", label: "Sucursales", icon: Building2 }] : []),
+        ...(isAdmin ? [{ id: "usuarios", label: "Usuarios", icon: UserPlus }] : []),
+      ];
   // Supervisor solo configura metas de su sucursal.
   const TABS = isSup ? ALL_TABS.filter((t) => t.id === "metas" || t.id === "calculadora") : ALL_TABS;
   // Si la sección actual no está permitida para el rol, ir a la primera válida.
@@ -55,21 +62,28 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
   // revienta ("Rendered more hooks…") dejando la pantalla en blanco.
   useEffect(() => {
     if (TABS.length && !TABS.some((t) => t.id === tab)) onSection?.(TABS[0].id);
-  }, [tab, isSup, isAdmin]);
+  }, [tab, isSup, isAdmin, isAll]);
 
-  if (!cfg) return <div className="p-6 text-slate-500 animate-pulse">Cargando configuración…</div>;
+  if (!isAll && !cfg) return <div className="p-6 text-slate-500 animate-pulse">Cargando configuración…</div>;
 
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="section-title flex items-center gap-2"><Settings2 className="text-brand-600" size={22} /> Configuración · {cfg.nombre}</h2>
-          <p className="text-sm text-slate-500">Todo es editable y se guarda por sucursal.</p>
+          <h2 className="section-title flex items-center gap-2">
+            <Settings2 className="text-brand-600" size={22} />
+            {isAll ? "Configuración · Todas las sucursales" : `Configuración · ${cfg?.nombre}`}
+          </h2>
+          <p className="text-sm text-slate-500">
+            {isAll ? "Gestiona usuarios y sucursales del sistema." : "Todo es editable y se guarda por sucursal."}
+          </p>
         </div>
-        <Button variant="subtle" icon={RotateCcw} onClick={async () => {
-          if (!confirm("¿Restaurar metas y parámetros por defecto? (los gestores se mantienen)")) return;
-          setCfg(await resetSucursal(sid)); flash("ok", "Metas y parámetros restaurados");
-        }}>Restaurar metas/parámetros</Button>
+        {!isAll && (
+          <Button variant="subtle" icon={RotateCcw} onClick={async () => {
+            if (!confirm("¿Restaurar metas y parámetros por defecto? (los gestores se mantienen)")) return;
+            setCfg(await resetSucursal(sid)); flash("ok", "Metas y parámetros restaurados");
+          }}>Restaurar metas/parámetros</Button>
+        )}
       </div>
 
       <Toast msg={msg} onClose={() => setMsg(null)} />
@@ -83,14 +97,14 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
         ))}
       </div>
 
-      {tab === "sucursal" && <DatosSucursal cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Datos guardados"); onSucursalesChanged?.(); }} />}
-      {tab === "gestores" && <Gestores cfg={cfg} sid={sid} reload={reload} flash={flash} />}
-      {tab === "metas" && <Metas cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Metas guardadas"); }} />}
-      {tab === "calculadora" && <CalculadoraView cfg={cfg} sid={sid} onSaved={(c) => setCfg(c)} />}
-      {tab === "grupos" && <Grupos cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Grupos guardados"); }} />}
-      {tab === "parametros" && <Parametros cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Parámetros guardados"); }} />}
+      {!isAll && tab === "sucursal" && <DatosSucursal cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Datos guardados"); onSucursalesChanged?.(); }} />}
+      {!isAll && tab === "gestores" && <Gestores cfg={cfg} sid={sid} reload={reload} flash={flash} />}
+      {!isAll && tab === "metas" && <Metas cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Metas guardadas"); }} />}
+      {!isAll && tab === "calculadora" && <CalculadoraView cfg={cfg} sid={sid} onSaved={(c) => setCfg(c)} />}
+      {!isAll && tab === "grupos" && <Grupos cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Grupos guardados"); }} />}
+      {!isAll && tab === "parametros" && <Parametros cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Parámetros guardados"); }} />}
       {tab === "sucursales" && isAdmin && <Sucursales sucursales={sucursales} onChanged={onSucursalesChanged} flash={flash} />}
-      {tab === "usuarios" && isAdmin && <Usuarios sucursales={sucursales} flash={flash} />}
+      {tab === "usuarios" && isAdmin && <Usuarios sucursales={sucursales} flash={flash} sid={sid} />}
     </div>
   );
 }
@@ -562,11 +576,16 @@ function ScopeCell({ role, sucursales, value, gestor, onSucursales, onGestor }) 
   );
 }
 
-function Usuarios({ sucursales, flash }) {
+function Usuarios({ sucursales, flash, sid }) {
   const [users, setUsers] = useState([]);
   const [nuevo, setNuevo] = useState(emptyUser);
   const reload = () => listUsers().then(setUsers).catch(() => {});
   useEffect(() => { reload(); }, []);
+
+  const isAll = sid === "__all__";
+  const filteredUsers = isAll
+    ? users
+    : users.filter((u) => (u.sucursales || []).includes(sid));
 
   async function crear() {
     if (!nuevo.username.trim() || !nuevo.password) return flash("err", "Usuario y contraseña requeridos");
@@ -582,7 +601,7 @@ function Usuarios({ sucursales, flash }) {
         <table className="tbl">
           <thead><tr>{["Usuario", "Nombre", "Rol", "Sucursales", "Contraseña", ""].map((h) => <th key={h}>{h}</th>)}</tr></thead>
           <tbody>
-            {users.map((u) => <UserRow key={u.username} u={u} sucursales={sucursales} reload={reload} flash={flash} />)}
+            {filteredUsers.map((u) => <UserRow key={u.username} u={u} sucursales={sucursales} reload={reload} flash={flash} activeSid={isAll ? null : sid} />)}
             <tr className="bg-brand-50/50">
               <td className={td}><input className="input input-sm w-28" placeholder="usuario" value={nuevo.username} onChange={(e) => setNuevo({ ...nuevo, username: e.target.value })} /></td>
               <td className={td}><input className="input input-sm w-32" placeholder="Nombre" value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} /></td>
@@ -599,20 +618,31 @@ function Usuarios({ sucursales, flash }) {
   );
 }
 
-function UserRow({ u, sucursales, reload, flash }) {
+function UserRow({ u, sucursales, reload, flash, activeSid }) {
   const [pw, setPw] = useState("");
   const td = "px-2 py-1.5 border-b border-slate-100";
+  const isSameSuc = activeSid && (u.sucursales || []).includes(activeSid);
+  const sucNames = (u.sucursales || []).map((id) => sucursales.find((s) => s.id === id)?.nombre || id).join(", ");
   return (
-    <tr className="hover:bg-slate-50">
-      <td className={cn(td, "font-medium")}>{u.username}</td>
+    <tr className={cn("hover:bg-slate-50", isSameSuc && "bg-emerald-50/60")}>
+      <td className={cn(td, "font-medium")}>
+        <span className="flex items-center gap-1.5">
+          {isSameSuc && <span className="inline-block size-1.5 rounded-full bg-emerald-500" />}
+          {u.username}
+        </span>
+      </td>
       <td className={td}>{u.nombre}</td>
       <td className={cn(td, "align-top")}>
         <Select width="w-52" value={u.role} onChange={async (v) => { await updateUser(u.username, { role: v }); reload(); }} options={ROLE_OPTS} />
       </td>
       <td className={cn(td, "align-top")}>
-        <ScopeCell role={u.role} sucursales={sucursales} value={u.sucursales} gestor={u.gestor}
-          onSucursales={async (v) => { await updateUser(u.username, { sucursales: v }); reload(); }}
-          onGestor={async (g) => { await updateUser(u.username, { gestor: g }); reload(); }} />
+        {activeSid ? (
+          <span className="text-xs text-slate-500">{sucNames || "sin asignar"}</span>
+        ) : (
+          <ScopeCell role={u.role} sucursales={sucursales} value={u.sucursales} gestor={u.gestor}
+            onSucursales={async (v) => { await updateUser(u.username, { sucursales: v }); reload(); }}
+            onGestor={async (g) => { await updateUser(u.username, { gestor: g }); reload(); }} />
+        )}
       </td>
       <td className={cn(td, "whitespace-nowrap")}>
         <div className="flex gap-1 items-center">
@@ -624,6 +654,62 @@ function UserRow({ u, sucursales, reload, flash }) {
         <IconButton variant="danger" icon={Trash2} size={12} title="Eliminar" onClick={async () => { if (confirm(`¿Eliminar usuario ${u.username}?`)) { try { await deleteUser(u.username); reload(); } catch (e) { flash("err", e?.response?.data?.detail || "Error"); } } }} />
       </td>
     </tr>
+  );
+}
+
+// ---------------- Vista "Todas las sucursales" — grilla con acceso rápido a config de cada una
+export function TodasSucursalesConfig({ sucursales, onSelectSucursal }) {
+  const [configs, setConfigs] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all(sucursales.map((s) => getSucursal(s.id).catch(() => null)))
+      .then((results) => {
+        const map = {};
+        sucursales.forEach((s, i) => { if (results[i]) map[s.id] = results[i]; });
+        setConfigs(map);
+      })
+      .finally(() => setLoading(false));
+  }, [sucursales]);
+
+  if (loading) return <div className="p-6 text-slate-500 animate-pulse">Cargando configuraciones…</div>;
+
+  return (
+    <div className="space-y-5 animate-fade-in">
+      <div>
+        <h2 className="section-title flex items-center gap-2">
+          <Settings2 className="text-brand-600" size={22} /> Configuración · Todas las sucursales
+        </h2>
+        <p className="text-sm text-slate-500">Selecciona una sucursal para configurarla. Cada una tiene sus propios gestores, metas y parámetros.</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {sucursales.map((s) => {
+          const cfg = configs[s.id];
+          const gestores = cfg ? Object.keys(cfg.gestores || {}).length : 0;
+          return (
+            <button
+              key={s.id}
+              className="text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-brand-400 hover:shadow-md transition-all group"
+              onClick={() => onSelectSucursal(s.id)}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Building2 size={18} className="text-brand-600" />
+                <span className="font-semibold text-slate-800 group-hover:text-brand-700">{s.nombre}</span>
+              </div>
+              <div className="text-xs text-slate-500 space-y-0.5">
+                {cfg && <p>{gestores} gestor{gestores !== 1 ? "es" : ""}</p>}
+                {cfg?.metas && <p>Metas configuradas</p>}
+                {cfg?.parametros && <p>Parámetros activos</p>}
+              </div>
+              <div className="mt-3 text-xs font-medium text-brand-600 group-hover:text-brand-700">
+                Configurar →
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
