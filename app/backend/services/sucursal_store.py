@@ -123,9 +123,8 @@ def config_for_period(suc: dict, year: int | None, month: int | None) -> dict:
             merged = dict(eff["metas_productos_ces"])
             merged.update({k: float(v) for k, v in monthly["metas_productos_ces"].items()})
             eff["metas_productos_ces"] = merged
-        # Roster + metas por vendedor del mes: si el mes define gestores, SOLO esos
-        # vendedores existen ese mes (un gestor que entró después no sale en meses
-        # anteriores). Se combinan identidad global + cuotas/metas del mes.
+        # Roster + metas por vendedor del mes: el mes puede fijar cuotas/metas por
+        # vendedor. Se combinan identidad global + cuotas/metas del mes.
         if isinstance(monthly.get("gestores"), dict) and monthly["gestores"]:
             global_g = eff["gestores"] or {}
             roster: dict = {}
@@ -140,6 +139,16 @@ def config_for_period(suc: dict, year: int | None, month: int | None) -> dict:
                         base["metas_formato"] = {str(k): float(v) for k, v in ov["metas_formato"].items()}
                 base["activo"] = True
                 roster[clave] = base
+            # Un gestor ACTIVO en el global pero ausente del roster del mes (ej. se
+            # agregó después de fijar las metas del mes — como un supervisor que también
+            # vende) igual debe aparecer y que se le atribuyan sus ventas. Se suma con su
+            # config global (sin meta del mes) en vez de quedar invisible en todas las
+            # vistas por vendedor. Las metas del mes siguen aplicando a los del roster.
+            for clave, gv in global_g.items():
+                if clave not in roster and (gv or {}).get("activo", True):
+                    base = dict(gv)
+                    base["activo"] = True
+                    roster[clave] = base
             eff["gestores"] = roster
         eff["_period"] = key
     return eff
