@@ -22,7 +22,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
-from services.auth_store import auth_store
+from services.auth_store import auth_store, ALL_SUCURSALES
 from services.clientes_analisis import compute_clientes_analisis
 from services.diario import compute_diario
 from services.metas_gestor import compute_metas_gestor
@@ -109,11 +109,28 @@ def require_manage(user: dict = Depends(current_user)) -> dict:
 
 
 def require_metas_write(sid: str, user: dict = Depends(current_user)) -> dict:
-    """Configurar metas o subir reportes: admin (todas) o supervisor (su sucursal)."""
+    """Configurar metas / gestores / subir reportes: admin (todas) o supervisor (su sucursal)."""
     _get_sucursal_or_404(sid)
     if not auth_store.can_write_metas(user, sid):
         raise HTTPException(status_code=403, detail="Sin permiso para configurar esta sucursal")
     return user
+
+
+# Roles que un supervisor puede asignar/gestionar (nunca admin/analitico).
+_SUPERVISOR_ROLES = ("supervisor", "gestor")
+
+
+def _supervisor_sucs(user: dict) -> set:
+    """Sucursales concretas del supervisor (sin el comodín '*')."""
+    return {s for s in (user.get("sucursales") or []) if s != ALL_SUCURSALES}
+
+
+def require_manage_users(user: dict = Depends(current_user)) -> dict:
+    """Gestión de usuarios: admin (todos) o supervisor. El supervisor solo puede tocar
+    usuarios de SU sucursal y con rol supervisor/gestor (se aplica en cada endpoint)."""
+    if user.get("role") in ("admin", "supervisor"):
+        return user
+    raise HTTPException(status_code=403, detail="Sin permiso para gestionar usuarios")
 
 
 def _scope_for_user(eff: dict, user: dict) -> dict:
@@ -150,23 +167,52 @@ def me(user: dict = Depends(current_user)) -> dict:
 
 
 # --------------------------------------------------------------- usuarios (admin)
+def _puede_tocar(actor: dict, target: dict | None) -> bool:
+    """Un supervisor solo puede tocar usuarios supervisor/gestor de SU(s) sucursal(es)."""
+    if not target:
+        return False
+    allowed = _supervisor_sucs(actor)
+    return target.get("role") in _SUPERVISOR_ROLES and bool(set(target.get("sucursales") or []) & allowed)
+
+
 @app.get("/api/users")
-def list_users(_: dict = Depends(require_admin)) -> dict:
-    return {"items": auth_store.list()}
+def list_users(user: dict = Depends(require_manage_users)) -> dict:
+    items = auth_store.list()
+    if user.get("role") == "supervisor":
+        allowed = _supervisor_sucs(user)
+        items = [u for u in items
+                 if u.get("role") in _SUPERVISOR_ROLES and (set(u.get("sucursales") or []) & allowed)]
+    return {"items": items}
 
 
 @app.post("/api/users")
-def create_user(payload: dict, _: dict = Depends(require_admin)) -> dict:
+def create_user(payload: dict, user: dict = Depends(require_manage_users)) -> dict:
+    sucursales = payload.get("sucursales", [])
+    if user.get("role") == "supervisor":
+        if payload.get("role") not in _SUPERVISOR_ROLES:
+            raise HTTPException(status_code=403, detail="Un supervisor solo puede crear supervisores o gestores")
+        allowed = _supervisor_sucs(user)
+        sucursales = [s for s in (sucursales or list(allowed)) if s in allowed]
+        if not sucursales:
+            raise HTTPException(status_code=403, detail="Asigná al menos una de tus sucursales")
     try:
         return auth_store.create(
-            payload["username"], payload.get("password", ""), payload.get("role", "user"),
-            payload.get("sucursales", []), payload.get("nombre", ""), payload.get("gestor"))
+            payload["username"], payload.get("password", ""), payload.get("role", "usuario"),
+            sucursales, payload.get("nombre", ""), payload.get("gestor"))
     except (KeyError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put("/api/users/{username}")
-def update_user(username: str, payload: dict, _: dict = Depends(require_admin)) -> dict:
+def update_user(username: str, payload: dict, user: dict = Depends(require_manage_users)) -> dict:
+    if user.get("role") == "supervisor":
+        if not _puede_tocar(user, auth_store.get_raw(username)):
+            raise HTTPException(status_code=403, detail="No podés editar este usuario")
+        if "role" in payload and payload["role"] not in _SUPERVISOR_ROLES:
+            raise HTTPException(status_code=403, detail="Rol no permitido para un supervisor")
+        if "sucursales" in payload:
+            allowed = _supervisor_sucs(user)
+            payload["sucursales"] = [s for s in (payload["sucursales"] or []) if s in allowed]
     u = auth_store.update(username, payload)
     if u is None:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -174,7 +220,9 @@ def update_user(username: str, payload: dict, _: dict = Depends(require_admin)) 
 
 
 @app.delete("/api/users/{username}")
-def delete_user(username: str, _: dict = Depends(require_admin)) -> dict:
+def delete_user(username: str, user: dict = Depends(require_manage_users)) -> dict:
+    if user.get("role") == "supervisor" and not _puede_tocar(user, auth_store.get_raw(username)):
+        raise HTTPException(status_code=403, detail="No podés eliminar este usuario")
     if not auth_store.delete(username):
         raise HTTPException(status_code=400, detail="No se puede eliminar (no existe o es el último admin)")
     return {"ok": True}
@@ -227,7 +275,7 @@ def reset_sucursal(sid: str, suc: dict = Depends(require_access), _m: dict = Dep
 
 # --------------------------------------------------------------- gestores (CRUD)
 @app.post("/api/sucursales/{sid}/gestores")
-def add_gestor(sid: str, payload: dict, suc: dict = Depends(require_access), _m: dict = Depends(require_manage)) -> dict:
+def add_gestor(sid: str, payload: dict, suc: dict = Depends(require_access), _w: dict = Depends(require_metas_write)) -> dict:
     clave = (payload.get("clave") or payload.get("nombre") or "").strip()
     if not clave:
         raise HTTPException(status_code=400, detail="Clave o nombre requerido")
@@ -235,7 +283,7 @@ def add_gestor(sid: str, payload: dict, suc: dict = Depends(require_access), _m:
 
 
 @app.put("/api/sucursales/{sid}/gestores/{clave}")
-def edit_gestor(sid: str, clave: str, payload: dict, suc: dict = Depends(require_access), _m: dict = Depends(require_manage)) -> dict:
+def edit_gestor(sid: str, clave: str, payload: dict, suc: dict = Depends(require_access), _w: dict = Depends(require_metas_write)) -> dict:
     if payload.get("nueva_clave") and payload["nueva_clave"].strip().upper() != clave.upper():
         sucursal_store.rename_gestor(sid, clave, payload["nueva_clave"])
         clave = payload["nueva_clave"]
@@ -243,7 +291,7 @@ def edit_gestor(sid: str, clave: str, payload: dict, suc: dict = Depends(require
 
 
 @app.delete("/api/sucursales/{sid}/gestores/{clave}")
-def remove_gestor(sid: str, clave: str, suc: dict = Depends(require_access), _m: dict = Depends(require_manage)) -> dict:
+def remove_gestor(sid: str, clave: str, suc: dict = Depends(require_access), _w: dict = Depends(require_metas_write)) -> dict:
     sucursal_store.delete_gestor(sid, clave)
     return {"ok": True}
 

@@ -52,10 +52,13 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
         { id: "grupos", label: "Grupos y productos", icon: Layers },
         { id: "parametros", label: "Parámetros", icon: SlidersHorizontal },
         ...(isAdmin ? [{ id: "sucursales", label: "Sucursales", icon: Building2 }] : []),
-        ...(isAdmin ? [{ id: "usuarios", label: "Usuarios", icon: UserPlus }] : []),
+        ...((isAdmin || isSup) ? [{ id: "usuarios", label: "Usuarios", icon: UserPlus }] : []),
       ];
-  // Supervisor solo configura metas de su sucursal.
-  const TABS = isSup ? ALL_TABS.filter((t) => t.id === "metas" || t.id === "calculadora") : ALL_TABS;
+  // El supervisor gestiona SU sucursal: gestores, metas, calculadora y usuarios
+  // (solo puede crear supervisores/gestores de su sucursal).
+  const TABS = isSup
+    ? ALL_TABS.filter((t) => ["gestores", "metas", "calculadora", "usuarios"].includes(t.id))
+    : ALL_TABS;
   // Si la sección actual no está permitida para el rol, ir a la primera válida.
   // OJO: este useEffect debe ir ANTES de cualquier return temprano; si queda
   // después de `if (!cfg) return`, el nº de hooks cambia entre renders y React
@@ -104,7 +107,7 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
       {!isAll && tab === "grupos" && <Grupos cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Grupos guardados"); }} />}
       {!isAll && tab === "parametros" && <Parametros cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Parámetros guardados"); }} />}
       {tab === "sucursales" && isAdmin && <Sucursales sucursales={sucursales} onChanged={onSucursalesChanged} flash={flash} />}
-      {tab === "usuarios" && isAdmin && <Usuarios sucursales={sucursales} flash={flash} sid={sid} />}
+      {tab === "usuarios" && (isAdmin || isSup) && <Usuarios sucursales={sucursales} flash={flash} sid={sid} user={user} />}
     </div>
   );
 }
@@ -576,9 +579,14 @@ function ScopeCell({ role, sucursales, value, gestor, onSucursales, onGestor }) 
   );
 }
 
-function Usuarios({ sucursales, flash, sid }) {
+function Usuarios({ sucursales, flash, sid, user }) {
+  const isSup = user?.role === "supervisor";
+  // Supervisor: solo crea/gestiona supervisores y gestores, y solo en SU(s) sucursal(es).
+  const roleOpts = isSup ? ROLE_OPTS.filter((r) => ["supervisor", "gestor"].includes(r.value)) : ROLE_OPTS;
+  const sucScoped = isSup ? sucursales.filter((s) => (user?.sucursales || []).includes(s.id)) : sucursales;
+  const vacio = isSup ? { ...emptyUser, role: "gestor", sucursales: sucScoped.map((s) => s.id) } : emptyUser;
   const [users, setUsers] = useState([]);
-  const [nuevo, setNuevo] = useState(emptyUser);
+  const [nuevo, setNuevo] = useState(vacio);
   const reload = () => listUsers().then(setUsers).catch(() => {});
   useEffect(() => { reload(); }, []);
 
@@ -590,7 +598,7 @@ function Usuarios({ sucursales, flash, sid }) {
   async function crear() {
     if (!nuevo.username.trim() || !nuevo.password) return flash("err", "Usuario y contraseña requeridos");
     if (nuevo.role === "gestor" && !nuevo.gestor.trim()) return flash("err", "El rol gestor requiere la clave del gestor");
-    try { await createUser(nuevo); setNuevo(emptyUser); reload(); flash("ok", "Usuario creado"); }
+    try { await createUser(nuevo); setNuevo(vacio); reload(); flash("ok", "Usuario creado"); }
     catch (e) { flash("err", e?.response?.data?.detail || "Error"); }
   }
   const td = "px-2 py-1.5 border-b border-slate-100 align-top";
@@ -601,12 +609,12 @@ function Usuarios({ sucursales, flash, sid }) {
         <table className="tbl">
           <thead><tr>{["Usuario", "Nombre", "Rol", "Sucursales", "Contraseña", ""].map((h) => <th key={h}>{h}</th>)}</tr></thead>
           <tbody>
-            {filteredUsers.map((u) => <UserRow key={u.username} u={u} sucursales={sucursales} reload={reload} flash={flash} activeSid={isAll ? null : sid} />)}
+            {filteredUsers.map((u) => <UserRow key={u.username} u={u} sucursales={sucScoped} roleOpts={roleOpts} reload={reload} flash={flash} activeSid={isAll ? null : sid} />)}
             <tr className="bg-brand-50/50">
               <td className={td}><input className="input input-sm w-28" placeholder="usuario" value={nuevo.username} onChange={(e) => setNuevo({ ...nuevo, username: e.target.value })} /></td>
               <td className={td}><input className="input input-sm w-32" placeholder="Nombre" value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} /></td>
-              <td className={td}><Select width="w-52" value={nuevo.role} onChange={(v) => setNuevo({ ...nuevo, role: v })} options={ROLE_OPTS} /></td>
-              <td className={td}><ScopeCell role={nuevo.role} sucursales={sucursales} value={nuevo.sucursales} gestor={nuevo.gestor}
+              <td className={td}><Select width="w-52" value={nuevo.role} onChange={(v) => setNuevo({ ...nuevo, role: v })} options={roleOpts} /></td>
+              <td className={td}><ScopeCell role={nuevo.role} sucursales={sucScoped} value={nuevo.sucursales} gestor={nuevo.gestor}
                 onSucursales={(v) => setNuevo({ ...nuevo, sucursales: v })} onGestor={(g) => setNuevo({ ...nuevo, gestor: g })} /></td>
               <td className={td}><input className="input input-sm w-32" type="password" placeholder="contraseña" value={nuevo.password} onChange={(e) => setNuevo({ ...nuevo, password: e.target.value })} /></td>
               <td className={td}><Button size="sm" icon={Plus} onClick={crear}>Crear</Button></td>
@@ -618,7 +626,7 @@ function Usuarios({ sucursales, flash, sid }) {
   );
 }
 
-function UserRow({ u, sucursales, reload, flash, activeSid }) {
+function UserRow({ u, sucursales, reload, flash, activeSid, roleOpts = ROLE_OPTS }) {
   const [pw, setPw] = useState("");
   const td = "px-2 py-1.5 border-b border-slate-100";
   const isSameSuc = activeSid && (u.sucursales || []).includes(activeSid);
@@ -633,7 +641,7 @@ function UserRow({ u, sucursales, reload, flash, activeSid }) {
       </td>
       <td className={td}>{u.nombre}</td>
       <td className={cn(td, "align-top")}>
-        <Select width="w-52" value={u.role} onChange={async (v) => { await updateUser(u.username, { role: v }); reload(); }} options={ROLE_OPTS} />
+        <Select width="w-52" value={u.role} onChange={async (v) => { await updateUser(u.username, { role: v }); reload(); }} options={roleOpts} />
       </td>
       <td className={cn(td, "align-top")}>
         {activeSid ? (
