@@ -1,6 +1,6 @@
 import { BarChart3, CalendarDays, Calendar, FileSpreadsheet, LogOut, Package, Settings as SettingsIcon, ShoppingCart, Target, Trophy, UserCheck, Users } from "lucide-react";
 import { useEffect, useState } from "react";
-import AdminPanel, { TodasSucursalesConfig } from "./components/AdminPanel.jsx";
+import AdminPanel from "./components/AdminPanel.jsx";
 import ClientesAnalisisView from "./components/ClientesAnalisisView.jsx";
 import DashboardView from "./components/DashboardView.jsx";
 import Login from "./components/Login.jsx";
@@ -176,7 +176,8 @@ export default function App() {
           <div className="max-w-7xl mx-auto p-3 sm:p-6">
             {isConfig ? (
               isAll ? (
-                <TodasSucursalesConfig sucursales={sucursales} onSelectSucursal={(id) => { setSid(id); setSucursal(id); go("config/sucursal"); }} />
+                <AdminPanel sid={ALL_SID} user={user} sucursales={sucursales} onSucursalesChanged={loadSucursales}
+                  section={configSection} onSection={(id) => go("config/" + id)} />
               ) : sid ? (
                 <AdminPanel sid={sid} user={user} sucursales={sucursales} onSucursalesChanged={loadSucursales}
                   section={configSection} onSection={(id) => go("config/" + id)} />
