@@ -6,6 +6,7 @@ JSON (`data/sucursales.json`).
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
 import threading
@@ -14,6 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from services.db import session_scope, Sucursal
 from core.constants import (
     COMISION_GESTOR_PCT,
     COMISION_SUPERVISOR_PCT,
@@ -207,39 +209,49 @@ def report_months(report) -> list:
 
 
 class SucursalStore:
-    def __init__(self, base_dir: Path):
-        self._base = base_dir
-        self._base.mkdir(parents=True, exist_ok=True)
-        self._path = base_dir / "sucursales.json"
-        self._lock = threading.RLock()
+    """Config de sucursales sobre postgres (tabla analytics_sucursal, config en JSONB).
+
+    Interfaz idéntica a la versión JSON: los métodos devuelven el MISMO dict de config
+    (con claves `id`, `nombre`, `supervisor_nombre`, `gestores`, `metas`, `parametros`,
+    `metas_mensuales`). La lógica de merge se conserva exacta; solo cambia el I/O.
+    """
+
+    def __init__(self, base_dir: Path | str | None = None):
+        # base_dir se conserva por compat; ya NO se usa (la config vive en postgres).
         self._ensure_seed()
 
-    # ---------- persistencia ----------
-    def _read(self) -> dict:
-        if not self._path.exists():
-            return {}
-        try:
-            data = json.loads(self._path.read_text(encoding="utf-8"))
-            return {s["id"]: s for s in data} if isinstance(data, list) else data
-        except Exception:
-            return {}
+    # ---------- helpers ----------
+    @staticmethod
+    def _to_dict(row: Sucursal) -> dict:
+        # id y nombre viven en columnas; el resto en config (JSONB). Se re-arma el dict
+        # completo tal como lo esperaban los consumidores de la versión JSON.
+        # deepcopy: si se compartieran los dicts anidados con row.config, una mutación
+        # in-place (ej. suc["metas"][x]=...) también tocaría el snapshot "viejo" de
+        # SQLAlchemy y NO se detectaría el cambio → no se guardaría.
+        return {**copy.deepcopy(row.config or {}), "id": row.sid, "nombre": row.nombre}
 
-    def _write(self, data: dict) -> None:
-        self._path.write_text(
-            json.dumps(list(data.values()), ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+    def _persist(self, s, sid: str, suc: dict) -> None:
+        nombre = suc.get("nombre", suc.get("id", sid))
+        body = {k: v for k, v in suc.items() if k not in ("id", "nombre")}
+        row = s.query(Sucursal).filter_by(sid=sid).one_or_none()
+        if row is None:
+            s.add(Sucursal(sid=sid, nombre=nombre, config=body))
+        else:
+            row.nombre = nombre
+            row.config = body
 
     def _ensure_seed(self) -> None:
-        with self._lock:
-            data = self._read()
-            if not data:
+        with session_scope() as s:
+            if s.query(Sucursal).count() == 0:
                 suc = default_sucursal_config("Camagüey", sid="camaguey", seed_gestores=True)
-                self._write({suc["id"]: suc})
+                self._persist(s, "camaguey", suc)
 
     # ---------- sucursales ----------
     def list(self) -> list[dict]:
-        with self._lock:
-            return sorted(self._read().values(), key=lambda s: s.get("nombre", ""))
+        with session_scope() as s:
+            rows = s.query(Sucursal).all()
+            out = [self._to_dict(r) for r in rows]
+        return sorted(out, key=lambda x: x.get("nombre", ""))
 
     def list_summary(self) -> list[dict]:
         return [
@@ -249,34 +261,34 @@ class SucursalStore:
         ]
 
     def get(self, sid: str) -> dict | None:
-        with self._lock:
-            return self._read().get(sid)
+        with session_scope() as s:
+            row = s.query(Sucursal).filter_by(sid=sid).one_or_none()
+            return self._to_dict(row) if row else None
 
     def exists(self, sid: str) -> bool:
         return self.get(sid) is not None
 
     def create(self, nombre: str, seed_gestores: bool = False) -> dict:
-        with self._lock:
-            data = self._read()
+        with session_scope() as s:
+            existing = {r[0] for r in s.query(Sucursal.sid).all()}
             sid = slugify(nombre)
             base = sid
             i = 2
-            while sid in data:
+            while sid in existing:
                 sid = f"{base}-{i}"
                 i += 1
             suc = default_sucursal_config(nombre, sid=sid, seed_gestores=seed_gestores)
-            data[sid] = suc
-            self._write(data)
-            return suc
+            self._persist(s, sid, suc)
+        return self.get(sid)
 
     def update(self, sid: str, patch: dict) -> dict | None:
         """Actualiza campos de nivel superior: nombre, supervisor_nombre, metas,
         parametros, metas_mensuales (merge superficial e inteligente)."""
-        with self._lock:
-            data = self._read()
-            suc = data.get(sid)
-            if suc is None:
+        with session_scope() as s:
+            row = s.query(Sucursal).filter_by(sid=sid).one_or_none()
+            if row is None:
                 return None
+            suc = self._to_dict(row)
             for k in ("nombre", "supervisor_nombre"):
                 if k in patch and patch[k]:
                     suc[k] = patch[k]
@@ -309,26 +321,24 @@ class SucursalStore:
                                 cur[kk] = vv
                         mm[k] = cur
                 suc["metas_mensuales"] = mm
-            data[sid] = suc
-            self._write(data)
-            return suc
+            self._persist(s, sid, suc)
+        return self.get(sid)
 
     def delete(self, sid: str) -> bool:
-        with self._lock:
-            data = self._read()
-            if sid not in data:
+        with session_scope() as s:
+            row = s.query(Sucursal).filter_by(sid=sid).one_or_none()
+            if row is None:
                 return False
-            del data[sid]
-            self._write(data)
+            s.delete(row)
             return True
 
     # ---------- gestores (CRUD dinámico) ----------
     def upsert_gestor(self, sid: str, clave: str, cfg: dict) -> dict | None:
-        with self._lock:
-            data = self._read()
-            suc = data.get(sid)
-            if suc is None:
+        with session_scope() as s:
+            row = s.query(Sucursal).filter_by(sid=sid).one_or_none()
+            if row is None:
                 return None
+            suc = self._to_dict(row)
             clave = str(clave).upper().strip()
             gestores = suc.setdefault("gestores", {})
             existing = gestores.get(clave, {})
@@ -345,49 +355,45 @@ class SucursalStore:
                     for k, v in (cfg.get("metas_formato", existing.get("metas_formato", {})) or {}).items()
                 },
             }
-            data[sid] = suc
-            self._write(data)
-            return suc
+            self._persist(s, sid, suc)
+        return self.get(sid)
 
     def rename_gestor(self, sid: str, clave: str, nueva_clave: str) -> dict | None:
-        with self._lock:
-            data = self._read()
-            suc = data.get(sid)
-            if suc is None:
+        with session_scope() as s:
+            row = s.query(Sucursal).filter_by(sid=sid).one_or_none()
+            if row is None:
                 return None
+            suc = self._to_dict(row)
             gestores = suc.setdefault("gestores", {})
             clave = str(clave).upper().strip()
             nueva_clave = str(nueva_clave).upper().strip()
             if clave in gestores and nueva_clave and nueva_clave != clave:
                 gestores[nueva_clave] = gestores.pop(clave)
-                data[sid] = suc
-                self._write(data)
-            return suc
+                self._persist(s, sid, suc)
+        return self.get(sid)
 
     def delete_gestor(self, sid: str, clave: str) -> dict | None:
-        with self._lock:
-            data = self._read()
-            suc = data.get(sid)
-            if suc is None:
+        with session_scope() as s:
+            row = s.query(Sucursal).filter_by(sid=sid).one_or_none()
+            if row is None:
                 return None
+            suc = self._to_dict(row)
             suc.get("gestores", {}).pop(str(clave).upper().strip(), None)
-            data[sid] = suc
-            self._write(data)
-            return suc
+            self._persist(s, sid, suc)
+        return self.get(sid)
 
     def reset(self, sid: str) -> dict | None:
         """Restaura metas y parámetros por defecto (mantiene gestores y nombre)."""
-        with self._lock:
-            data = self._read()
-            suc = data.get(sid)
-            if suc is None:
+        with session_scope() as s:
+            row = s.query(Sucursal).filter_by(sid=sid).one_or_none()
+            if row is None:
                 return None
+            suc = self._to_dict(row)
             suc["metas"] = default_metas()
             suc["parametros"] = default_parametros()
             suc["metas_mensuales"] = {}
-            data[sid] = suc
-            self._write(data)
-            return suc
+            self._persist(s, sid, suc)
+        return self.get(sid)
 
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
