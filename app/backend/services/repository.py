@@ -1,8 +1,13 @@
-"""Repositorio persistente de reportes subidos, aislado por sucursal (parquet + index)."""
+"""Repositorio de reportes subidos, aislado por sucursal, sobre PostgreSQL.
+
+Guarda SOLO los datos (las filas en `analytics_upload_row`), NUNCA el archivo. Las
+columnas derivadas del loader (VendorSegNorm, Size, IsMalta, ...) NO se guardan: se
+RE-DERIVAN al leer con `_type_df` + `_add_stable_helpers`, así el DataFrame que reciben
+los reportes es idéntico al que daba el parquet. Interfaz pública igual a la versión
+anterior (find_conflicts, add, list, get, delete, reset, accumulated).
+"""
 from __future__ import annotations
 
-import json
-import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,11 +15,32 @@ from pathlib import Path
 
 import pandas as pd
 
-from services.loader import ReportData, STD_COLS
+from services.db import session_scope, Upload, UploadRow
+from services.loader import ReportData, STD_COLS, _type_df, _add_stable_helpers
 
 
 DEDUPE_KEYS = [STD_COLS["op"], STD_COLS["fecha"], STD_COLS["socio"],
                STD_COLS["merc"], STD_COLS["cant"], STD_COLS["importe"]]
+
+# Columnas BASE que se persisten (las derivadas se recalculan al leer).
+_BASE_COLS = [STD_COLS["op"], STD_COLS["fecha"], STD_COLS["socio"], STD_COLS["merc"],
+              STD_COLS["grupo"], STD_COLS["cant"], STD_COLS["importe"], STD_COLS["suma"],
+              STD_COLS["nota"]]
+
+# STD col -> atributo de UploadRow.
+_COL2ATTR = {
+    STD_COLS["op"]: "operacion",
+    STD_COLS["fecha"]: "fecha",
+    STD_COLS["socio"]: "socio",
+    STD_COLS["merc"]: "mercancia",
+    STD_COLS["grupo"]: "grupo",
+    STD_COLS["cant"]: "cantidad",
+    STD_COLS["importe"]: "importe",
+    STD_COLS["suma"]: "suma",
+    STD_COLS["nota"]: "nota",
+}
+_TEXT_ATTRS = ("operacion", "socio", "mercancia", "grupo", "nota")
+_NUM_ATTRS = ("cantidad", "importe", "suma")
 
 
 @dataclass
@@ -45,66 +71,70 @@ def _df_to_report(df: pd.DataFrame, filename: str) -> ReportData:
     return ReportData(df=df, date_min=date_min, date_max=date_max, filename=filename)
 
 
-def _df_for_parquet(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.copy()
-    for c in out.columns:
-        if out[c].dtype == object:
-            out[c] = out[c].astype("string")
-    return out
-
-
 def _ranges_overlap(a_min, a_max, b_min, b_max) -> bool:
     if any(v is None for v in (a_min, a_max, b_min, b_max)):
         return False
     return not (a_max < b_min or b_max < a_min)
 
 
+def _cell(v):
+    """Escalar limpio para guardar (None si es NaN/NA)."""
+    try:
+        if v is None or pd.isna(v):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return v
+
+
 class UploadRepository:
-    def __init__(self, base_dir: Path):
-        self._base = base_dir
-        self._base.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.RLock()
+    def __init__(self, base_dir: Path | str | None = None):
+        # base_dir se conserva por compat; ya NO se usa (los datos viven en postgres).
+        pass
 
-    # ---------- rutas por sucursal ----------
-    def _suc_dir(self, sid: str) -> Path:
-        d = self._base / "uploads" / sid
-        d.mkdir(parents=True, exist_ok=True)
-        return d
-
-    def _index_path(self, sid: str) -> Path:
-        return self._suc_dir(sid) / "index.json"
-
-    def _parquet_path(self, sid: str, uid: str) -> Path:
-        return self._suc_dir(sid) / f"{uid}.parquet"
-
-    def _load_index(self, sid: str) -> list[dict]:
-        p = self._index_path(sid)
-        if not p.exists():
-            return []
-        try:
-            return json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-
-    def _save_index(self, sid: str, items: list[dict]) -> None:
-        self._index_path(sid).write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    def _load_df(self, sid: str, uid: str) -> pd.DataFrame:
-        p = self._parquet_path(sid, uid)
-        if not p.exists():
-            return pd.DataFrame()
-        df = pd.read_parquet(p)
-        fecha = STD_COLS["fecha"]
-        if fecha in df.columns:
-            df[fecha] = pd.to_datetime(df[fecha], errors="coerce")
+    # ---------- lectura de filas -> DataFrame (con columnas derivadas) ----------
+    def _df_de_filas(self, upload_ids) -> pd.DataFrame:
+        if not upload_ids:
+            df = pd.DataFrame(columns=_BASE_COLS)
+        else:
+            with session_scope() as s:
+                rows = s.query(UploadRow).filter(UploadRow.upload_id.in_(list(upload_ids))).all()
+                data = [
+                    {
+                        STD_COLS["op"]: r.operacion,
+                        STD_COLS["fecha"]: r.fecha,
+                        STD_COLS["socio"]: r.socio,
+                        STD_COLS["merc"]: r.mercancia,
+                        STD_COLS["grupo"]: r.grupo,
+                        STD_COLS["cant"]: r.cantidad,
+                        STD_COLS["importe"]: r.importe,
+                        STD_COLS["suma"]: r.suma,
+                        STD_COLS["nota"]: r.nota,
+                    }
+                    for r in rows
+                ]
+            df = pd.DataFrame(data, columns=_BASE_COLS)
+        # Reproduce EXACTO lo que hacía el loader: tipa las base y re-deriva helpers
+        # (vseg/size/malta/...). Así los reportes reciben el mismo DataFrame que antes.
+        df = _type_df(df)
+        df = _add_stable_helpers(df)
         return df
+
+    def _uploads(self, sid: str) -> list[dict]:
+        with session_scope() as s:
+            ups = s.query(Upload).filter_by(sid=sid).order_by(Upload.date_min).all()
+            return [
+                {"id": u.id, "filename": u.filename, "uploaded_at": u.uploaded_at,
+                 "rango": u.rango, "filas": u.filas, "date_min": u.date_min, "date_max": u.date_max}
+                for u in ups
+            ]
 
     # ---------- conflictos ----------
     def find_conflicts(self, sid: str, filename: str, date_min, date_max) -> list[dict]:
         dmin = pd.Timestamp(date_min) if date_min is not None else None
         dmax = pd.Timestamp(date_max) if date_max is not None else None
         out: list[dict] = []
-        for item in self._load_index(sid):
+        for item in self._uploads(sid):
             same_name = bool(filename and item.get("filename") == filename)
             i_min = pd.Timestamp(item["date_min"]) if item.get("date_min") else None
             i_max = pd.Timestamp(item["date_max"]) if item.get("date_max") else None
@@ -125,60 +155,75 @@ class UploadRepository:
         if conflicts and force:
             for c in conflicts:
                 self.delete(sid, c["id"])
-        with self._lock:
-            uid = uuid.uuid4().hex
-            df = _df_for_parquet(report.df)
-            df.to_parquet(self._parquet_path(sid, uid), index=False)
-            stored = StoredUpload(
-                id=uid, filename=report.filename,
-                uploaded_at=datetime.utcnow().isoformat(timespec="seconds"),
-                rango=report.rango_str, filas=int(len(df)),
-                date_min=report.date_min.isoformat() if report.date_min is not None else None,
-                date_max=report.date_max.isoformat() if report.date_max is not None else None)
-            items = self._load_index(sid)
-            items.append(stored.__dict__)
-            items.sort(key=lambda x: x.get("date_min") or "")
-            self._save_index(sid, items)
-            return stored
+
+        df = report.df
+        uid = uuid.uuid4().hex
+        uploaded_at = datetime.utcnow().isoformat(timespec="seconds")
+        dmin = report.date_min.isoformat() if report.date_min is not None else None
+        dmax = report.date_max.isoformat() if report.date_max is not None else None
+
+        with session_scope() as s:
+            s.add(Upload(
+                id=uid, sid=sid, filename=report.filename, uploaded_at=uploaded_at,
+                rango=report.rango_str, filas=int(len(df)), date_min=dmin, date_max=dmax,
+                source="upload",
+            ))
+            for _, r in df.iterrows():
+                kw = {}
+                for col, attr in _COL2ATTR.items():
+                    val = _cell(r.get(col)) if col in df.columns else None
+                    kw[attr] = val
+                # fecha -> date; textos -> str; números -> float
+                f = kw.get("fecha")
+                kw["fecha"] = pd.to_datetime(f).date() if f is not None and pd.notna(f) else None
+                for a in _TEXT_ATTRS:
+                    kw[a] = None if kw.get(a) is None else str(kw[a])
+                for a in _NUM_ATTRS:
+                    v = kw.get(a)
+                    try:
+                        kw[a] = None if v is None else float(v)
+                    except (TypeError, ValueError):
+                        kw[a] = None
+                s.add(UploadRow(upload_id=uid, **kw))
+
+        return StoredUpload(id=uid, filename=report.filename, uploaded_at=uploaded_at,
+                            rango=report.rango_str, filas=int(len(df)), date_min=dmin, date_max=dmax)
 
     def list(self, sid: str) -> list[StoredUpload]:
-        return [StoredUpload(**x) for x in self._load_index(sid)]
+        return [StoredUpload(**x) for x in self._uploads(sid)]
 
     def get(self, sid: str, uid: str) -> ReportData | None:
-        df = self._load_df(sid, uid)
+        with session_scope() as s:
+            up = s.query(Upload).filter_by(sid=sid, id=uid).one_or_none()
+            if up is None:
+                return None
+            fname = up.filename
+        df = self._df_de_filas([uid])
         if df.empty:
             return None
-        item = next((x for x in self._load_index(sid) if x["id"] == uid), None)
-        return _df_to_report(df, filename=item["filename"] if item else uid)
+        return _df_to_report(df, filename=fname)
 
     def delete(self, sid: str, uid: str) -> bool:
-        with self._lock:
-            items = self._load_index(sid)
-            new_items = [x for x in items if x["id"] != uid]
-            if len(new_items) == len(items):
+        with session_scope() as s:
+            up = s.query(Upload).filter_by(sid=sid, id=uid).one_or_none()
+            if up is None:
                 return False
-            self._save_index(sid, new_items)
-            p = self._parquet_path(sid, uid)
-            if p.exists():
-                p.unlink()
+            s.delete(up)  # las filas caen por cascade (relationship + FK ondelete)
             return True
 
     def reset(self, sid: str) -> None:
-        with self._lock:
-            d = self._suc_dir(sid)
-            for p in d.glob("*.parquet"):
-                p.unlink()
-            self._save_index(sid, [])
+        with session_scope() as s:
+            for up in s.query(Upload).filter_by(sid=sid).all():
+                s.delete(up)
 
     def accumulated(self, sid: str) -> ReportData | None:
-        items = self._load_index(sid)
-        if not items:
+        with session_scope() as s:
+            ids = [u.id for u in s.query(Upload).filter_by(sid=sid).all()]
+        if not ids:
             return None
-        dfs = [self._load_df(sid, it["id"]) for it in items]
-        dfs = [d for d in dfs if not d.empty]
-        if not dfs:
+        merged = self._df_de_filas(ids)
+        if merged.empty:
             return None
-        merged = pd.concat(dfs, ignore_index=True)
         keys = [k for k in DEDUPE_KEYS if k in merged.columns]
         if keys:
             merged = merged.drop_duplicates(subset=keys, keep="last")
@@ -186,7 +231,7 @@ class UploadRepository:
         if sort_keys:
             merged = merged.sort_values(by=sort_keys)
         merged = merged.reset_index(drop=True)
-        return _df_to_report(merged, filename=f"Acumulado ({len(items)} archivos)")
+        return _df_to_report(merged, filename=f"Acumulado ({len(ids)} archivos)")
 
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
