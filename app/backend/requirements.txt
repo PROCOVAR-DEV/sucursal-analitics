@@ -9,3 +9,8 @@ xlsxwriter==3.2.0
 pydantic==2.10.4
 pyarrow==18.1.0
 httpx==0.28.1
+
+# Migración a PostgreSQL (storage de reportes)
+sqlalchemy>=2.0
+psycopg2-binary
+pytest

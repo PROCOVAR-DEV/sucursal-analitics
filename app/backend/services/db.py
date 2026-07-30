@@ -1,0 +1,109 @@
+"""Capa de base de datos (PostgreSQL vía SQLAlchemy) para analitics."""
+from __future__ import annotations
+
+import os
+from contextlib import contextmanager
+from datetime import datetime, date
+
+from sqlalchemy import (
+    create_engine,
+    String,
+    Integer,
+    Float,
+    Date,
+    DateTime,
+    Text,
+    ForeignKey,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    sessionmaker,
+    relationship,
+)
+
+DATABASE_URL = os.environ["DATABASE_URL"]  # del .env (analitics_app@127.0.0.1:5432/analitics)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
+    __tablename__ = "analytics_user"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(String(40), nullable=False, default="usuario")
+    # {sucursales, nombre, gestor}
+    data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Sucursal(Base):
+    __tablename__ = "analytics_sucursal"
+    sid: Mapped[str] = mapped_column(String(80), primary_key=True)
+    nombre: Mapped[str] = mapped_column(String(200), nullable=False)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class Upload(Base):
+    __tablename__ = "analytics_upload"
+    id: Mapped[str] = mapped_column(String(60), primary_key=True)  # uuid como hoy
+    sid: Mapped[str] = mapped_column(
+        String(80), ForeignKey("analytics_sucursal.sid"), index=True, nullable=False
+    )
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    uploaded_at: Mapped[str] = mapped_column(String(40), nullable=False)
+    rango: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    filas: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    date_min: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    date_max: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    source: Mapped[str] = mapped_column(String(40), nullable=False, default="upload")
+    rows: Mapped[list["UploadRow"]] = relationship(
+        cascade="all, delete-orphan", back_populates="upload"
+    )
+
+
+class UploadRow(Base):
+    __tablename__ = "analytics_upload_row"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    upload_id: Mapped[str] = mapped_column(
+        String(60), ForeignKey("analytics_upload.id", ondelete="CASCADE"), index=True
+    )
+    operacion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fecha: Mapped[date | None] = mapped_column(Date, index=True, nullable=True)
+    socio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mercancia: Mapped[str | None] = mapped_column(Text, nullable=True)
+    grupo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cantidad: Mapped[float | None] = mapped_column(Float, nullable=True)
+    importe: Mapped[float | None] = mapped_column(Float, nullable=True)
+    suma: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nota: Mapped[str | None] = mapped_column(Text, nullable=True)
+    upload: Mapped["Upload"] = relationship(back_populates="rows")
+
+
+def init_db() -> None:
+    """Crea las tablas si no existen. Idempotente."""
+    Base.metadata.create_all(engine)
+
+
+@contextmanager
+def session_scope():
+    """Sesión transaccional: commit al salir bien, rollback si hay excepción."""
+    s = SessionLocal()
+    try:
+        yield s
+        s.commit()
+    except Exception:
+        s.rollback()
+        raise
+    finally:
+        s.close()
