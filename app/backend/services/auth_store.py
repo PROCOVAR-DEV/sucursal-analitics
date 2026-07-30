@@ -1,8 +1,12 @@
-"""Autenticación y usuarios (solo librería estándar).
+"""Autenticación y usuarios.
+
+Storage en PostgreSQL (tabla analytics_user) vía SQLAlchemy. La INTERFAZ pública se
+conserva idéntica a la versión JSON: mismos métodos, mismas firmas y el mismo "dict de
+usuario" ({username, nombre, role, sucursales, gestor}).
 
 - Contraseñas: PBKDF2-HMAC-SHA256 con salt aleatorio por usuario.
-- Tokens: JSON firmado con HMAC-SHA256 y expiración (no requiere dependencias).
-- Roles: 'admin' ve TODAS las sucursales; 'user' solo las asignadas.
+- Tokens: JSON firmado con HMAC-SHA256 y expiración (solo librería estándar).
+- Roles: 'admin'/'analitico' ven TODAS las sucursales; el resto solo las asignadas.
 """
 from __future__ import annotations
 
@@ -11,9 +15,10 @@ import hashlib
 import hmac
 import json
 import os
-import threading
 import time
 from pathlib import Path
+
+from services.db import session_scope, User
 
 _PBKDF2_ROUNDS = 120_000
 _TOKEN_TTL = 60 * 60 * 12  # 12 horas
@@ -61,129 +66,134 @@ def verify_password(password: str, stored: str) -> bool:
 
 
 class AuthStore:
-    def __init__(self, base_dir: Path):
-        self._base = base_dir
-        self._base.mkdir(parents=True, exist_ok=True)
-        self._path = base_dir / "users.json"
-        self._secret_path = base_dir / "secret.key"
-        self._lock = threading.RLock()
+    def __init__(self, base_dir: Path | str | None = None):
+        # base_dir se conserva por compat: ya NO guarda los usuarios (van a postgres),
+        # pero SÍ sigue guardando el `secret.key` de los tokens en disco para no
+        # invalidar sesiones al reiniciar. En scripts/migración base_dir=None.
+        self._base = Path(base_dir) if base_dir else None
         self._secret = self._load_secret()
         self._ensure_seed()
 
     def _load_secret(self) -> bytes:
-        if self._secret_path.exists():
-            return self._secret_path.read_bytes()
-        secret = os.urandom(32)
-        self._secret_path.write_bytes(secret)
-        try:
-            os.chmod(self._secret_path, 0o600)
-        except OSError:
-            pass
-        return secret
+        if self._base is not None:
+            try:
+                self._base.mkdir(parents=True, exist_ok=True)
+                p = self._base / "secret.key"
+                if p.exists():
+                    return p.read_bytes()
+                secret = os.urandom(32)
+                p.write_bytes(secret)
+                try:
+                    os.chmod(p, 0o600)
+                except OSError:
+                    pass
+                return secret
+            except OSError:
+                # No se pudo leer/escribir el secret en disco (p.ej. tests corriendo como
+                # otro usuario, el archivo es 0600 de root). Se cae a env/efímero. En
+                # PRODUCCIÓN el servicio corre como root y sí lee el secret real.
+                pass
+        env = os.environ.get("AUTH_SECRET")
+        return env.encode() if env else os.urandom(32)
 
-    def _read(self) -> dict:
-        if not self._path.exists():
-            return {}
-        try:
-            data = json.loads(self._path.read_text(encoding="utf-8"))
-            return {u["username"]: u for u in data} if isinstance(data, list) else data
-        except Exception:
-            return {}
-
-    def _write(self, data: dict) -> None:
-        self._path.write_text(
-            json.dumps(list(data.values()), ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+    @staticmethod
+    def _to_dict(u: User) -> dict:
+        data = u.data or {}
+        return {
+            "username": u.username,
+            "nombre": data.get("nombre", u.username),
+            "role": normalize_role(u.role),
+            "sucursales": data.get("sucursales", []),
+            "gestor": data.get("gestor"),
+        }
 
     def _ensure_seed(self) -> None:
-        with self._lock:
-            data = self._read()
-            if not data:
-                admin = {
-                    "username": "admin",
-                    "nombre": "Administrador",
-                    "password_hash": hash_password("admin"),
-                    "role": "admin",
-                    "sucursales": [ALL_SUCURSALES],
-                }
-                self._write({"admin": admin})
+        with session_scope() as s:
+            if s.query(User).count() == 0:
+                s.add(
+                    User(
+                        username="admin",
+                        password_hash=hash_password("admin"),
+                        role="admin",
+                        data={"nombre": "Administrador", "sucursales": [ALL_SUCURSALES], "gestor": None},
+                    )
+                )
 
     # ---------- usuarios ----------
     def list(self) -> list[dict]:
-        return [self._public(u) for u in self._read().values()]
-
-    @staticmethod
-    def _public(u: dict) -> dict:
-        return {"username": u["username"], "nombre": u.get("nombre", u["username"]),
-                "role": normalize_role(u.get("role", "usuario")),
-                "sucursales": u.get("sucursales", []),
-                "gestor": u.get("gestor")}
+        with session_scope() as s:
+            return [self._to_dict(u) for u in s.query(User).order_by(User.username).all()]
 
     def get_raw(self, username: str) -> dict | None:
-        return self._read().get(str(username).strip().lower())
+        username = str(username).strip().lower()
+        with session_scope() as s:
+            u = s.query(User).filter_by(username=username).one_or_none()
+            return self._to_dict(u) if u else None
 
     def create(self, username: str, password: str, role: str, sucursales: list[str], nombre: str = "", gestor: str | None = None) -> dict:
         username = str(username).strip().lower()
         if not username:
             raise ValueError("Usuario vacío")
-        with self._lock:
-            data = self._read()
-            if username in data:
+        role = normalize_role(role)
+        sucs = [ALL_SUCURSALES] if role in _ALL_ROLES else list(sucursales or [])
+        g = str(gestor).strip().upper() if role == "gestor" and gestor else None
+        with session_scope() as s:
+            if s.query(User).filter_by(username=username).first():
                 raise ValueError("El usuario ya existe")
-            role = normalize_role(role)
-            sucs = [ALL_SUCURSALES] if role in _ALL_ROLES else list(sucursales or [])
-            u = {"username": username, "nombre": nombre or username,
-                 "password_hash": hash_password(password), "role": role, "sucursales": sucs,
-                 "gestor": (str(gestor).strip().upper() if role == "gestor" and gestor else None)}
-            data[username] = u
-            self._write(data)
-            return self._public(u)
+            u = User(
+                username=username,
+                password_hash=hash_password(password),
+                role=role,
+                data={"nombre": nombre or username, "sucursales": sucs, "gestor": g},
+            )
+            s.add(u)
+            s.flush()
+            return self._to_dict(u)
 
     def update(self, username: str, patch: dict) -> dict | None:
         username = str(username).strip().lower()
-        with self._lock:
-            data = self._read()
-            u = data.get(username)
+        with session_scope() as s:
+            u = s.query(User).filter_by(username=username).one_or_none()
             if u is None:
                 return None
+            data = dict(u.data or {})
             if patch.get("nombre"):
-                u["nombre"] = patch["nombre"]
+                data["nombre"] = patch["nombre"]
             if "role" in patch:
-                u["role"] = normalize_role(patch["role"])
-                if u["role"] in _ALL_ROLES:
-                    u["sucursales"] = [ALL_SUCURSALES]
-                if u["role"] != "gestor":
-                    u["gestor"] = None
-            if "sucursales" in patch and u.get("role") not in _ALL_ROLES:
-                u["sucursales"] = list(patch["sucursales"] or [])
-            if "gestor" in patch and u.get("role") == "gestor":
-                u["gestor"] = str(patch["gestor"]).strip().upper() if patch["gestor"] else None
+                u.role = normalize_role(patch["role"])
+                if u.role in _ALL_ROLES:
+                    data["sucursales"] = [ALL_SUCURSALES]
+                if u.role != "gestor":
+                    data["gestor"] = None
+            if "sucursales" in patch and u.role not in _ALL_ROLES:
+                data["sucursales"] = list(patch["sucursales"] or [])
+            if "gestor" in patch and u.role == "gestor":
+                data["gestor"] = str(patch["gestor"]).strip().upper() if patch["gestor"] else None
             if patch.get("password"):
-                u["password_hash"] = hash_password(patch["password"])
-            data[username] = u
-            self._write(data)
-            return self._public(u)
+                u.password_hash = hash_password(patch["password"])
+            u.data = data
+            s.flush()
+            return self._to_dict(u)
 
     def delete(self, username: str) -> bool:
         username = str(username).strip().lower()
-        with self._lock:
-            data = self._read()
-            if username not in data or data[username].get("role") == "admin" and \
-                    len([x for x in data.values() if x.get("role") == "admin"]) <= 1:
-                # no borrar el último admin
-                if username in data and data[username].get("role") == "admin":
-                    return False
-                if username not in data:
-                    return False
-            del data[username]
-            self._write(data)
+        with session_scope() as s:
+            u = s.query(User).filter_by(username=username).one_or_none()
+            if u is None:
+                return False
+            # No borrar el último admin.
+            if u.role == "admin" and s.query(User).filter_by(role="admin").count() <= 1:
+                return False
+            s.delete(u)
             return True
 
     # ---------- login / tokens ----------
     def authenticate(self, username: str, password: str) -> dict | None:
-        u = self.get_raw(str(username).strip().lower())
-        if u and verify_password(password, u.get("password_hash", "")):
-            return u
+        username = str(username).strip().lower()
+        with session_scope() as s:
+            u = s.query(User).filter_by(username=username).one_or_none()
+            if u and verify_password(password, u.password_hash or ""):
+                return self._to_dict(u)
         return None
 
     def make_token(self, username: str) -> str:
