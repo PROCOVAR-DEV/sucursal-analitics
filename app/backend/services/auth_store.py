@@ -107,6 +107,19 @@ class AuthStore:
             "gestor": data.get("gestor"),
         }
 
+    @staticmethod
+    def _public(u: dict) -> dict:
+        """Vista pública de un usuario (sin hash). Se conserva para compat con main.py,
+        que la llama sobre el dict que devuelven authenticate/verify_token (ya público).
+        Es idempotente: funciona igual sobre un dict crudo o ya público."""
+        return {
+            "username": u["username"],
+            "nombre": u.get("nombre", u["username"]),
+            "role": normalize_role(u.get("role", "usuario")),
+            "sucursales": u.get("sucursales", []),
+            "gestor": u.get("gestor"),
+        }
+
     def _ensure_seed(self) -> None:
         with session_scope() as s:
             if s.query(User).count() == 0:

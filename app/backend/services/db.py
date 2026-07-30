@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from contextlib import contextmanager
 from datetime import datetime, date
+from pathlib import Path
 
 from sqlalchemy import (
     create_engine,
@@ -24,7 +25,18 @@ from sqlalchemy.orm import (
     relationship,
 )
 
-DATABASE_URL = os.environ["DATABASE_URL"]  # del .env (analitics_app@127.0.0.1:5432/analitics)
+# DATABASE_URL viene del entorno. El servicio (systemd) lo inyecta con EnvironmentFile=.env;
+# los scripts/comandos manuales NO, así que si falta lo leemos del .env de app/backend.
+if "DATABASE_URL" not in os.environ:
+    _env = Path(__file__).resolve().parents[1] / ".env"
+    if _env.exists():
+        for _line in _env.read_text().splitlines():
+            _line = _line.strip()
+            if _line.startswith("DATABASE_URL="):
+                os.environ["DATABASE_URL"] = _line.split("=", 1)[1].strip().strip('"').strip("'")
+                break
+
+DATABASE_URL = os.environ["DATABASE_URL"]  # analitics_app@127.0.0.1:5432/analitics
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
@@ -107,3 +119,9 @@ def session_scope():
         raise
     finally:
         s.close()
+
+
+# Crea las tablas al importar (startup del servicio): los stores hacen _ensure_seed()
+# al instanciarse (auth_store/sucursal_store son singletons de módulo), así que las
+# tablas deben existir ANTES. create_all es idempotente (no toca las que ya existen).
+init_db()
