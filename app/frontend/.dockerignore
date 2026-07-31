@@ -1,5 +1,7 @@
+# El build ahora ocurre dentro de la imagen (Dockerfile multi-stage), así que
+# src/ y package-lock.json SÍ tienen que entrar al contexto. Lo que se excluye
+# es lo que se regenera dentro: node_modules, caché de vite y el dist local.
 node_modules
 .vite
 npm-debug.log
-src
-package-lock.json
+dist
