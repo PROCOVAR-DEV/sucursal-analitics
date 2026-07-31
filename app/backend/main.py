@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from services.auth_store import auth_store, ALL_SUCURSALES
+from services import cache
 from services.clientes_analisis import compute_clientes_analisis
 from services.diario import compute_diario
 from services.metas_gestor import compute_metas_gestor
@@ -443,7 +444,25 @@ def _desglose_formato_general(report, eff) -> list[dict]:
     return out
 
 
+def _scope_key(user: dict) -> str:
+    """Identifica QUÉ ve este usuario, para no compartir caché entre alcances.
+    Solo el rol 'gestor' recorta los datos (ver _scope_for_user); el resto ve lo
+    mismo, así que comparten entrada."""
+    if user.get("role") == "gestor" and user.get("gestor"):
+        return f"gestor:{str(user['gestor']).upper()}"
+    return "todos"
+
+
 def _compute_dashboard(suc: dict, source_id: str, mes: str | None, user: dict) -> dict:
+    """Payload del Resumen para UNA sucursal, cacheado.
+
+    Se invalida solo cuando cambia la sucursal (archivo nuevo/borrado o config
+    editada). Sin esto, cada carga del Resumen recalculaba todo desde cero."""
+    key = ("dashboard", suc["id"], source_id, mes or "", _scope_key(user))
+    return cache.get_or_compute(key, suc["id"], lambda: _compute_dashboard_uncached(suc, source_id, mes, user))
+
+
+def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user: dict) -> dict:
     """Payload del Resumen para UNA sucursal (fuente = upload uuid o 'accumulated')."""
     report = repository.accumulated(suc["id"]) if source_id == "accumulated" else repository.get(suc["id"], source_id)
     if report is None:
