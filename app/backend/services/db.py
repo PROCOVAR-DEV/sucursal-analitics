@@ -102,6 +102,27 @@ class UploadRow(Base):
     upload: Mapped["Upload"] = relationship(back_populates="rows")
 
 
+class ResultCache(Base):
+    """Resultados ya calculados (Resumen y demás payloads pesados).
+
+    Vive en Postgres y no en memoria a propósito: sobrevive a los reinicios y
+    despliegues, se comparte entre procesos/réplicas y no consume RAM del
+    servidor. Es también la base del motor de reportes: aquí es donde acaban
+    los valores precalculados en vez de recomputarse en cada consulta.
+
+    `version` es la huella de la sucursal en el momento del cálculo. Si al leer
+    no coincide con la huella actual, el resultado se descarta y se recalcula:
+    así es imposible servir un dato viejo tras subir un archivo.
+    """
+
+    __tablename__ = "analytics_result_cache"
+    cache_key: Mapped[str] = mapped_column(String(300), primary_key=True)
+    sid: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    version: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 def init_db() -> None:
     """Crea las tablas si no existen. Idempotente."""
     Base.metadata.create_all(engine)
