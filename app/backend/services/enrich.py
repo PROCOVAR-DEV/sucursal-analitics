@@ -7,12 +7,22 @@ gestores/alias/factores se refleja de inmediato.
 """
 from __future__ import annotations
 
+import json
 import re
 
 import pandas as pd
 
 from core.utils import build_alias_map, detect_product_group, normalize_text
 from services.loader import STD_COLS
+
+
+def _firma_eff(eff: dict) -> str:
+    """Huella de la config efectiva. Si cambia, el enriquecido debe rehacerse."""
+    try:
+        return json.dumps(eff, sort_keys=True, default=str)
+    except Exception:
+        # Ante cualquier duda se devuelve algo único para NO reutilizar nada.
+        return repr(id(eff))
 
 
 def _match_gestor_from_seg(vseg, keys: list[str], alias_map: dict[str, str]) -> str | None:
@@ -54,7 +64,24 @@ def enrich_for_sucursal(report, eff: dict):
     """Devuelve un nuevo DataFrame enriquecido con las columnas dinámicas.
 
     `eff` = config efectiva de la sucursal (config_for_period).
+
+    El resultado se guarda en el propio `report` porque construirlo cuesta:
+    lleva un `apply` fila a fila y, medido sobre las 25.148 filas de Guantánamo,
+    tarda 1.52 s. Un dashboard llama a esta función OCHO veces (dos por cada uno
+    de ventas, productos, ranking y análisis de clientes) siempre con el mismo
+    reporte y la misma config, así que se calculaba lo mismo ocho veces: 12.12 s
+    de los ~13 s que costaba el Resumen entero.
+
+    Se puede reutilizar sin copiar porque ningún llamante escribe en el
+    DataFrame devuelto (comprobado: cero asignaciones de columna y cero
+    `inplace=True` en los seis servicios que lo usan). Si alguna vez uno
+    empieza a modificarlo, tendrá que llevarse su propia copia.
     """
+    firma = _firma_eff(eff)
+    memo = getattr(report, "_enrich_memo", None) if report is not None else None
+    if memo is not None and memo[0] == firma:
+        return memo[1]
+
     df = report.df.copy() if report is not None and report.df is not None else pd.DataFrame()
     if df.empty:
         return df
@@ -134,6 +161,14 @@ def enrich_for_sucursal(report, eff: dict):
 
     for c in ("GestorDetectado", "GestorPunto", "GrupoComercial"):
         df[c] = df[c].astype("string")
+
+    # Se guarda para las otras siete llamadas de este mismo dashboard. Va sobre
+    # el objeto report, que vive solo mientras dura la petición: no hay riesgo
+    # de servir un enriquecido viejo en una petición posterior.
+    try:
+        report._enrich_memo = (firma, df)
+    except Exception:
+        pass  # si el objeto no admite atributos, simplemente no se reutiliza
     return df
 
 
