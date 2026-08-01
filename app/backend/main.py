@@ -17,6 +17,7 @@ Estructura de rutas:
 from __future__ import annotations
 
 import logging
+import threading
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -320,8 +321,56 @@ async def upload_file(sid: str, file: UploadFile = File(...), force: bool = Form
     except Exception as e:
         logger.exception("Error guardando upload")
         raise HTTPException(status_code=500, detail=f"Error guardando el archivo: {e}") from e
+
+    # Subir un archivo deja obsoletos todos los resultados de esa sucursal, y
+    # el siguiente que abra el Resumen pagaría los segundos del recálculo. Se
+    # hace aquí, en segundo plano: quien sube ya está esperando, y quien mire
+    # después lo encuentra listo. De paso se limpia lo que ya no sirve.
+    threading.Thread(target=_tras_subida, args=(suc,), daemon=True).start()
+
     return JSONResponse(content={"id": stored.id, "filename": stored.filename,
                                  "uploaded_at": stored.uploaded_at, "rango": stored.rango, "filas": stored.filas})
+
+
+def _tras_subida(suc: dict) -> None:
+    """Recalcula el Resumen de la sucursal y purga lo viejo. En segundo plano:
+    si algo falla aquí NO debe romper la subida, que ya se guardó bien."""
+    sid = suc["id"]
+    try:
+        version = cache.sucursal_version(sid)
+        if version:
+            n = cache.purgar_obsoletos_de(sid, version)
+            if n:
+                logger.info("cache: %s resultados obsoletos de %s borrados", n, sid)
+
+        # Se precalcula con el alcance de admin ("todos"), que es el que ven
+        # los roles admin, supervisor y analitico. El del rol gestor se calcula
+        # solo cuando ese gestor entre: son pocos y no compensa adelantarlos.
+        admin = {"role": "admin", "username": "(precalculo)", "sucursales": [], "gestores": []}
+        _compute_dashboard(suc, "accumulated", None, admin)
+        logger.info("cache: Resumen de %s precalculado tras la subida", sid)
+
+        borrados = cache.purgar()
+        if any(borrados.values()):
+            logger.info("cache: purga -> %s", borrados)
+    except Exception:
+        logger.exception("cache: fallo el precalculo tras subir a %s", sid)
+
+
+@app.get("/api/cache")
+def cache_stats(_: dict = Depends(require_admin)) -> dict:
+    """Cuántos resultados hay guardados, cuánto ocupan y desde cuándo."""
+    return cache.stats()
+
+
+@app.post("/api/cache/purgar")
+def cache_purgar(dias: int | None = Query(default=None),
+                 _: dict = Depends(require_admin)) -> dict:
+    """Purga manual. Sin parámetro usa la retención configurada.
+    Lo purgado se vuelve a calcular solo si alguien lo pide."""
+    antes = cache.stats()
+    borrados = cache.purgar(dias if dias is not None else cache.DIAS_RETENCION)
+    return {"borrados": borrados, "antes": antes, "despues": cache.stats()}
 
 
 @app.get("/api/sucursales/{sid}/uploads")

@@ -24,12 +24,18 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 from sqlalchemy import text
 
 from services.db import session_scope
 
 log = logging.getLogger(__name__)
+
+# Cuántos días se conserva un resultado calculado. Pasado ese tiempo se borra;
+# si alguien vuelve a pedirlo se recalcula solo. Ajustable por entorno sin
+# tocar el código: ANALITICS_RETENCION_DIAS.
+DIAS_RETENCION = int(os.environ.get("ANALITICS_RETENCION_DIAS", "90"))
 
 
 def sucursal_version(sid: str) -> str | None:
@@ -68,9 +74,12 @@ def get_or_compute(key: tuple, sid: str, fn):
 
     try:
         with session_scope() as s:
+            # Se marca la lectura en el mismo golpe: así la purga sabe qué
+            # reportes se usan de verdad y cuáles llevan semanas sin abrirse.
             row = s.execute(
-                text("select payload from analytics_result_cache"
-                     " where cache_key = :k and version = :v"),
+                text("update analytics_result_cache set last_read_at = now()"
+                     " where cache_key = :k and version = :v"
+                     " returning payload"),
                 {"k": cache_key, "v": version},
             ).first()
         if row is not None:
@@ -87,12 +96,13 @@ def get_or_compute(key: tuple, sid: str, fn):
             s.execute(
                 text(
                     "insert into analytics_result_cache"
-                    "       (cache_key, sid, version, payload, computed_at)"
-                    " values (:k, :sid, :v, cast(:p as jsonb), now())"
+                    "       (cache_key, sid, version, payload, computed_at, last_read_at)"
+                    " values (:k, :sid, :v, cast(:p as jsonb), now(), now())"
                     " on conflict (cache_key) do update"
                     "    set version = excluded.version,"
                     "        payload = excluded.payload,"
-                    "        computed_at = excluded.computed_at"
+                    "        computed_at = excluded.computed_at,"
+                    "        last_read_at = excluded.last_read_at"
                 ),
                 {"k": cache_key, "sid": sid, "v": version,
                  "p": json.dumps(valor, default=str)},
@@ -116,13 +126,71 @@ def invalidate_sucursal(sid: str) -> int:
         return 0
 
 
+def purgar(dias: int = DIAS_RETENCION) -> dict:
+    """Borra resultados viejos para que la tabla no crezca sin fin.
+
+    Se purga por EDAD, no por uso: pasados `dias` desde que se calculó, el
+    resultado se borra. Si alguien vuelve a pedir ese reporte, se calcula otra
+    vez y se guarda de nuevo — solo paga los segundos del cálculo esa primera
+    vez. Guardar para siempre el resumen de un mes que nadie va a volver a
+    abrir es ocupar disco a cambio de nada.
+
+    Un reporte que SÍ se usa no desaparece: cada vez que la sucursal cambia
+    (subida de archivo o edición de config) su huella cambia, el resultado se
+    recalcula y `computed_at` se renueva.
+
+    Además se limpia lo que ya no puede servir para nada:
+      - resultados de sucursales que ya no existen
+      - resultados cuya huella no coincide con la actual (nunca se leerán)
+    """
+    borrados = {"por_edad": 0, "huerfanos": 0, "obsoletos": 0}
+    try:
+        with session_scope() as s:
+            r = s.execute(
+                text("delete from analytics_result_cache"
+                     " where computed_at < now() - make_interval(days => :d)"),
+                {"d": int(dias)},
+            )
+            borrados["por_edad"] = r.rowcount or 0
+
+            r = s.execute(text(
+                "delete from analytics_result_cache"
+                " where sid not in (select sid from analytics_sucursal)"))
+            borrados["huerfanos"] = r.rowcount or 0
+    except Exception:
+        log.exception("Fallo purgando la cache de resultados")
+    return borrados
+
+
+def purgar_obsoletos_de(sid: str, version_actual: str) -> int:
+    """Borra los resultados de una sucursal que quedaron con huella vieja.
+
+    Se llama tras subir un archivo: en ese momento TODOS los resultados de esa
+    sucursal quedan obsoletos de golpe y ya no se van a leer nunca más."""
+    try:
+        with session_scope() as s:
+            r = s.execute(
+                text("delete from analytics_result_cache"
+                     " where sid = :sid and version <> :v"),
+                {"sid": sid, "v": version_actual},
+            )
+            return r.rowcount or 0
+    except Exception:
+        log.exception("Fallo purgando obsoletos de %s", sid)
+        return 0
+
+
 def stats() -> dict:
     try:
         with session_scope() as s:
-            n, kb = s.execute(text(
-                "select count(*), coalesce(sum(pg_column_size(payload)), 0) / 1024.0"
+            n, kb, viejo = s.execute(text(
+                "select count(*),"
+                "       coalesce(sum(pg_column_size(payload)), 0) / 1024.0,"
+                "       min(computed_at)"
                 "  from analytics_result_cache"
             )).first()
-        return {"entradas": int(n), "tamano_kb": round(float(kb), 1)}
+        return {"entradas": int(n), "tamano_kb": round(float(kb), 1),
+                "mas_antiguo": str(viejo) if viejo else None,
+                "retencion_dias": DIAS_RETENCION}
     except Exception:
         return {"entradas": -1, "tamano_kb": -1.0}

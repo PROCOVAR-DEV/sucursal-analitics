@@ -121,11 +121,50 @@ class ResultCache(Base):
     version: Mapped[str] = mapped_column(Text, nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     computed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Cuándo se sirvió por última vez. Es lo que permite purgar por uso real:
+    # un reporte de un mes que nadie abre desde hace semanas ocupa espacio para
+    # nada, y recalcularlo cuesta segundos si alguien vuelve a pedirlo.
+    last_read_at: Mapped[datetime] = mapped_column(DateTime, index=True, default=datetime.utcnow)
 
 
 def init_db() -> None:
-    """Crea las tablas si no existen. Idempotente."""
+    """Crea las tablas si no existen y aplica las migraciones pendientes.
+
+    Idempotente: se puede llamar en cada arranque sin efecto si ya está todo.
+    """
     Base.metadata.create_all(engine)
+    _migrar()
+
+
+# Columnas añadidas después de la creación original de una tabla. `create_all`
+# NO las agrega a tablas que ya existen: crea solo las tablas que faltan. Sin
+# esto, una columna nueva queda ausente en las instalaciones ya montadas y todo
+# lo que la use falla en silencio.
+_MIGRACIONES = [
+    ("analytics_result_cache", "last_read_at",
+     "alter table analytics_result_cache"
+     " add column if not exists last_read_at timestamp not null default now()"),
+    ("analytics_result_cache", "idx_last_read",
+     "create index if not exists ix_analytics_result_cache_last_read_at"
+     " on analytics_result_cache (last_read_at)"),
+    ("analytics_result_cache", "idx_computed",
+     "create index if not exists ix_analytics_result_cache_computed_at"
+     " on analytics_result_cache (computed_at)"),
+]
+
+
+def _migrar() -> None:
+    from sqlalchemy import text as _text
+    import logging as _logging
+    log = _logging.getLogger(__name__)
+    with engine.begin() as conn:
+        for tabla, que, sql in _MIGRACIONES:
+            try:
+                conn.execute(_text(sql))
+            except Exception:
+                # Una migración que falla no debe impedir que el servicio
+                # arranque: se registra y se sigue.
+                log.exception("migracion fallida en %s (%s)", tabla, que)
 
 
 @contextmanager
