@@ -157,11 +157,11 @@ export default function GestorSkuView({ sourceId, period }) {
           {/* overflow-x propio: con muchos productos la tabla es ancha y no debe
               estirar el layout de la página. La primera columna y la cabecera
               quedan fijas para no perder de vista de quién es cada fila. */}
-          <div className="overflow-x-auto">
+          <div className="w-full min-w-0 overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left border-b border-slate-200 dark:border-slate-700">
-                  <th className="py-2 pr-4 sticky left-0 bg-white dark:bg-slate-900 z-10">
+                <tr className="text-left border-b border-slate-200">
+                  <th className="py-2 pr-4 sticky left-0 bg-white z-20 shadow-[2px_0_4px_-2px_rgba(0,0,0,.15)]">
                     Gestor
                   </th>
                   {columnas.map((p) => (
@@ -177,8 +177,8 @@ export default function GestorSkuView({ sourceId, period }) {
                   const tot = data.totales_gestor.find((t) => t.gestor === g.clave);
 
                   return (
-                    <tr key={g.clave} className="border-b border-slate-100 dark:border-slate-800">
-                      <td className="py-1.5 pr-4 sticky left-0 bg-white dark:bg-slate-900 z-10">
+                    <tr key={g.clave} className="border-b border-slate-100">
+                      <td className="py-1.5 pr-4 sticky left-0 bg-white z-20 shadow-[2px_0_4px_-2px_rgba(0,0,0,.15)]">
                         {g.nombre}
                       </td>
                       {columnas.map((p) => {
@@ -189,34 +189,34 @@ export default function GestorSkuView({ sourceId, period }) {
                             key={p}
                             className={cn(
                               "py-1.5 px-3 text-right tabular-nums",
-                              !v && "text-slate-300 dark:text-slate-600",
+                              !v && "text-slate-300",
                             )}
                           >
-                            {v ? formatMoney(v) : "—"}
+                            {formatNumber(v)}
                           </td>
                         );
                       })}
                       <td className="py-1.5 pl-3 text-right font-semibold tabular-nums">
-                        {formatMoney(tot?.importe || 0)}
+                        {formatNumber(tot?.importe || 0)}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-slate-300 dark:border-slate-600 font-semibold">
-                  <td className="py-2 pr-4 sticky left-0 bg-white dark:bg-slate-900 z-10">Total</td>
+                <tr className="border-t-2 border-slate-300 font-semibold">
+                  <td className="py-2 pr-4 sticky left-0 bg-white z-20 shadow-[2px_0_4px_-2px_rgba(0,0,0,.15)]">Total</td>
                   {columnas.map((p) => {
                     const t = data.totales_producto.find((x) => x.producto === p);
 
                     return (
                       <td key={p} className="py-2 px-3 text-right tabular-nums">
-                        {formatMoney(t?.importe || 0)}
+                        {formatNumber(t?.importe || 0)}
                       </td>
                     );
                   })}
                   <td className="py-2 pl-3 text-right tabular-nums">
-                    {formatMoney(data.total_importe)}
+                    {formatNumber(data.total_importe)}
                   </td>
                 </tr>
               </tfoot>
@@ -242,10 +242,10 @@ export default function GestorSkuView({ sourceId, period }) {
               </select>
             }
           />
-          <div className="overflow-x-auto">
+          <div className="w-full min-w-0 overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left border-b border-slate-200 dark:border-slate-700">
+                <tr className="text-left border-b border-slate-200">
                   <th className="py-2 pr-4">Gestor</th>
                   <th className="py-2 pr-4">Producto</th>
                   <th className="py-2 px-3 text-right">Importe</th>
@@ -258,7 +258,7 @@ export default function GestorSkuView({ sourceId, period }) {
                 {filas.map((f, i) => (
                   <tr
                     key={`${f.gestor}-${f.producto}-${i}`}
-                    className="border-b border-slate-100 dark:border-slate-800"
+                    className="border-b border-slate-100"
                   >
                     <td className="py-1.5 pr-4">{f.gestor_nombre}</td>
                     <td className="py-1.5 pr-4">{f.producto}</td>
@@ -270,7 +270,7 @@ export default function GestorSkuView({ sourceId, period }) {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-slate-300 dark:border-slate-600 font-semibold">
+                <tr className="border-t-2 border-slate-300 font-semibold">
                   <td className="py-2 pr-4" colSpan={2}>
                     Total {soloGestor || filtro ? "(filtrado)" : ""}
                   </td>
@@ -295,10 +295,10 @@ export default function GestorSkuView({ sourceId, period }) {
 
       <Panel>
         <PanelHeader title="Totales por gestor" />
-        <div className="overflow-x-auto">
+        <div className="w-full min-w-0 overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="text-left border-b border-slate-200 dark:border-slate-700">
+              <tr className="text-left border-b border-slate-200">
                 <th className="py-2 pr-4">Gestor</th>
                 <th className="py-2 px-3 text-right">Importe</th>
                 <th className="py-2 px-3 text-right">% del total</th>
@@ -308,7 +308,7 @@ export default function GestorSkuView({ sourceId, period }) {
             </thead>
             <tbody>
               {data.totales_gestor.map((t) => (
-                <tr key={t.gestor} className="border-b border-slate-100 dark:border-slate-800">
+                <tr key={t.gestor} className="border-b border-slate-100">
                   <td className="py-1.5 pr-4">{t.gestor_nombre}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums">{formatMoney(t.importe)}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums">
@@ -322,7 +322,7 @@ export default function GestorSkuView({ sourceId, period }) {
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-slate-300 dark:border-slate-600 font-semibold">
+              <tr className="border-t-2 border-slate-300 font-semibold">
                 <td className="py-2 pr-4">Total</td>
                 <td className="py-2 px-3 text-right tabular-nums">
                   {formatMoney(data.total_importe)}

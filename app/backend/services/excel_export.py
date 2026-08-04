@@ -591,11 +591,11 @@ def export_gestor_sku(report, eff: dict) -> bytes:
     for g in gestores:
         ws.write(r, 0, g["nombre"], f["label"])
         for j, p in enumerate(productos, start=1):
-            v = celda.get((g["clave"], p), 0.0)
-            # Las casillas sin venta se dejan VACIAS, no a cero: un cero invita a
-            # sumarlo y ensucia la lectura de la tabla.
-            if v:
-                ws.write_number(r, j, v, f["money0"])
+            # Se escribe CERO donde no hay venta, no una casilla vacia. Excel trata
+            # los huecos como texto ausente: rompen las sumas, las tablas
+            # dinamicas y cualquier formula que cruce esta hoja. Con esto el
+            # fichero sirve para trabajar los datos, que es para lo que se baja.
+            ws.write_number(r, j, celda.get((g["clave"], p), 0.0), f["money0"])
         tot = next((t["importe"] for t in data["totales_gestor"] if t["gestor"] == g["clave"]), 0.0)
         ws.write_number(r, len(productos) + 1, tot, f["money0"])
         r += 1
