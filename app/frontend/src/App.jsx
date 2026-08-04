@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, Calendar, FileSpreadsheet, LogOut, Package, Settings as SettingsIcon, ShoppingCart, Target, Trophy, UserCheck, Users } from "lucide-react";
+import { BarChart3, CalendarDays, Calendar, FileSpreadsheet, LogOut, Package, Settings as SettingsIcon, ShoppingCart, Target, Trophy, UserCheck, Users, Grid3x3 } from "lucide-react";
 import { useEffect, useState } from "react";
 import AdminPanel from "./components/AdminPanel.jsx";
 import ClientesAnalisisView from "./components/ClientesAnalisisView.jsx";
@@ -10,6 +10,7 @@ import RankingView from "./components/RankingView.jsx";
 import ReportesView from "./components/ReportesView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import VendedoresView from "./components/VendedoresView.jsx";
+import GestorSkuView from "./components/GestorSkuView.jsx";
 import VentasView from "./components/VentasView.jsx";
 import { ALL_SID, getPeriods, getToken, listSucursales, logout, me, setSucursal } from "./api.js";
 import { Picker, Select } from "./components/ui.jsx";
@@ -28,6 +29,7 @@ const TABS = [
   { id: "productos", label: "Productos", icon: Package, Comp: ProductosView },
   { id: "ranking", label: "Ranking", icon: Trophy, Comp: RankingView },
   { id: "vendedores", label: "Vendedores", icon: UserCheck, Comp: VendedoresView },
+  { id: "gestor-sku", label: "Gestor × Producto", icon: Grid3x3, Comp: GestorSkuView },
   { id: "clientes", label: "Análisis Clientes", icon: Users, Comp: ClientesAnalisisView },
   { id: "reportes", label: "Reportes", icon: FileSpreadsheet, Comp: ReportesView },
 ];
