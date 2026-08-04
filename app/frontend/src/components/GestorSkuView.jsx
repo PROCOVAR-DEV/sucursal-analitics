@@ -1,6 +1,6 @@
-import { Grid3x3 } from "lucide-react";
+import { Download, Grid3x3 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { getGestorSku } from "../api.js";
+import { downloadExport, getGestorSku } from "../api.js";
 import { formatMoney, formatNumber } from "./Kpi.jsx";
 import { Panel, PanelHeader, StatTile, cn } from "./ui.jsx";
 
@@ -12,8 +12,9 @@ import { Panel, PanelHeader, StatTile, cn } from "./ui.jsx";
  * gestor por gestor y sumar a mano. Aquí se ve cruzado de un vistazo.
  *
  * Dos formas de la misma verdad, porque cada una responde a una pregunta:
- *  - Matriz: "¿quién vende este producto?" — productos en filas, gestores en
- *    columnas. Se lee en horizontal.
+ *  - Matriz: una fila por GESTOR y una columna por PRODUCTO. Es como se lee de
+ *    verdad: "¿qué vendió esta persona?" recorriendo su fila. Los productos van
+ *    de cabecera porque son los que se comparan entre sí.
  *  - Tabla:  "¿qué vendió este gestor?" — una fila por par, ordenable y
  *    filtrable. Se lee en vertical.
  *
@@ -27,6 +28,7 @@ export default function GestorSkuView({ sourceId, period }) {
   const [vista, setVista] = useState("matriz");
   const [filtro, setFiltro] = useState("");
   const [soloGestor, setSoloGestor] = useState("");
+  const [bajando, setBajando] = useState(false);
 
   useEffect(() => {
     // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado
@@ -53,11 +55,38 @@ export default function GestorSkuView({ sourceId, period }) {
     );
   }, [data, filtro, soloGestor]);
 
-  const matriz = useMemo(() => {
+  // Importe de cada casilla, indexado una sola vez: recorrer la matriz por cada
+  // celda seria O(gestores x productos x matriz) y con 27 productos se nota.
+  const celda = useMemo(() => {
+    const m = new Map();
+
+    if (data) {
+      for (const fila of data.matriz) {
+        for (const [g, v] of Object.entries(fila.por_gestor)) {
+          m.set(g + "\u0000" + fila.producto, v);
+        }
+      }
+    }
+
+    return m;
+  }, [data]);
+
+  // En la matriz el filtro busca por GESTOR (son las filas) o por producto, y en
+  // ese caso deja solo las columnas que coinciden.
+  const columnas = useMemo(() => {
     if (!data) return [];
     const q = filtro.trim().toLowerCase();
+    const porProducto = data.productos.filter((p) => p.toLowerCase().includes(q));
 
-    return data.matriz.filter((m) => !q || m.producto.toLowerCase().includes(q));
+    return !q || !porProducto.length ? data.productos : porProducto;
+  }, [data, filtro]);
+
+  const filasMatriz = useMemo(() => {
+    if (!data) return [];
+    const q = filtro.trim().toLowerCase();
+    const coincideGestor = data.gestores.filter((g) => g.nombre.toLowerCase().includes(q));
+
+    return !q || !coincideGestor.length ? data.gestores : coincideGestor;
   }, [data, filtro]);
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;
@@ -98,6 +127,20 @@ export default function GestorSkuView({ sourceId, period }) {
           >
             Tabla
           </button>
+          <button
+            className="btn"
+            disabled={bajando}
+            onClick={async () => {
+              setBajando(true);
+              try {
+                await downloadExport(sourceId, "gestor-sku", period);
+              } finally {
+                setBajando(false);
+              }
+            }}
+          >
+            <Download size={16} /> {bajando ? "Generando…" : "Excel"}
+          </button>
         </div>
       </div>
 
@@ -110,55 +153,64 @@ export default function GestorSkuView({ sourceId, period }) {
 
       {vista === "matriz" ? (
         <Panel>
-          <PanelHeader title="Importe por producto y gestor" />
-          {/* overflow-x propio: con muchos gestores la tabla es ancha y no debe
-              estirar el layout de la página. */}
+          <PanelHeader title="Importe por gestor y producto" />
+          {/* overflow-x propio: con muchos productos la tabla es ancha y no debe
+              estirar el layout de la página. La primera columna y la cabecera
+              quedan fijas para no perder de vista de quién es cada fila. */}
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left border-b border-slate-200 dark:border-slate-700">
-                  <th className="py-2 pr-4 sticky left-0 bg-inherit">Producto</th>
-                  {gestores.map((g) => (
-                    <th key={g.clave} className="py-2 px-3 text-right whitespace-nowrap">
-                      {g.nombre}
+                  <th className="py-2 pr-4 sticky left-0 bg-white dark:bg-slate-900 z-10">
+                    Gestor
+                  </th>
+                  {columnas.map((p) => (
+                    <th key={p} className="py-2 px-3 text-right whitespace-nowrap">
+                      {p}
                     </th>
                   ))}
                   <th className="py-2 pl-3 text-right font-semibold">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {matriz.map((m) => (
-                  <tr key={m.producto} className="border-b border-slate-100 dark:border-slate-800">
-                    <td className="py-1.5 pr-4 sticky left-0 bg-inherit">{m.producto}</td>
-                    {gestores.map((g) => {
-                      const v = m.por_gestor[g.clave] || 0;
+                {filasMatriz.map((g) => {
+                  const tot = data.totales_gestor.find((t) => t.gestor === g.clave);
 
-                      return (
-                        <td
-                          key={g.clave}
-                          className={cn(
-                            "py-1.5 px-3 text-right tabular-nums",
-                            !v && "text-slate-300 dark:text-slate-600",
-                          )}
-                        >
-                          {v ? formatMoney(v) : "—"}
-                        </td>
-                      );
-                    })}
-                    <td className="py-1.5 pl-3 text-right font-semibold tabular-nums">
-                      {formatMoney(m.total)}
-                    </td>
-                  </tr>
-                ))}
+                  return (
+                    <tr key={g.clave} className="border-b border-slate-100 dark:border-slate-800">
+                      <td className="py-1.5 pr-4 sticky left-0 bg-white dark:bg-slate-900 z-10">
+                        {g.nombre}
+                      </td>
+                      {columnas.map((p) => {
+                        const v = celda.get(g.clave + "\u0000" + p) || 0;
+
+                        return (
+                          <td
+                            key={p}
+                            className={cn(
+                              "py-1.5 px-3 text-right tabular-nums",
+                              !v && "text-slate-300 dark:text-slate-600",
+                            )}
+                          >
+                            {v ? formatMoney(v) : "—"}
+                          </td>
+                        );
+                      })}
+                      <td className="py-1.5 pl-3 text-right font-semibold tabular-nums">
+                        {formatMoney(tot?.importe || 0)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-slate-300 dark:border-slate-600 font-semibold">
-                  <td className="py-2 pr-4 sticky left-0 bg-inherit">Total</td>
-                  {gestores.map((g) => {
-                    const t = data.totales_gestor.find((x) => x.gestor === g.clave);
+                  <td className="py-2 pr-4 sticky left-0 bg-white dark:bg-slate-900 z-10">Total</td>
+                  {columnas.map((p) => {
+                    const t = data.totales_producto.find((x) => x.producto === p);
 
                     return (
-                      <td key={g.clave} className="py-2 px-3 text-right tabular-nums">
+                      <td key={p} className="py-2 px-3 text-right tabular-nums">
                         {formatMoney(t?.importe || 0)}
                       </td>
                     );

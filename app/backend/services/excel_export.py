@@ -17,6 +17,7 @@ from services.productos import compute_productos
 from services.ranking import compute_ranking
 from services.ventas import compute_ventas
 from services.clientes_analisis import compute_clientes_analisis
+from services.gestor_sku import compute_gestor_sku
 
 
 # ---------------------------------------------------------------- helpers
@@ -546,5 +547,85 @@ def export_all(report, eff: dict) -> bytes:
         ws.write_number(r, 4, row["delta"], f["green"] if ok else f["red"])
         ws.write(r, 5, "OK" if ok else "FALTA", f["green"] if ok else f["red"]); r += 1
     ws.set_column(0, 0, 18); ws.set_column(1, 5, 13)
+    wb.close()
+    return bio.getvalue()
+
+
+def export_gestor_sku(report, eff: dict) -> bytes:
+    """
+    Cruce gestor x producto para trabajar los datos en Excel.
+
+    Los PRODUCTOS van de cabecera y los gestores en las filas, que es como se
+    lee: una fila por persona y una columna por lo que vende. Con totales por
+    gestor (a la derecha) y por producto (abajo), para no tener que sumar a mano.
+
+    Se congelan los encabezados y la primera columna: con muchos productos hay
+    que desplazarse en horizontal y sin eso se pierde de vista de quien es cada
+    fila.
+    """
+    data = compute_gestor_sku(report, eff)
+    bio, wb = _new_wb()
+    f = _formats(wb)
+
+    productos = data["productos"]
+    gestores = data["gestores"]
+    # Importe de cada celda, indexado para no recorrer la matriz por cada casilla.
+    celda = {
+        (g["clave"], m["producto"]): m["por_gestor"].get(g["clave"], 0.0)
+        for m in data["matriz"]
+        for g in gestores
+    }
+
+    ws = wb.add_worksheet("Gestor x Producto")
+    ancho = max(1, len(productos) + 1)
+    ws.merge_range(0, 0, 1, ancho, "IMPORTE POR GESTOR Y PRODUCTO", f["title"])
+    ws.merge_range(2, 0, 2, ancho, f"Periodo: {data['rango']}", f["subtitle"])
+
+    FILA_CAB = 4
+    ws.write(FILA_CAB, 0, "Gestor", f["header"])
+    for j, p in enumerate(productos, start=1):
+        ws.write(FILA_CAB, j, p, f["header"])
+    ws.write(FILA_CAB, len(productos) + 1, "TOTAL", f["header"])
+
+    r = FILA_CAB + 1
+    for g in gestores:
+        ws.write(r, 0, g["nombre"], f["label"])
+        for j, p in enumerate(productos, start=1):
+            v = celda.get((g["clave"], p), 0.0)
+            # Las casillas sin venta se dejan VACIAS, no a cero: un cero invita a
+            # sumarlo y ensucia la lectura de la tabla.
+            if v:
+                ws.write_number(r, j, v, f["money0"])
+        tot = next((t["importe"] for t in data["totales_gestor"] if t["gestor"] == g["clave"]), 0.0)
+        ws.write_number(r, len(productos) + 1, tot, f["money0"])
+        r += 1
+
+    ws.write(r, 0, "TOTAL", f["header"])
+    for j, p in enumerate(productos, start=1):
+        tot_p = next((t["importe"] for t in data["totales_producto"] if t["producto"] == p), 0.0)
+        ws.write_number(r, j, tot_p, f["money0"])
+    ws.write_number(r, len(productos) + 1, data["total_importe"], f["money0"])
+
+    ws.freeze_panes(FILA_CAB + 1, 1)
+    ws.set_column(0, 0, 24)
+    ws.set_column(1, len(productos) + 1, 16)
+
+    # Hoja plana: una fila por (gestor, producto). Es la que sirve para tablas
+    # dinamicas y para cruzar con otras fuentes.
+    ws2 = wb.add_worksheet("Detalle")
+    for j, h in enumerate(["Gestor", "Producto", "Importe", "Cantidad", "Hectolitros", "Operaciones"]):
+        ws2.write(0, j, h, f["header"])
+    for i, fila in enumerate(data["filas"], start=1):
+        ws2.write(i, 0, fila["gestor_nombre"], f["label"])
+        ws2.write(i, 1, fila["producto"], f["label"])
+        ws2.write_number(i, 2, fila["importe"], f["money0"])
+        ws2.write_number(i, 3, fila["cantidad"])
+        ws2.write_number(i, 4, fila["hectolitros"])
+        ws2.write_number(i, 5, fila["operaciones"])
+    ws2.freeze_panes(1, 0)
+    ws2.set_column(0, 0, 24)
+    ws2.set_column(1, 1, 38)
+    ws2.set_column(2, 5, 14)
+
     wb.close()
     return bio.getvalue()
