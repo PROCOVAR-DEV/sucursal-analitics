@@ -66,6 +66,23 @@ class Sucursal(Base):
     )
 
 
+class Ajuste(Base):
+    """Configuración GLOBAL, la que no es de ninguna sucursal en concreto.
+
+    Nace para las reglas de comisión, que se pueden poner para todas las
+    sucursales a la vez o solo en una. Es clave/valor a propósito: lo global es
+    poca cosa y muy variada, y una tabla por cada ajuste que aparezca serían
+    migraciones constantes para guardar cuatro campos.
+    """
+
+    __tablename__ = "analytics_ajuste"
+    clave: Mapped[str] = mapped_column(String(80), primary_key=True)
+    valor: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class Upload(Base):
     __tablename__ = "analytics_upload"
     id: Mapped[str] = mapped_column(String(60), primary_key=True)  # uuid como hoy

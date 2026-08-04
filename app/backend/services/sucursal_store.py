@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import re
 import threading
 import unicodedata
@@ -34,6 +35,9 @@ from core.constants import (
 )
 
 
+log = logging.getLogger(__name__)
+
+
 def slugify(name: str) -> str:
     t = unicodedata.normalize("NFKD", str(name))
     t = "".join(c for c in t if not unicodedata.combining(c)).lower()
@@ -49,6 +53,10 @@ def default_parametros() -> dict:
         "comision_gestor_pct": COMISION_GESTOR_PCT,
         "comision_supervisor_pct": COMISION_SUPERVISOR_PCT,
         "descuento_sin_pedido": 0.0,   # $ a descontar por cada venta sin pedido (Nota con V- y sin P-)
+        # Reglas de comisión por producto/grupo con vigencia por mes. Vacío = solo
+        # se aplica `comision_gestor_pct` a todo, que es el comportamiento de
+        # siempre. Ver services/comisiones.py.
+        "reglas_comision": [],
         "trabaja_sabado": False,
         "trabaja_domingo": False,
         "curva_venta": dict(CURVA_VENTA),
@@ -100,6 +108,24 @@ def config_for_period(suc: dict, year: int | None, month: int | None) -> dict:
     """
     metas = dict(suc.get("metas") or default_metas())
     params = {**default_parametros(), **(suc.get("parametros") or {})}
+
+    # Las reglas de comisión son la suma de las GLOBALES (valen para todas las
+    # sucursales) y las propias. Se juntan aquí, en el único sitio por el que
+    # pasa toda la configuración, para que ningún servicio pueda quedarse con la
+    # mitad: uno que leyera solo las propias calcularía comisiones distintas del
+    # de al lado sin que nada lo delatara.
+    #
+    # Cada una lleva marcado su ámbito, que es lo que decide quién manda cuando
+    # dos apuntan a lo mismo (ver services/comisiones.py).
+    try:
+        from services import ajustes
+        from services.comisiones import AMBITO_GLOBAL, AMBITO_SUCURSAL
+
+        globales = [{**r, "ambito": AMBITO_GLOBAL} for r in ajustes.reglas_comision_globales()]
+        propias = [{**r, "ambito": AMBITO_SUCURSAL} for r in (params.get("reglas_comision") or [])]
+        params["reglas_comision"] = globales + propias
+    except Exception:  # pragma: no cover - si falla, se sigue con las propias
+        log.exception("No se pudieron leer las reglas de comisión globales")
     eff = {
         "id": suc.get("id"),
         "nombre": suc.get("nombre"),
@@ -379,6 +405,27 @@ class SucursalStore:
                 return None
             suc = self._to_dict(row)
             suc.get("gestores", {}).pop(str(clave).upper().strip(), None)
+            self._persist(s, sid, suc)
+        return self.get(sid)
+
+    # ------------------------------------------------- reglas de comisión (CRUD)
+    #
+    # Las reglas viven dentro de `parametros` porque son configuración de la
+    # sucursal como cualquier otra, y así viajan solas en el export/import y en
+    # el reset. No se les hace tabla propia: son pocas, se leen enteras siempre,
+    # y una tabla obligaría a un JOIN en cada cálculo para nada.
+
+    def reglas_comision(self, sid: str) -> list[dict]:
+        suc = self.get(sid) or {}
+        return list((suc.get("parametros") or {}).get("reglas_comision") or [])
+
+    def guardar_reglas_comision(self, sid: str, reglas: list[dict]) -> dict | None:
+        with session_scope() as s:
+            row = s.query(Sucursal).filter_by(sid=sid).one_or_none()
+            if row is None:
+                return None
+            suc = self._to_dict(row)
+            suc.setdefault("parametros", {})["reglas_comision"] = list(reglas)
             self._persist(s, sid, suc)
         return self.get(sid)
 

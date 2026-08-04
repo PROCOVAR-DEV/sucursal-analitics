@@ -25,6 +25,8 @@ from fastapi.responses import JSONResponse, Response
 
 from services.auth_store import auth_store, ALL_SUCURSALES
 from services import cache
+from services import ajustes
+from services import comisiones
 from services.clientes_analisis import compute_clientes_analisis
 from services.diario import compute_diario
 from services.metas_gestor import compute_metas_gestor
@@ -297,6 +299,137 @@ def edit_gestor(sid: str, clave: str, payload: dict, suc: dict = Depends(require
 def remove_gestor(sid: str, clave: str, suc: dict = Depends(require_access), _w: dict = Depends(require_metas_write)) -> dict:
     sucursal_store.delete_gestor(sid, clave)
     return {"ok": True}
+
+
+# ----------------------------------------------------- reglas de comisión (CRUD)
+#
+# La validación de verdad está en services/comisiones.py y estas rutas solo la
+# traducen a HTTP. Se hace así a propósito: son reglas que deciden lo que cobra
+# gente, y tienen que poder probarse sin levantar el servidor.
+
+def _ordenar(reglas: list) -> list:
+    return sorted(reglas, key=lambda r: (str(r.get("desde") or ""), str(r.get("creada") or "")), reverse=True)
+
+
+def _respuesta_comisiones(sid: str, extra: dict | None = None) -> dict:
+    propias = [{**r, "ambito": comisiones.AMBITO_SUCURSAL} for r in sucursal_store.reglas_comision(sid)]
+    globales = [{**r, "ambito": comisiones.AMBITO_GLOBAL} for r in ajustes.reglas_comision_globales()]
+    # Las globales viajan aparte y en solo lectura: aquí se ven para saber con
+    # qué se está compitiendo, pero se editan en su propia pantalla. Mezclarlas
+    # en la misma lista llevaría a borrar desde una sucursal algo que afecta a
+    # las siete.
+    reglas = globales + propias
+    suc = sucursal_store.get(sid) or {}
+    params = (suc.get("parametros") or {})
+    return {
+        "items": _ordenar(propias),
+        "globales": _ordenar(globales),
+        "ambito": comisiones.AMBITO_SUCURSAL,
+        # Los avisos van SIEMPRE, no solo al crear: si dos reglas se pisan, hay
+        # que verlo cada vez que se abre la pantalla y no solo el día que se creó
+        # la segunda.
+        "avisos": comisiones.solapes(reglas),
+        "comision_general_pct": float(params.get("comision_gestor_pct", 0.01) or 0.0),
+        "mes_actual": comisiones.mes_actual(),
+        **(extra or {}),
+    }
+
+
+@app.get("/api/sucursales/{sid}/comisiones")
+def list_comisiones(sid: str, suc: dict = Depends(require_access)) -> dict:
+    return _respuesta_comisiones(sid)
+
+
+@app.post("/api/sucursales/{sid}/comisiones")
+def add_comision(sid: str, payload: dict, suc: dict = Depends(require_access), _w: dict = Depends(require_metas_write)) -> dict:
+    try:
+        regla = comisiones.normalizar_regla(payload, ambito=comisiones.AMBITO_SUCURSAL)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    sucursal_store.guardar_reglas_comision(sid, sucursal_store.reglas_comision(sid) + [regla])
+    return _respuesta_comisiones(sid, {"item": regla})
+
+
+@app.put("/api/sucursales/{sid}/comisiones/{rid}")
+def edit_comision(sid: str, rid: str, payload: dict, suc: dict = Depends(require_access), _w: dict = Depends(require_metas_write)) -> dict:
+    reglas = sucursal_store.reglas_comision(sid)
+    actual = next((r for r in reglas if str(r.get("id")) == rid), None)
+    if actual is None:
+        raise HTTPException(status_code=404, detail="Regla no encontrada")
+    try:
+        nueva = comisiones.normalizar_regla(payload, existente=actual, ambito=comisiones.AMBITO_SUCURSAL)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    sucursal_store.guardar_reglas_comision(sid, [nueva if str(r.get("id")) == rid else r for r in reglas])
+    return _respuesta_comisiones(sid, {"item": nueva})
+
+
+@app.delete("/api/sucursales/{sid}/comisiones/{rid}")
+def remove_comision(sid: str, rid: str, suc: dict = Depends(require_access), _w: dict = Depends(require_metas_write)) -> dict:
+    reglas = sucursal_store.reglas_comision(sid)
+    quedan = [r for r in reglas if str(r.get("id")) != rid]
+    if len(quedan) == len(reglas):
+        raise HTTPException(status_code=404, detail="Regla no encontrada")
+    # Se BORRA de verdad, no se marca de baja. Para "dejó de usarse en tal mes"
+    # está `hasta`, que conserva el histórico y no toca lo ya calculado. Borrar
+    # es para la regla que se creó por error y nunca debió existir.
+    sucursal_store.guardar_reglas_comision(sid, quedan)
+    return _respuesta_comisiones(sid, {"ok": True})
+
+
+# ------------------------------------------------ reglas de comisión GLOBALES
+#
+# Valen para TODAS las sucursales. Solo las toca un admin: una regla de aquí
+# cambia lo que cobra todo el mundo, y un supervisor solo manda en lo suyo.
+
+def _respuesta_globales(extra: dict | None = None) -> dict:
+    reglas = [{**r, "ambito": comisiones.AMBITO_GLOBAL} for r in ajustes.reglas_comision_globales()]
+    return {
+        "items": _ordenar(reglas),
+        "ambito": comisiones.AMBITO_GLOBAL,
+        "avisos": comisiones.solapes(reglas),
+        "mes_actual": comisiones.mes_actual(),
+        **(extra or {}),
+    }
+
+
+@app.get("/api/comisiones")
+def list_comisiones_globales(_: dict = Depends(current_user)) -> dict:
+    return _respuesta_globales()
+
+
+@app.post("/api/comisiones")
+def add_comision_global(payload: dict, _: dict = Depends(require_admin)) -> dict:
+    try:
+        regla = comisiones.normalizar_regla(payload, ambito=comisiones.AMBITO_GLOBAL)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    ajustes.guardar_reglas_comision_globales(ajustes.reglas_comision_globales() + [regla])
+    return _respuesta_globales({"item": regla})
+
+
+@app.put("/api/comisiones/{rid}")
+def edit_comision_global(rid: str, payload: dict, _: dict = Depends(require_admin)) -> dict:
+    reglas = ajustes.reglas_comision_globales()
+    actual = next((r for r in reglas if str(r.get("id")) == rid), None)
+    if actual is None:
+        raise HTTPException(status_code=404, detail="Regla no encontrada")
+    try:
+        nueva = comisiones.normalizar_regla(payload, existente=actual, ambito=comisiones.AMBITO_GLOBAL)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    ajustes.guardar_reglas_comision_globales([nueva if str(r.get("id")) == rid else r for r in reglas])
+    return _respuesta_globales({"item": nueva})
+
+
+@app.delete("/api/comisiones/{rid}")
+def remove_comision_global(rid: str, _: dict = Depends(require_admin)) -> dict:
+    reglas = ajustes.reglas_comision_globales()
+    quedan = [r for r in reglas if str(r.get("id")) != rid]
+    if len(quedan) == len(reglas):
+        raise HTTPException(status_code=404, detail="Regla no encontrada")
+    ajustes.guardar_reglas_comision_globales(quedan)
+    return _respuesta_globales({"ok": True})
 
 
 # --------------------------------------------------------------- uploads

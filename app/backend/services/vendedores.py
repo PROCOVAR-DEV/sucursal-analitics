@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from services.comisiones import comision_de
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 from services.market import WEEKS, _week_of
@@ -51,6 +52,8 @@ def compute_vendedores(report, eff: dict) -> dict:
     keys = gestor_keys(eff)
     gestores_cfg = eff.get("gestores") or {}
     com_gestor = float(eff.get("comision_gestor_pct", 0.01))
+    reglas_com = eff.get("reglas_comision") or []
+    periodo = eff.get("_period") or ""
     desc_sin_pedido = float(eff.get("descuento_sin_pedido", 0.0))
 
     df_all = enrich_for_sucursal(report, eff)
@@ -75,7 +78,8 @@ def compute_vendedores(report, eff: dict) -> dict:
         total_hl = round(M330 + M500 + M1500 + P330 + P500 + P1500, 2)
         cuota = float(g_cfg.get("cuota_hl", 0.0))
 
-        comision = round(total_importe * com_gestor, 2)
+        com = comision_de(sub_all, com_gestor, reglas_com, periodo)
+        comision = com["comision"]
         sin_pedido = int(sub_all["SinPedido"].sum()) if ("SinPedido" in sub_all.columns and not sub_all.empty) else 0
         descuento = round(sin_pedido * desc_sin_pedido, 2)
         comision_neta = round(comision - descuento, 2)

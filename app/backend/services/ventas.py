@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from services.comisiones import comision_de
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 
@@ -21,6 +22,8 @@ def compute_ventas(report, eff: dict) -> dict:
     meta_total = float(eff["meta_hectolitros_total"])
     meta_dinero = float(eff["meta_dinero_total"])
     com_gestor = float(eff.get("comision_gestor_pct", 0.01))
+    reglas_com = eff.get("reglas_comision") or []
+    periodo = eff.get("_period") or ""
     com_super = float(eff.get("comision_supervisor_pct", 0.10))
     desc_sin_pedido = float(eff.get("descuento_sin_pedido", 0.0))
 
@@ -45,7 +48,11 @@ def compute_ventas(report, eff: dict) -> dict:
 
         cuota = float(g_cfg.get("cuota_hl", 0.0))
         cumplimiento = round((total_hl / cuota * 100) if cuota else 0.0, 2)
-        comision = round(total_importe * com_gestor, 2)
+        # Con reglas por producto la comisión ya no es un porcentaje sobre el
+        # total: cada línea puede llevar el suyo. Sin reglas el resultado es
+        # idéntico al de antes (total_importe * com_gestor).
+        com = comision_de(sub_all, com_gestor, reglas_com, periodo)
+        comision = com["comision"]
 
         # Ventas sin pedido (Nota con V- y sin P-) → descuento a la comisión
         sin_pedido = int(sub_all["SinPedido"].sum()) if ("SinPedido" in sub_all.columns and not sub_all.empty) else 0
@@ -81,6 +88,7 @@ def compute_ventas(report, eff: dict) -> dict:
             "gestor": g, "nombre": g_cfg.get("nombre", g), "sector": g_cfg.get("sector", ""),
             "agencia": g_cfg.get("agencia", ""),
             "total_importe": total_importe, "comision": comision,
+            "comision_detalle": com["detalle"],
             "sin_pedido": sin_pedido, "importe_sin_pedido": importe_sin_pedido,
             "descuento": descuento, "comision_neta": comision_neta,
             "total_hectolitros": total_hl, "cuota_hl": cuota, "cumplimiento_pct": cumplimiento,

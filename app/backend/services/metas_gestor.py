@@ -6,6 +6,7 @@ from __future__ import annotations
 import pandas as pd
 
 from services.calendario import working_days, working_days_elapsed
+from services.comisiones import comision_de
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 
@@ -53,6 +54,8 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
     imp, fec, cant, merc = STD_COLS["importe"], STD_COLS["fecha"], STD_COLS["cant"], STD_COLS["merc"]
     gestores_cfg = eff.get("gestores") or {}
     comision_pct = float(eff.get("comision_gestor_pct", 0.01) or 0.0)
+    reglas_com = eff.get("reglas_comision") or []
+    periodo = eff.get("_period") or ""
 
     # Siempre las 6 columnas estándar + cualquier formato extra en metas.
     formatos = list(DEFAULT_FORMATOS)
@@ -160,7 +163,8 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
         total_blisters = round(float(sub[cant].sum()) if cant in sub.columns else 0.0, 2)
         total_pallets = round(float(sub["Pallets"].sum()) if "Pallets" in sub.columns else 0.0, 2)
         totales = {
-            "total_importe": total_importe, "comision": round(total_importe * comision_pct, 2),
+            "total_importe": total_importe,
+            "comision": comision_de(sub, comision_pct, reglas_com, periodo)["comision"],
             "total_blisters": total_blisters, "total_pallets": total_pallets,
             "total_hl": total_hl, "meta_hl": round(meta_total_tot, 2),
             "delta_hl": round(total_hl - meta_total_tot, 2), "cumpl_hl_pct": _pct(total_hl, meta_total_tot),

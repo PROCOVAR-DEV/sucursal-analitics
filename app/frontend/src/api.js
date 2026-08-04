@@ -73,6 +73,23 @@ export async function addGestor(sid, payload) { return (await api.post(`/sucursa
 export async function updateGestor(sid, clave, payload) { return (await api.put(`/sucursales/${sid}/gestores/${encodeURIComponent(clave)}`, payload)).data; }
 export async function deleteGestor(sid, clave) { await api.delete(`/sucursales/${sid}/gestores/${encodeURIComponent(clave)}`); }
 
+// --- reglas de comisión por producto -----------------------------------------
+// Todas devuelven la lista COMPLETA y los avisos de solape, no solo lo tocado:
+// crear una regla puede cambiar cuál manda en otra, así que la pantalla tiene
+// que repintarse entera con lo que diga el servidor.
+export async function listComisiones(sid) { return (await api.get(`/sucursales/${sid}/comisiones`)).data; }
+export async function addComision(sid, payload) { return (await api.post(`/sucursales/${sid}/comisiones`, payload)).data; }
+export async function updateComision(sid, rid, payload) { return (await api.put(`/sucursales/${sid}/comisiones/${rid}`, payload)).data; }
+export async function deleteComision(sid, rid) { return (await api.delete(`/sucursales/${sid}/comisiones/${rid}`)).data; }
+
+// Ámbito GLOBAL: la regla vale para todas las sucursales. Ruta aparte a
+// propósito — desde la pantalla de una sucursal no debe poder tocarse algo que
+// afecta a las siete.
+export async function listComisionesGlobales() { return (await api.get(`/comisiones`)).data; }
+export async function addComisionGlobal(payload) { return (await api.post(`/comisiones`, payload)).data; }
+export async function updateComisionGlobal(rid, payload) { return (await api.put(`/comisiones/${rid}`, payload)).data; }
+export async function deleteComisionGlobal(rid) { return (await api.delete(`/comisiones/${rid}`)).data; }
+
 // ---- Uploads (sucursal activa) ----
 // En modo "Todas las sucursales" las consultas van a /all/... (agregado en el backend).
 function base() {

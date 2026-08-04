@@ -1,5 +1,5 @@
 import {
-  Building2, Calculator, Layers, Plus, RotateCcw, Save, Settings2, SlidersHorizontal,
+  Building2, Calculator, Layers, Percent, Plus, RotateCcw, Save, Settings2, SlidersHorizontal,
   Target, Trash2, UserPlus, Users, X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -8,6 +8,7 @@ import {
   getSucursal, listUsers, resetSucursal, updateGestor, updateSucursal, updateUser,
 } from "../api.js";
 import CalculadoraView from "./CalculadoraView.jsx";
+import ComisionesView from "./ComisionesView.jsx";
 import { Badge, Button, Field, IconButton, MultiSelect, Panel, PanelHeader, SearchSelect, Select, Toast, cn } from "./ui.jsx";
 
 const ROLE_OPTS = [
@@ -43,6 +44,7 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
     ? [
         ...(isAdmin ? [{ id: "usuarios", label: "Usuarios", icon: UserPlus }] : []),
         ...(isAdmin ? [{ id: "sucursales", label: "Sucursales", icon: Building2 }] : []),
+        ...(isAdmin ? [{ id: "comisiones", label: "Comisiones (todas)", icon: Percent }] : []),
       ]
     : [
         { id: "sucursal", label: "Sucursal", icon: Building2 },
@@ -51,13 +53,14 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
         { id: "calculadora", label: "Calculadora de metas", icon: Calculator },
         { id: "grupos", label: "Grupos y productos", icon: Layers },
         { id: "parametros", label: "Parámetros", icon: SlidersHorizontal },
+        { id: "comisiones", label: "Comisiones", icon: Percent },
         ...(isAdmin ? [{ id: "sucursales", label: "Sucursales", icon: Building2 }] : []),
         ...((isAdmin || isSup) ? [{ id: "usuarios", label: "Usuarios", icon: UserPlus }] : []),
       ];
   // El supervisor gestiona SU sucursal: gestores, metas, calculadora y usuarios
   // (solo puede crear supervisores/gestores de su sucursal).
   const TABS = isSup
-    ? ALL_TABS.filter((t) => ["gestores", "metas", "calculadora", "usuarios"].includes(t.id))
+    ? ALL_TABS.filter((t) => ["gestores", "metas", "calculadora", "comisiones", "usuarios"].includes(t.id))
     : ALL_TABS;
   // Si la sección actual no está permitida para el rol, ir a la primera válida.
   // OJO: este useEffect debe ir ANTES de cualquier return temprano; si queda
@@ -106,6 +109,14 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
       {!isAll && tab === "calculadora" && <CalculadoraView cfg={cfg} sid={sid} onSaved={(c) => setCfg(c)} />}
       {!isAll && tab === "grupos" && <Grupos cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Grupos guardados"); }} />}
       {!isAll && tab === "parametros" && <Parametros cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Parámetros guardados"); }} />}
+      {tab === "comisiones" && (
+        <ComisionesView
+          sid={sid}
+          esGlobal={isAll}
+          puedeEditar={isAll ? isAdmin : (isAdmin || isSup)}
+          flash={flash}
+        />
+      )}
       {tab === "sucursales" && isAdmin && <Sucursales sucursales={sucursales} onChanged={onSucursalesChanged} flash={flash} />}
       {tab === "usuarios" && (isAdmin || isSup) && <Usuarios sucursales={sucursales} flash={flash} sid={sid} user={user} />}
     </div>

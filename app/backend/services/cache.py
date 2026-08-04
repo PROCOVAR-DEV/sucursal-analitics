@@ -57,7 +57,15 @@ def sucursal_version(sid: str) -> str | None:
                 ),
                 {"sid": sid},
             ).first()
-        return "|".join(str(x) for x in row) if row is not None else "sin-datos"
+        # La marca de los ajustes GLOBALES entra en la huella: una regla de
+        # comisión global cambia los resultados de TODAS las sucursales, y sin
+        # esto se seguirían sirviendo los guardados. El día que se olvidara
+        # purgar a mano, unas sucursales cobrarían con la regla nueva y otras con
+        # la vieja, sin nada que lo delatara.
+        from services import ajustes
+
+        base = "|".join(str(x) for x in row) if row is not None else "sin-datos"
+        return f"{base}|g:{ajustes.marca_de_tiempo()}"
     except Exception:
         log.exception("No se pudo calcular la version de la sucursal %s", sid)
         return None
