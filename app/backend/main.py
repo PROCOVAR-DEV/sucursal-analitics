@@ -40,6 +40,7 @@ from services.ranking import compute_ranking
 from services.repository import OverlapError, repository
 from services.sucursal_store import config_for_period, config_for_report, sucursal_store
 from services.vendedores import compute_vendedores
+from services.gestor_sku import compute_gestor_sku
 from services.ventas import compute_ventas
 
 logger = logging.getLogger(__name__)
@@ -435,6 +436,13 @@ def src_clientes_analisis(sid: str, source_id: str, mes: str | None = Query(defa
 def src_vendedores(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     report = filter_by_period(_get_source(sid, source_id), mes)
     return compute_vendedores(report, _eff_scoped(suc, report, mes, user))
+
+
+@app.get("/api/sucursales/{sid}/sources/{source_id}/gestor-sku")
+def src_gestor_sku(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    """Informe cruzado gestor x producto por importe, con totales en ambas direcciones."""
+    report = filter_by_period(_get_source(sid, source_id), mes)
+    return compute_gestor_sku(report, _eff_scoped(suc, report, mes, user))
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/diario")
