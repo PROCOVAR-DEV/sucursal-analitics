@@ -119,8 +119,13 @@ export default function App() {
 
   function doLogout() { logout(); setUser(null); setSucursales([]); setSid(null); }
 
+  // overflow-x-hidden en la raiz: la PAGINA no se desplaza de lado nunca. Lo
+  // ancho (tablas con muchas columnas) se desplaza DENTRO de su panel. Sin esto
+  // una tabla ancha empuja todo el layout: se van de vista la cabecera y las
+  // columnas ancladas dejan de anclar, porque el que scrollea pasa a ser la
+  // pagina en vez de su contenedor.
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-x-hidden">
       <header className="bg-gradient-to-r from-brand-900 via-brand-700 to-brand-500 text-white shadow shrink-0">
         <div className="px-3 sm:px-6 py-3 flex items-center justify-between gap-3 sm:gap-4 flex-wrap">
           <div className="min-w-0">

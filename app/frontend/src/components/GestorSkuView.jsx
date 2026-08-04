@@ -156,7 +156,10 @@ export default function GestorSkuView({ sourceId, period }) {
           <PanelHeader title="Importe por gestor y producto" />
           {/* overflow-x propio: con muchos productos la tabla es ancha y no debe
               estirar el layout de la página. La primera columna y la cabecera
-              quedan fijas para no perder de vista de quién es cada fila. */}
+              quedan fijas para no perder de vista de quién es cada fila, y la
+              columna Total se ancla a la derecha: con muchos productos hay que
+              desplazarse igual, y si el total se va con ellos la tabla obliga a
+              ir y volver para leer una sola fila. */}
           <div className="w-full min-w-0 overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
@@ -169,7 +172,7 @@ export default function GestorSkuView({ sourceId, period }) {
                       {p}
                     </th>
                   ))}
-                  <th className="py-2 pl-3 text-right font-semibold">Total</th>
+                  <th className="py-2 pl-3 text-right font-semibold sticky right-0 bg-white z-20 shadow-[-2px_0_4px_-2px_rgba(0,0,0,.15)]">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,7 +199,7 @@ export default function GestorSkuView({ sourceId, period }) {
                           </td>
                         );
                       })}
-                      <td className="py-1.5 pl-3 text-right font-semibold tabular-nums">
+                      <td className="py-1.5 pl-3 text-right font-semibold tabular-nums sticky right-0 bg-white z-20 shadow-[-2px_0_4px_-2px_rgba(0,0,0,.15)]">
                         {formatNumber(tot?.importe || 0)}
                       </td>
                     </tr>
@@ -215,7 +218,7 @@ export default function GestorSkuView({ sourceId, period }) {
                       </td>
                     );
                   })}
-                  <td className="py-2 pl-3 text-right tabular-nums">
+                  <td className="py-2 pl-3 text-right tabular-nums sticky right-0 bg-white z-20 shadow-[-2px_0_4px_-2px_rgba(0,0,0,.15)]">
                     {formatNumber(data.total_importe)}
                   </td>
                 </tr>
