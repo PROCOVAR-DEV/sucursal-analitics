@@ -37,7 +37,64 @@ if "DATABASE_URL" not in os.environ:
                 break
 
 DATABASE_URL = os.environ["DATABASE_URL"]  # analitics_app@127.0.0.1:5432/analitics
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+
+
+def _conectar_reintentando():
+    """Abre la conexión a Postgres, reintentando si el fallo es pasajero.
+
+    `pool_pre_ping` ya detecta conexiones MUERTAS, pero no ayuda cuando lo que
+    falla es abrir una NUEVA. Y eso pasa: el 07/08/2026 a las 15:13 el
+    contenedor no pudo resolver el nombre del servidor de base de datos durante
+    **16 segundos** —
+
+        could not translate host name "procovar-postgres-nlfols" to address
+
+    — y soltó seis trazas de error seguidas, que llegaron por correo como si la
+    aplicación se hubiera caído. No se había caído: el DNS interno de Docker
+    parpadeó, cosa que pasa cuando un servicio se redespliega o la red del
+    enjambre se reorganiza.
+
+    Un parpadeo de segundos no es una avería, y no debe despertar a nadie. Con
+    esto se espera y se vuelve a intentar; solo si de verdad no vuelve en ~8
+    segundos se levanta el error, que entonces sí es real.
+    """
+    from sqlalchemy.engine.url import make_url
+    import time
+
+    import psycopg2
+
+    url = make_url(DATABASE_URL)
+    espera = 0.25
+    ultimo: Exception | None = None
+
+    for intento in range(5):
+        try:
+            return psycopg2.connect(
+                host=url.host,
+                port=url.port or 5432,
+                dbname=url.database,
+                user=url.username,
+                password=url.password,
+                # Sin esto, un servidor que no contesta deja la petición colgada
+                # minutos: el error tarda más en llegar que el propio arreglo.
+                connect_timeout=5,
+            )
+        except psycopg2.OperationalError as e:
+            ultimo = e
+            if intento == 4:
+                break
+            time.sleep(espera)
+            espera = min(espera * 2, 4)
+
+    raise ultimo  # type: ignore[misc]
+
+
+engine = create_engine(
+    DATABASE_URL,
+    creator=_conectar_reintentando,
+    pool_pre_ping=True,
+    future=True,
+)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
 
