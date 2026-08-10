@@ -27,7 +27,22 @@ from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 
 
-def compute_gestor_sku(report, eff: dict) -> dict:
+def compute_gestor_sku(
+    report,
+    eff: dict,
+    grupos: list[str] | None = None,
+    metrica: str = "importe",
+) -> dict:
+    """El cruce gestor × producto, en importe o en cantidad.
+
+    Mismas dos opciones que el análisis de clientes, y a propósito: son la misma
+    pregunta mirada por otro lado, así que si una pantalla filtra por grupo y la
+    otra no, los dos números dejan de poderse comparar.
+
+    `metrica` cambia lo que se SUMA y también por lo que se ORDENA. Ordenar por
+    importe una tabla que enseña cantidades pondría arriba lo que más factura, no
+    lo que más se mueve — y quien la lea creerá que está viendo lo segundo.
+    """
     keys = gestor_keys(eff)
     gestores_cfg = eff.get("gestores") or {}
 
@@ -36,14 +51,26 @@ def compute_gestor_sku(report, eff: dict) -> dict:
     df = enrich_for_sucursal(report, eff)
     df = only_valid(df, keys)
 
+    # Los grupos que EXISTEN en estos datos, antes de filtrar: si se calcularan
+    # después, al elegir uno desaparecerían los demás del filtro.
+    disponibles = (
+        sorted({str(g) for g in df["GrupoComercial"].dropna().unique() if str(g).strip()})
+        if df is not None and not df.empty and "GrupoComercial" in df.columns
+        else []
+    )
+
+    if grupos and df is not None and not df.empty and "GrupoComercial" in df.columns:
+        df = df[df["GrupoComercial"].astype(str).isin([str(g) for g in grupos])]
+
     vacio = {
         "rango": getattr(report, "rango_str", ""),
         "filas": [], "matriz": [], "gestores": [], "productos": [],
         "totales_gestor": [], "totales_producto": [],
         "total_importe": 0.0, "total_cantidad": 0.0, "total_hectolitros": 0.0,
+        "grupos_disponibles": [], "grupos": list(grupos or []), "metrica": "importe",
     }
     if df is None or df.empty or merc not in df.columns:
-        return vacio
+        return {**vacio, "grupos_disponibles": disponibles}
 
     # Nombre legible del gestor; si no está configurado, se usa su clave.
     def nombre_de(g: str) -> str:
@@ -59,6 +86,11 @@ def compute_gestor_sku(report, eff: dict) -> dict:
     aggs = {"importe": (imp, "sum")}
     if cant in df.columns:
         aggs["cantidad"] = (cant, "sum")
+
+    # La columna por la que se suma y se ordena TODO lo de abajo. Si se pide
+    # cantidad y no viene esa columna, se cae al importe: mejor el número de
+    # siempre que una tabla vacía sin explicación.
+    medida = "cantidad" if (metrica == "cantidad" and cant in df.columns) else "importe"
     if "Hectolitros" in df.columns:
         aggs["hectolitros"] = ("Hectolitros", "sum")
     aggs["operaciones"] = (merc, "size")
@@ -67,7 +99,7 @@ def compute_gestor_sku(report, eff: dict) -> dict:
         df.groupby([col_gestor, merc], dropna=False)
         .agg(**aggs)
         .reset_index()
-        .sort_values("importe", ascending=False)
+        .sort_values(medida, ascending=False)
     )
 
     filas = [
@@ -86,9 +118,9 @@ def compute_gestor_sku(report, eff: dict) -> dict:
     # Orden de columnas y filas: por importe descendente, para que lo que más pesa
     # quede arriba y a la izquierda en vez de en orden alfabético.
     tot_g = (
-        agrupado.groupby(col_gestor)["importe"].sum().sort_values(ascending=False)
+        agrupado.groupby(col_gestor)[medida].sum().sort_values(ascending=False)
     )
-    tot_p = agrupado.groupby(merc)["importe"].sum().sort_values(ascending=False)
+    tot_p = agrupado.groupby(merc)[medida].sum().sort_values(ascending=False)
 
     gestores = [{"clave": str(g), "nombre": nombre_de(str(g))} for g in tot_g.index]
     productos = [str(p) for p in tot_p.index]
@@ -96,7 +128,7 @@ def compute_gestor_sku(report, eff: dict) -> dict:
     # Matriz producto x gestor. Se rellena con 0.0 lo que no tiene venta, para que
     # la tabla del front no tenga huecos y se pueda sumar sin comprobar nulos.
     pivote = agrupado.pivot_table(
-        index=merc, columns=col_gestor, values="importe", aggfunc="sum", fill_value=0.0
+        index=merc, columns=col_gestor, values=medida, aggfunc="sum", fill_value=0.0
     )
     matriz = [
         {
@@ -119,13 +151,18 @@ def compute_gestor_sku(report, eff: dict) -> dict:
             "importe": round(float(sub["importe"].sum()), 2),
             "cantidad": round(float(sub["cantidad"].sum()), 2) if "cantidad" in sub else 0.0,
             "hectolitros": round(float(sub["hectolitros"].sum()), 2) if "hectolitros" in sub else 0.0,
+            # Lo que se está midiendo ahora (importe o cantidad). Va aparte para
+            # que quien lo lea no tenga que adivinar si "importe" trae dólares o
+            # empaques según cómo se pidió.
+            "medida": round(float(sub[medida].sum()), 2),
             "productos_distintos": int(sub[merc].nunique()),
         })
 
     totales_producto = [
         {
             "producto": str(p),
-            "importe": round(float(tot_p.loc[p]), 2),
+            "importe": round(float(agrupado[agrupado[merc] == p]["importe"].sum()), 2),
+            "medida": round(float(tot_p.loc[p]), 2),
             "gestores_que_lo_venden": int((pivote.loc[p] > 0).sum()) if p in pivote.index else 0,
         }
         for p in productos
@@ -133,6 +170,12 @@ def compute_gestor_sku(report, eff: dict) -> dict:
 
     return {
         "rango": getattr(report, "rango_str", ""),
+        "grupos_disponibles": disponibles,
+        "grupos": list(grupos or []),
+        "metrica": medida,
+        # El total de lo que se está midiendo. `total_importe` sigue siendo el de
+        # dólares siempre, para que no cambie de significado a mitad.
+        "total_medida": round(float(agrupado[medida].sum()), 2),
         "filas": filas,
         "matriz": matriz,
         "gestores": gestores,

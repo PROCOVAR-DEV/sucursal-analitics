@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { downloadExport, getClientesAnalisis } from "../api.js";
 import { formatInt, formatMoney } from "./Kpi.jsx";
 import { Button, Empty, Panel, PanelHeader, StatTile, cn } from "./ui.jsx";
+import FiltroMulti from "./FiltroMulti.jsx";
 
 export default function ClientesAnalisisView({ sourceId, period }) {
   const [data, setData] = useState(null);
@@ -104,34 +105,13 @@ export default function ClientesAnalisisView({ sourceId, period }) {
         </div>
 
         {gruposDisponibles.length > 1 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-slate-500">Grupo</span>
-            {/* "Todos" no es un grupo mas: es no filtrar. Por eso vacia la
-                seleccion en vez de marcarlos todos — asi un grupo que se
-                configure mañana entra solo, sin que nadie tenga que volver a
-                marcarlo aqui. */}
-            <button
-              onClick={() => setGrupos([])}
-              className={cn("tab shrink-0", grupos.length === 0 && "tab-active")}
-            >
-              Todos
-            </button>
-            {gruposDisponibles.map((g) => {
-              const on = grupos.includes(g);
-
-              return (
-                <button
-                  key={g}
-                  onClick={() =>
-                    setGrupos(on ? grupos.filter((x) => x !== g) : [...grupos, g])
-                  }
-                  className={cn("tab shrink-0", on && "tab-active")}
-                >
-                  {g}
-                </button>
-              );
-            })}
-          </div>
+          <FiltroMulti
+            etiqueta="Grupo"
+            opciones={gruposDisponibles}
+            valor={grupos}
+            onChange={setGrupos}
+            textoTodos="Todos los grupos"
+          />
         )}
       </div>
 

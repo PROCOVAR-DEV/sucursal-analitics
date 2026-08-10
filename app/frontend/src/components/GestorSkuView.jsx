@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { downloadExport, getGestorSku } from "../api.js";
 import { formatMoney, formatNumber } from "./Kpi.jsx";
 import { Panel, PanelHeader, StatTile, cn } from "./ui.jsx";
+import FiltroMulti from "./FiltroMulti.jsx";
 
 /**
  * Informe cruzado GESTOR x PRODUCTO por importe.
@@ -29,6 +30,13 @@ export default function GestorSkuView({ sourceId, period }) {
   const [filtro, setFiltro] = useState("");
   const [soloGestor, setSoloGestor] = useState("");
   const [bajando, setBajando] = useState(false);
+  // Grupos comerciales elegidos. Vacio = todos, que es como estaba.
+  const [grupos, setGrupos] = useState([]);
+  // "importe" (dolares) o "cantidad" (por empaque, tal como viene del origen).
+  const [metrica, setMetrica] = useState("importe");
+  // Se conserva entre consultas: el servidor la calcula ANTES de filtrar, pero
+  // vaciarla al recargar haria parpadear el desplegable.
+  const [gruposDisponibles, setGruposDisponibles] = useState([]);
 
   useEffect(() => {
     // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado
@@ -37,12 +45,18 @@ export default function GestorSkuView({ sourceId, period }) {
 
     setData(null);
     setErr(null);
-    getGestorSku(sourceId, period)
-      .then((d) => { if (!cancelled) setData(d); })
+    getGestorSku(sourceId, period, grupos, metrica)
+      .then((d) => {
+        if (cancelled) return;
+        setData(d);
+        if (d.grupos_disponibles?.length) setGruposDisponibles(d.grupos_disponibles);
+      })
       .catch((e) => { if (!cancelled) setErr(e?.response?.data?.detail || e.message); });
 
     return () => { cancelled = true; };
-  }, [sourceId, period]);
+    // `grupos` se serializa: como array suelto es uno nuevo en cada render y
+    // relanzaria la peticion sin parar.
+  }, [sourceId, period, grupos.join("|"), metrica]);
 
   const filas = useMemo(() => {
     if (!data) return [];
@@ -91,13 +105,21 @@ export default function GestorSkuView({ sourceId, period }) {
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!data) return <div className="p-6 text-slate-400 animate-pulse">Cargando…</div>;
+
+  // En cantidad NO se pone simbolo de moneda: un "$" delante de un numero de
+  // empaques es falso, y quien lo lea saca la cuenta equivocada.
+  const esCantidad = data.metrica === "cantidad";
+  const fmt = (v) => (esCantidad ? formatNumber(Math.round(v || 0)) : formatMoney(v));
+  // El total de lo que se esta midiendo. `total_importe` sigue siendo dolares
+  // siempre, a proposito: no cambia de significado a mitad.
+  const totalMedida = data.total_medida ?? data.total_importe;
   if (!data.filas.length) {
     return <div className="p-6 text-slate-400">No hay ventas en este periodo.</div>;
   }
 
   const gestores = data.gestores;
   // El % que representa cada gestor sobre el total, para leer el peso sin dividir.
-  const pesoDe = (v) => (data.total_importe ? (v / data.total_importe) * 100 : 0);
+  const pesoDe = (v) => (totalMedida ? (v / totalMedida) * 100 : 0);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -133,19 +155,55 @@ export default function GestorSkuView({ sourceId, period }) {
             onClick={async () => {
               setBajando(true);
               try {
-                await downloadExport(sourceId, "gestor-sku", period);
+                await downloadExport(sourceId, "gestor-sku", period, { grupos, metrica });
               } finally {
                 setBajando(false);
               }
             }}
           >
-            <Download size={16} /> {bajando ? "Generando…" : "Excel"}
+            <Download size={16} />{" "}
+            {bajando
+              ? "Generando…"
+              : grupos.length || esCantidad
+                ? "Excel de lo que veo"
+                : "Excel"}
           </button>
         </div>
       </div>
 
+      {/* Qué se mide y de qué grupos. La métrica va como par de botones porque
+          son dos y no van a crecer; el grupo va en desplegable porque la lista
+          crece con el negocio y en fila acabaría partiéndose. */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-500">Medir en</span>
+          {[
+            { id: "importe", label: "Importe" },
+            { id: "cantidad", label: "Cantidad" },
+          ].map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setMetrica(m.id)}
+              className={cn("tab shrink-0", metrica === m.id && "tab-active")}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {gruposDisponibles.length > 1 && (
+          <FiltroMulti
+            etiqueta="Grupo"
+            opciones={gruposDisponibles}
+            valor={grupos}
+            onChange={setGrupos}
+            textoTodos="Todos los grupos"
+          />
+        )}
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatTile label="Importe total" value={formatMoney(data.total_importe)} />
+        <StatTile label={esCantidad ? "Cantidad total" : "Importe total"} value={fmt(totalMedida)} />
         <StatTile label="Gestores" value={gestores.length} />
         <StatTile label="Productos" value={data.productos.length} />
         <StatTile label="Hectolitros" value={formatNumber(data.total_hectolitros)} />
@@ -219,7 +277,7 @@ export default function GestorSkuView({ sourceId, period }) {
                     );
                   })}
                   <td className="py-2 pl-3 text-right tabular-nums sticky right-0 bg-white z-20 shadow-[-2px_0_4px_-2px_rgba(0,0,0,.15)]">
-                    {formatNumber(data.total_importe)}
+                    {formatNumber(totalMedida)}
                   </td>
                 </tr>
               </tfoot>
@@ -265,7 +323,7 @@ export default function GestorSkuView({ sourceId, period }) {
                   >
                     <td className="py-1.5 pr-4">{f.gestor_nombre}</td>
                     <td className="py-1.5 pr-4">{f.producto}</td>
-                    <td className="py-1.5 px-3 text-right tabular-nums">{formatMoney(f.importe)}</td>
+                    <td className="py-1.5 px-3 text-right tabular-nums">{fmt(esCantidad ? f.cantidad : f.importe)}</td>
                     <td className="py-1.5 px-3 text-right tabular-nums">{formatNumber(f.cantidad)}</td>
                     <td className="py-1.5 px-3 text-right tabular-nums">{formatNumber(f.hectolitros)}</td>
                     <td className="py-1.5 pl-3 text-right tabular-nums">{f.operaciones}</td>
@@ -278,7 +336,7 @@ export default function GestorSkuView({ sourceId, period }) {
                     Total {soloGestor || filtro ? "(filtrado)" : ""}
                   </td>
                   <td className="py-2 px-3 text-right tabular-nums">
-                    {formatMoney(filas.reduce((s, f) => s + f.importe, 0))}
+                    {fmt(filas.reduce((s, f) => s + (esCantidad ? f.cantidad : f.importe), 0))}
                   </td>
                   <td className="py-2 px-3 text-right tabular-nums">
                     {formatNumber(filas.reduce((s, f) => s + f.cantidad, 0))}
@@ -313,9 +371,9 @@ export default function GestorSkuView({ sourceId, period }) {
               {data.totales_gestor.map((t) => (
                 <tr key={t.gestor} className="border-b border-slate-100">
                   <td className="py-1.5 pr-4">{t.gestor_nombre}</td>
-                  <td className="py-1.5 px-3 text-right tabular-nums">{formatMoney(t.importe)}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums">{fmt(t.medida ?? t.importe)}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums">
-                    {pesoDe(t.importe).toFixed(1)}%
+                    {pesoDe(t.medida ?? t.importe).toFixed(1)}%
                   </td>
                   <td className="py-1.5 px-3 text-right tabular-nums">
                     {formatNumber(t.hectolitros)}
@@ -328,7 +386,7 @@ export default function GestorSkuView({ sourceId, period }) {
               <tr className="border-t-2 border-slate-300 font-semibold">
                 <td className="py-2 pr-4">Total</td>
                 <td className="py-2 px-3 text-right tabular-nums">
-                  {formatMoney(data.total_importe)}
+                  {fmt(totalMedida)}
                 </td>
                 <td className="py-2 px-3 text-right tabular-nums">100,0%</td>
                 <td className="py-2 px-3 text-right tabular-nums">

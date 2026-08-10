@@ -582,7 +582,8 @@ def export_all(report, eff: dict) -> bytes:
     return bio.getvalue()
 
 
-def export_gestor_sku(report, eff: dict) -> bytes:
+def export_gestor_sku(report, eff: dict, grupos: list[str] | None = None,
+                      metrica: str = "importe") -> bytes:
     """
     Cruce gestor x producto para trabajar los datos en Excel.
 
@@ -594,7 +595,8 @@ def export_gestor_sku(report, eff: dict) -> bytes:
     que desplazarse en horizontal y sin eso se pierde de vista de quien es cada
     fila.
     """
-    data = compute_gestor_sku(report, eff)
+    data = compute_gestor_sku(report, eff, grupos=grupos, metrica=metrica)
+    es_cantidad = data.get("metrica") == "cantidad"
     bio, wb = _new_wb()
     f = _formats(wb)
 
@@ -609,8 +611,15 @@ def export_gestor_sku(report, eff: dict) -> bytes:
 
     ws = wb.add_worksheet("Gestor x Producto")
     ancho = max(1, len(productos) + 1)
-    ws.merge_range(0, 0, 1, ancho, "IMPORTE POR GESTOR Y PRODUCTO", f["title"])
-    ws.merge_range(2, 0, 2, ancho, f"Periodo: {data['rango']}", f["subtitle"])
+    # El título dice qué se está midiendo y de qué grupos. Es lo único que lo
+    # aclara dentro del archivo, ya lejos de la pantalla que lo generó.
+    ws.merge_range(0, 0, 1, ancho,
+                   ("CANTIDAD" if es_cantidad else "IMPORTE") + " POR GESTOR Y PRODUCTO",
+                   f["title"])
+    sub = f"Periodo: {data['rango']}"
+    if grupos:
+        sub += f" · Grupos: {', '.join(grupos)}"
+    ws.merge_range(2, 0, 2, ancho, sub, f["subtitle"])
 
     FILA_CAB = 4
     ws.write(FILA_CAB, 0, "Gestor", f["header"])
@@ -627,15 +636,15 @@ def export_gestor_sku(report, eff: dict) -> bytes:
             # dinamicas y cualquier formula que cruce esta hoja. Con esto el
             # fichero sirve para trabajar los datos, que es para lo que se baja.
             ws.write_number(r, j, celda.get((g["clave"], p), 0.0), f["money0"])
-        tot = next((t["importe"] for t in data["totales_gestor"] if t["gestor"] == g["clave"]), 0.0)
+        tot = next((t.get("medida", t["importe"]) for t in data["totales_gestor"] if t["gestor"] == g["clave"]), 0.0)
         ws.write_number(r, len(productos) + 1, tot, f["money0"])
         r += 1
 
     ws.write(r, 0, "TOTAL", f["header"])
     for j, p in enumerate(productos, start=1):
-        tot_p = next((t["importe"] for t in data["totales_producto"] if t["producto"] == p), 0.0)
+        tot_p = next((t.get("medida", t["importe"]) for t in data["totales_producto"] if t["producto"] == p), 0.0)
         ws.write_number(r, j, tot_p, f["money0"])
-    ws.write_number(r, len(productos) + 1, data["total_importe"], f["money0"])
+    ws.write_number(r, len(productos) + 1, data.get("total_medida", data["total_importe"]), f["money0"])
 
     ws.freeze_panes(FILA_CAB + 1, 1)
     ws.set_column(0, 0, 24)
