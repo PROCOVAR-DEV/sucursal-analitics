@@ -836,11 +836,29 @@ _EXPORTERS = {
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/export/{modulo}.xlsx")
 def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query(default=None),
+                  grupo: list[str] = Query(default=[]), metrica: str = Query(default="importe"),
                   suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> Response:
     exporter = _EXPORTERS.get(modulo)
     if exporter is None:
         raise HTTPException(status_code=404, detail="Módulo de exportación desconocido")
     report = filter_by_period(_get_source(sid, source_id), mes)
-    suffix = f"_{mes}" if mes else ""
-    data = exporter(report, _eff_scoped(suc, report, mes, user))
-    return _xlsx(data, f"{modulo}{suffix}.xlsx")
+
+    # Los filtros de pantalla solo los entiende este informe; a los demás se les
+    # pasarían argumentos que no aceptan. Explícito y no por introspección: se
+    # lee de un vistazo cuál los usa.
+    extra = {"grupos": grupo, "metrica": metrica} if modulo == "clientes-analisis" else {}
+
+    # El nombre del archivo dice qué lleva dentro. Sin esto, dos descargas con
+    # filtros distintos se llaman igual y acaban confundidas en la carpeta de
+    # descargas — que es donde se abren, lejos de la pantalla que las generó.
+    partes = [modulo]
+    if mes:
+        partes.append(mes)
+    if modulo == "clientes-analisis":
+        if grupo:
+            partes.append("-".join(g.replace(" ", "") for g in grupo))
+        if metrica == "cantidad":
+            partes.append("cantidad")
+
+    data = exporter(report, _eff_scoped(suc, report, mes, user), **extra)
+    return _xlsx(data, f"{'_'.join(partes)}.xlsx")

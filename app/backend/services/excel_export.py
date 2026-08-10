@@ -35,6 +35,9 @@ def _formats(wb):
         "int": wb.add_format({"num_format": "0", "border": 1}),
         "money": wb.add_format({"num_format": "$#,##0.00", "border": 1}),
         "money_b": wb.add_format({"bold": True, "num_format": "$#,##0.00", "border": 1, "bg_color": C["kpi"]}),
+        # El mismo resalte que `money_b` pero SIN moneda: para los totales cuando
+        # lo que se mide son empaques y no dólares.
+        "int_b": wb.add_format({"bold": True, "num_format": "#,##0", "border": 1, "bg_color": C["kpi"]}),
         "pct": wb.add_format({"num_format": "0.0%", "border": 1, "align": "center"}),
         "band": wb.add_format({"bg_color": C["band"], "border": 1}),
         "kpi": wb.add_format({"bold": True, "num_format": "#,##0.00", "border": 1, "bg_color": C["kpi"]}),
@@ -309,19 +312,34 @@ def export_ranking(report, eff: dict) -> bytes:
 
 
 # ---------------------------------------------------------------- ANÁLISIS DE CLIENTES
-def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict) -> None:
-    """Escribe una hoja: clientes (filas, ranking por $) × SKU (columnas) en dólares."""
+def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict, metrica: str = "importe") -> None:
+    """Una hoja: clientes (filas) × producto (columnas), en importe o en cantidad.
+
+    El formato de celda va con la métrica. Escribir empaques con formato de
+    dólares no es un detalle estético: el Excel sale con "$1,240.00" donde hay
+    1.240 cajas, y quien lo abra —o lo reenvíe— saca la cuenta equivocada sin
+    tener forma de notarlo.
+    """
+    es_cantidad = metrica == "cantidad"
+    # En cantidad se usan los formatos enteros, que ya existen para los conteos.
+    fmt_tot = f["int_b"] if (es_cantidad and "int_b" in f) else (f["int"] if es_cantidad else f["money_b"])
+    fmt_celda = f["int"] if es_cantidad else f["money"]
     ws = wb.add_worksheet(sheet_name[:31])
     skus = blk.get("skus", [])
     clientes = blk.get("clientes", [])
     has_gestor = bool(clientes and "gestor" in clientes[0])
 
     # columnas fijas + una por SKU
-    fixed = ["#", "Cliente"] + (["Gestor"] if has_gestor else []) + ["Total $", "# SKUs"]
+    fixed = ["#", "Cliente"] + (["Gestor"] if has_gestor else []) + [
+        "Total cantidad" if es_cantidad else "Total $",
+        "# Productos",
+    ]
     ncols = len(fixed) + len(skus)
     ws.merge_range(0, 0, 0, max(1, ncols - 1), titulo, f["title"])
     ws.merge_range(1, 0, 1, max(1, ncols - 1),
-                   f"{len(clientes)} clientes · {len(skus)} SKUs · total ${blk.get('total', 0):,.2f}", f["subtitle"])
+                   f"{len(clientes)} clientes · {len(skus)} productos · total "
+                   + (f"{blk.get('total', 0):,.0f}" if es_cantidad else f"${blk.get('total', 0):,.2f}"),
+                   f["subtitle"])
 
     hdr_row = 3
     for j, h in enumerate(fixed):
@@ -336,13 +354,13 @@ def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict) -> None:
         ws.write(r, col, c["cliente"], f["label"]); col += 1
         if has_gestor:
             ws.write(r, col, c.get("gestor", ""), f["band"]); col += 1
-        ws.write_number(r, col, c["total"], f["money_b"]); col += 1
+        ws.write_number(r, col, c["total"], fmt_tot); col += 1
         ws.write_number(r, col, c["num_skus"], f["int"]); col += 1
         montos = c.get("sku_montos", {})
         for k, s in enumerate(skus):
             v = montos.get(s["sku"])
             if v:
-                ws.write_number(r, len(fixed) + k, v, f["money"])
+                ws.write_number(r, len(fixed) + k, v, fmt_celda)
             else:
                 ws.write(r, len(fixed) + k, "", f["num"])
         r += 1
@@ -365,14 +383,27 @@ def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict) -> None:
     ws.freeze_panes(hdr_row + 1, 2)
 
 
-def export_clientes_analisis(report, eff: dict) -> bytes:
-    data = compute_clientes_analisis(report, eff)
+def export_clientes_analisis(report, eff: dict, grupos: list[str] | None = None,
+                             metrica: str = "importe") -> bytes:
+    """El Excel sale con LO MISMO que se está viendo en pantalla.
+
+    Antes salía siempre el informe completo en importe, sin los filtros. Un
+    archivo que no coincide con la pantalla de la que salió es peor que no
+    tenerlo: se reenvía por correo, se discute con él delante, y nadie sabe que
+    está mirando otra cosa.
+    """
+    data = compute_clientes_analisis(report, eff, grupos=grupos, metrica=metrica)
+    real = data.get("metrica", "importe")
+    # Los grupos elegidos van en el título: es lo único que dice, dentro del
+    # archivo, que esto no es el total de todo.
+    sufijo = f" — {', '.join(grupos)}" if grupos else ""
     bio, wb = _new_wb()
     f = _formats(wb)
-    _sheet_clientes(wb, f, "Oficina", "Análisis de clientes — Oficina (total)", data["oficina"])
+    _sheet_clientes(wb, f, "Oficina", f"Análisis de clientes — Oficina (total){sufijo}",
+                    data["oficina"], real)
     for g in data["por_gestor"]:
-        titulo = f"Clientes de {g['gestor']}"
-        _sheet_clientes(wb, f, g["gestor"], titulo, g)
+        titulo = f"Clientes de {g['gestor']}{sufijo}"
+        _sheet_clientes(wb, f, g["gestor"], titulo, g, real)
     wb.close()
     return bio.getvalue()
 

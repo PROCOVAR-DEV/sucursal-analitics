@@ -144,12 +144,31 @@ export async function getMetasGestor(id, mes = null, dia = null) {
 export async function getPeriods(id)                { return (await api.get(`${src(id)}/periods`)).data; }
 
 // ---- Descarga de export (con auth → blob) ----
-export async function downloadExport(id, modulo, mes = null) {
-  const resp = await api.get(`${src(id)}/export/${modulo}.xlsx${q(mes)}`, { responseType: "blob" });
+// `filtros` son los de la pantalla ({ grupos, metrica }). El Excel tiene que
+// salir con LO MISMO que se esta viendo: un archivo que no coincide con la
+// pantalla de la que salio se reenvia por correo y se discute con el delante,
+// sin que nadie sepa que esta mirando otra cosa.
+export async function downloadExport(id, modulo, mes = null, filtros = {}) {
+  const p = new URLSearchParams();
+
+  if (mes) p.set("mes", mes);
+  for (const g of filtros.grupos || []) p.append("grupo", g);
+  if (filtros.metrica && filtros.metrica !== "importe") p.set("metrica", filtros.metrica);
+
+  const qs = p.toString();
+  const resp = await api.get(`${src(id)}/export/${modulo}.xlsx${qs ? `?${qs}` : ""}`, { responseType: "blob" });
   const url = URL.createObjectURL(resp.data);
   const a = document.createElement("a");
+  // El nombre lo pone el servidor en la cabecera; aqui se reconstruye igual para
+  // que los dos digan lo mismo.
+  const partes = [modulo];
+
+  if (mes) partes.push(mes);
+  if ((filtros.grupos || []).length) partes.push(filtros.grupos.map((g) => g.replace(/ /g, "")).join("-"));
+  if (filtros.metrica === "cantidad") partes.push("cantidad");
+
   a.href = url;
-  a.download = `${modulo}${mes ? "_" + mes : ""}.xlsx`;
+  a.download = `${partes.join("_")}.xlsx`;
   document.body.appendChild(a);
   a.click();
   a.remove();

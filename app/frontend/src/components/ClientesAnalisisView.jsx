@@ -56,7 +56,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
 
   async function handleExport() {
     setBusy(true);
-    try { await downloadExport(sourceId, "clientes-analisis", period); }
+    try { await downloadExport(sourceId, "clientes-analisis", period, { grupos, metrica }); }
     catch (e) { alert(e?.response?.data?.detail || "No se pudo descargar"); }
     finally { setBusy(false); }
   }
@@ -70,8 +70,16 @@ export default function ClientesAnalisisView({ sourceId, period }) {
             Clientes rankeados por {esCantidad ? "cantidad (por empaque)" : "ventas ($)"}. Cada columna es un producto comprado. · {data.rango}
           </p>
         </div>
+        {/* El boton dice QUE se lleva. Antes ponia "Exportar Excel" y sacaba
+            siempre el informe completo en importe: con filtros puestos, el
+            archivo no era lo que se estaba viendo y no habia forma de saberlo
+            hasta abrirlo. */}
         <Button variant="outline" icon={Download} onClick={handleExport} disabled={busy}>
-          {busy ? "Generando…" : "Exportar Excel"}
+          {busy
+            ? "Generando…"
+            : grupos.length || esCantidad
+              ? "Exportar lo que veo"
+              : "Exportar Excel"}
         </Button>
       </div>
 
