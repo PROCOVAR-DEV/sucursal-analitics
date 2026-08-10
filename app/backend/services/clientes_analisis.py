@@ -24,7 +24,13 @@ def _clean_text(series: pd.Series, fallback: str) -> pd.Series:
 
 
 def _pivot(sub: pd.DataFrame, imp: str, socio: str, merc: str, with_gestor: bool, pedidos_map: dict | None = None) -> dict:
-    """Pivote clientes×SKU en dólares, ordenado por total de cliente (desc)."""
+    """Pivote clientes×producto, ordenado por total de cliente (desc).
+
+    `imp` es la columna que se SUMA: el importe en dólares o la cantidad por
+    empaque, según lo que se pida. Todo lo demás es igual — el pivote no sabe ni
+    le importa cuál de las dos está sumando, y por eso no hay dos versiones de
+    esta función que puedan separarse.
+    """
     empty = {"skus": [], "clientes": [], "total": 0.0, "num_clientes": 0, "num_skus": 0}
     if sub.empty or imp not in sub.columns or socio not in sub.columns or merc not in sub.columns:
         return empty
@@ -75,10 +81,48 @@ def _pivot(sub: pd.DataFrame, imp: str, socio: str, merc: str, with_gestor: bool
     }
 
 
-def compute_clientes_analisis(report, eff: dict) -> dict:
+def compute_clientes_analisis(
+    report,
+    eff: dict,
+    grupos: list[str] | None = None,
+    metrica: str = "importe",
+) -> dict:
+    """El pivote de clientes × producto, en importe o en cantidad.
+
+    `grupos` acota a unos grupos comerciales (PARRANDA, IMPORTACIONES...). Los
+    grupos no están escritos a mano en ningún sitio: salen de los datos, así que
+    cuando se configure uno nuevo aparece solo en el filtro sin tocar código.
+
+    `metrica`:
+      - "importe": dólares. Es lo que había y sigue siendo lo predeterminado.
+      - "cantidad": unidades POR EMPAQUE, que es como viene la columna del
+        origen — no se convierte a unidades sueltas, porque el negocio cuenta
+        por empaque y convertirlo daría un número que nadie usa.
+    """
     keys = gestor_keys(eff)
     df = only_valid(enrich_for_sucursal(report, eff), keys)
     imp, socio, merc = STD_COLS["importe"], STD_COLS["socio"], STD_COLS["merc"]
+
+    # Los grupos que EXISTEN en estos datos, para que el filtro los ofrezca.
+    # Se calculan ANTES de filtrar: si no, al elegir uno desaparecerían los demás
+    # de la lista y no habría forma de volver.
+    disponibles = (
+        sorted({str(g) for g in df["GrupoComercial"].dropna().unique() if str(g).strip()})
+        if "GrupoComercial" in df.columns
+        else []
+    )
+
+    if grupos and "GrupoComercial" in df.columns:
+        df = df[df["GrupoComercial"].astype(str).isin([str(g) for g in grupos])]
+
+    # La columna que se suma. Si se pide cantidad y no viene esa columna, se cae
+    # al importe: mejor enseñar el número de siempre que una tabla vacía sin
+    # explicación.
+    if metrica == "cantidad" and STD_COLS["cant"] in df.columns:
+        imp = STD_COLS["cant"]
+        metrica_real = "cantidad"
+    else:
+        metrica_real = "importe"
 
     # Cantidad de pedidos por cliente desde PEDIDO (best-effort; {} si no responde).
     pedidos_map = fetch_order_counts()
@@ -96,6 +140,9 @@ def compute_clientes_analisis(report, eff: dict) -> dict:
     return {
         "rango": report.rango_str,
         "periodo": eff.get("_period"),
+        "grupos_disponibles": disponibles,
+        "grupos": list(grupos or []),
+        "metrica": metrica_real,
         "oficina": _pivot(df, imp, socio, merc, with_gestor=True, pedidos_map=pedidos_map),
         "por_gestor": por_gestor,
     }

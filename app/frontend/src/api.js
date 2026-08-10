@@ -116,7 +116,19 @@ export async function getVentas(id, mes = null)     { return (await api.get(`${s
 export async function getProductos(id, mes = null)  { return (await api.get(`${src(id)}/productos${q(mes)}`)).data; }
 export async function getMarket(id, mes = null)     { return (await api.get(`${src(id)}/market${q(mes)}`)).data; }
 export async function getRanking(id, mes = null)    { return (await api.get(`${src(id)}/ranking${q(mes)}`)).data; }
-export async function getClientesAnalisis(id, mes = null) { return (await api.get(`${src(id)}/clientes-analisis${q(mes)}`)).data; }
+// `grupos` acota a unos grupos comerciales; vacio = todos. `metrica` es
+// "importe" (dolares) o "cantidad" (por empaque, tal como viene del origen).
+export async function getClientesAnalisis(id, mes = null, grupos = [], metrica = "importe") {
+  const p = new URLSearchParams();
+
+  if (mes) p.set("mes", mes);
+  for (const g of grupos) p.append("grupo", g);
+  if (metrica && metrica !== "importe") p.set("metrica", metrica);
+
+  const qs = p.toString();
+
+  return (await api.get(`${src(id)}/clientes-analisis${qs ? `?${qs}` : ""}`)).data;
+}
 export async function getVendedores(id, mes = null) { return (await api.get(`${src(id)}/vendedores${q(mes)}`)).data; }
 // Informe cruzado gestor x producto por importe, con totales en ambas direcciones.
 export async function getGestorSku(id, mes = null) { return (await api.get(`${src(id)}/gestor-sku${q(mes)}`)).data; }

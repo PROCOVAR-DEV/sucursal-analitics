@@ -560,9 +560,22 @@ def src_ranking(sid: str, source_id: str, mes: str | None = Query(default=None),
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/clientes-analisis")
-def src_clientes_analisis(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+def src_clientes_analisis(
+    sid: str,
+    source_id: str,
+    mes: str | None = Query(default=None),
+    # Grupos comerciales a incluir. Repetible: ?grupo=PARRANDA&grupo=IMPORTACIONES.
+    # Sin ninguno = todos, que es como estaba.
+    grupo: list[str] = Query(default=[]),
+    # "importe" (dolares) o "cantidad" (por empaque, como viene del origen).
+    metrica: str = Query(default="importe"),
+    suc: dict = Depends(require_access),
+    user: dict = Depends(current_user),
+) -> dict:
     report = filter_by_period(_get_source(sid, source_id), mes)
-    return compute_clientes_analisis(report, _eff_scoped(suc, report, mes, user))
+    return compute_clientes_analisis(
+        report, _eff_scoped(suc, report, mes, user), grupos=grupo, metrica=metrica
+    )
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/vendedores")

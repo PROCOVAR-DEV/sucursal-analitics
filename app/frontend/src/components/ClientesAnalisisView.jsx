@@ -9,16 +9,33 @@ export default function ClientesAnalisisView({ sourceId, period }) {
   const [err, setErr] = useState(null);
   const [sel, setSel] = useState("__oficina__");
   const [busy, setBusy] = useState(false);
+  // Grupos comerciales elegidos. Vacio = todos, que es como estaba.
+  const [grupos, setGrupos] = useState([]);
+  // "importe" (dolares) o "cantidad" (por empaque, tal como viene del origen).
+  const [metrica, setMetrica] = useState("importe");
+  // La lista de grupos se conserva entre consultas: el servidor la calcula ANTES
+  // de filtrar, pero si se vaciara al recargar, el desplegable parpadearia.
+  const [gruposDisponibles, setGruposDisponibles] = useState([]);
 
   useEffect(() => {
     // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
     let cancelled = false;
-    setData(null); setErr(null); setSel("__oficina__");
-    getClientesAnalisis(sourceId, period)
-      .then((d) => { if (!cancelled) setData(d); })
+    setData(null); setErr(null);
+    getClientesAnalisis(sourceId, period, grupos, metrica)
+      .then((d) => {
+        if (cancelled) return;
+        setData(d);
+        if (d.grupos_disponibles?.length) setGruposDisponibles(d.grupos_disponibles);
+      })
       .catch((e) => { if (!cancelled) setErr(e?.response?.data?.detail || e.message); });
     return () => { cancelled = true; };
-  }, [sourceId, period]);
+    // `grupos` se serializa: es un array nuevo en cada render y como dependencia
+    // suelta relanzaria la peticion sin parar.
+  }, [sourceId, period, grupos.join("|"), metrica]);
+
+  // Al cambiar de periodo o de fuente se vuelve a la vista general: el gestor
+  // elegido puede no existir en el periodo nuevo.
+  useEffect(() => { setSel("__oficina__"); }, [sourceId, period]);
 
   const block = useMemo(() => {
     if (!data) return null;
@@ -31,6 +48,10 @@ export default function ClientesAnalisisView({ sourceId, period }) {
 
   const skus = block.skus || [];
   const clientes = block.clientes || [];
+  // En cantidad NO se pone el simbolo de moneda: un "$" delante de un numero de
+  // empaques es sencillamente falso, y quien lo lea sacara la cuenta equivocada.
+  const esCantidad = data.metrica === "cantidad";
+  const fmt = (v) => (esCantidad ? formatInt(Math.round(v || 0)) : formatMoney(v));
   const isOficina = sel === "__oficina__";
 
   async function handleExport() {
@@ -46,12 +67,64 @@ export default function ClientesAnalisisView({ sourceId, period }) {
         <div>
           <h2 className="section-title">Análisis de Clientes por Vendedor</h2>
           <p className="text-sm text-slate-500 mt-0.5">
-            Clientes rankeados por ventas ($). Cada columna es un SKU comprado. · {data.rango}
+            Clientes rankeados por {esCantidad ? "cantidad (por empaque)" : "ventas ($)"}. Cada columna es un producto comprado. · {data.rango}
           </p>
         </div>
         <Button variant="outline" icon={Download} onClick={handleExport} disabled={busy}>
           {busy ? "Generando…" : "Exportar Excel"}
         </Button>
+      </div>
+
+      {/* Qué se mide y de qué grupos. Va ANTES del selector de vendedor porque
+          aplica a los dos lados —general y por vendedor—: cambiarlo aquí y que
+          el número de abajo cambie de significado sin avisar sería peor. */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-500">Medir en</span>
+          {[
+            { id: "importe", label: "Importe" },
+            { id: "cantidad", label: "Cantidad" },
+          ].map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setMetrica(m.id)}
+              className={cn("tab shrink-0", metrica === m.id && "tab-active")}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {gruposDisponibles.length > 1 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-slate-500">Grupo</span>
+            {/* "Todos" no es un grupo mas: es no filtrar. Por eso vacia la
+                seleccion en vez de marcarlos todos — asi un grupo que se
+                configure mañana entra solo, sin que nadie tenga que volver a
+                marcarlo aqui. */}
+            <button
+              onClick={() => setGrupos([])}
+              className={cn("tab shrink-0", grupos.length === 0 && "tab-active")}
+            >
+              Todos
+            </button>
+            {gruposDisponibles.map((g) => {
+              const on = grupos.includes(g);
+
+              return (
+                <button
+                  key={g}
+                  onClick={() =>
+                    setGrupos(on ? grupos.filter((x) => x !== g) : [...grupos, g])
+                  }
+                  className={cn("tab shrink-0", on && "tab-active")}
+                >
+                  {g}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Selector Oficina / vendedor */}
@@ -69,8 +142,8 @@ export default function ClientesAnalisisView({ sourceId, period }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="Clientes" value={formatInt(block.num_clientes)} accent="brand" />
         <StatTile label="SKUs distintos" value={formatInt(block.num_skus)} accent="slate" />
-        <StatTile label="Total ventas" value={formatMoney(block.total)} accent="green" />
-        <StatTile label="Ticket promedio" value={formatMoney(block.num_clientes ? block.total / block.num_clientes : 0)} accent="amber" />
+        <StatTile label={esCantidad ? "Total cantidad" : "Total ventas"} value={fmt(block.total)} accent="green" />
+        <StatTile label={esCantidad ? "Media por cliente" : "Ticket promedio"} value={fmt(block.num_clientes ? block.total / block.num_clientes : 0)} accent="amber" />
       </div>
 
       {clientes.length === 0 ? (
@@ -106,7 +179,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                     <td className="sticky left-0 z-10 bg-white group-hover:bg-brand-50/60 px-3 py-2 text-slate-400 border-b border-r border-slate-100 tabular-nums">{i + 1}</td>
                     <td className="sticky left-10 z-10 bg-white group-hover:bg-brand-50/60 px-3 py-2 font-medium text-slate-800 border-b border-r border-slate-100 whitespace-nowrap">{c.cliente}</td>
                     {isOficina && <td className="px-3 py-2 border-b border-slate-100"><span className="badge-slate">{c.gestor}</span></td>}
-                    <td className="px-3 py-2 text-right font-semibold text-slate-900 bg-slate-50/60 border-b border-slate-100 tabular-nums">{formatMoney(c.total)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-900 bg-slate-50/60 border-b border-slate-100 tabular-nums">{fmt(c.total)}</td>
                     <td className="px-2 py-2 text-center text-slate-500 border-b border-slate-100 tabular-nums">{c.num_skus}</td>
                     <td className="px-2 py-2 text-center text-slate-600 font-medium border-b border-slate-100 tabular-nums">{c.pedidos ? formatInt(c.pedidos) : "·"}</td>
                     {skus.map((s) => {
@@ -125,7 +198,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                   <td className="sticky left-0 z-30 bg-slate-800 border-r border-slate-700 px-3 py-2.5" />
                   <td className="sticky left-10 z-30 bg-slate-800 text-white font-semibold px-3 py-2.5 border-r border-slate-700 whitespace-nowrap">TOTAL POR SKU</td>
                   {isOficina && <td className="bg-slate-800" />}
-                  <td className="bg-slate-900 text-white font-bold px-3 py-2.5 text-right tabular-nums">{formatMoney(block.total)}</td>
+                  <td className="bg-slate-900 text-white font-bold px-3 py-2.5 text-right tabular-nums">{fmt(block.total)}</td>
                   <td className="bg-slate-800" />
                   <td className="bg-slate-800" />
                   {skus.map((s) => (
