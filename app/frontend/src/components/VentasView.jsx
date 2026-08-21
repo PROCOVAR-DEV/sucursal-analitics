@@ -45,8 +45,10 @@ export default function VentasView({ sourceId, period }) {
         <Kpi label="% Cumplimiento" value={`${formatNumber(data.cumplimiento_pct, 1)} %`}
           tone={data.cumplimiento_pct >= 100 ? "green" : data.cumplimiento_pct >= 80 ? "amber" : "red"} />
         <Kpi label="Total Importe" value={formatMoney(data.total_importe)} />
+        {/* Se dice de dónde sale: es la suma de lo que se le descontó a cada gestor,
+            no un porcentaje aparte que salga de la nada. */}
         <Kpi label="Comisión supervisor" value={formatMoney(data.comision_supervisor)} tone="green"
-          hint={data.supervisor_nombre || ""} />
+          hint={`${data.supervisor_nombre || ""}${data.comision_supervisor_pct ? ` · ${(data.comision_supervisor_pct * 100).toFixed(0)}% de cada gestor` : ""}`} />
       </div>
 
       <BarCard title="Hectolitros por gestor" data={gestoresBar} xKey="gestor" yKey="hectolitros" />

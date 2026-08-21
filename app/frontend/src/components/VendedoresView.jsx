@@ -168,12 +168,18 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
         </div>
       )}
 
-      {/* Comisión individual del vendedor */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Comisión individual del vendedor.
+          El descuento del supervisor va en su propia casilla: un neto más bajo sin
+          decir de dónde salió la diferencia es lo que hace que alguien piense que le
+          quitaron dinero sin avisar. */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <Kpi label="Comisión" value={formatMoney(vendor.comision)} tone="green" />
         <Kpi label="Ventas sin pedido" value={formatInt(vendor.sin_pedido || 0)} tone="slate" />
         <Kpi label="Descuento sin pedido" value={vendor.descuento ? "-" + formatMoney(vendor.descuento) : formatMoney(0)}
           tone={vendor.descuento > 0 ? "red" : "slate"} />
+        <Kpi label="Comisión supervisor"
+          value={vendor.comision_supervisor ? "-" + formatMoney(vendor.comision_supervisor) : formatMoney(0)}
+          tone={vendor.comision_supervisor > 0 ? "amber" : "slate"} />
         <Kpi label="Comisión neta" value={formatMoney(vendor.comision_neta)} tone="brand" />
       </div>
 

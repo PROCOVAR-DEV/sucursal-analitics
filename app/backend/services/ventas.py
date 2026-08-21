@@ -58,7 +58,17 @@ def compute_ventas(report, eff: dict) -> dict:
         sin_pedido = int(sub_all["SinPedido"].sum()) if ("SinPedido" in sub_all.columns and not sub_all.empty) else 0
         importe_sin_pedido = round(float(sub_all.loc[sub_all["SinPedido"], imp].sum()) if ("SinPedido" in sub_all.columns and imp in sub_all.columns and not sub_all.empty) else 0.0, 2)
         descuento = round(sin_pedido * desc_sin_pedido, 2)
-        comision_neta = round(comision - descuento, 2)
+
+        # Lo del supervisor SALE de la comisión del gestor.
+        #
+        # Se calculaba y se enseñaba, pero no se le restaba a nadie: el supervisor
+        # cobraba su 10% y los gestores seguían cobrando la comisión entera, así que
+        # la suma de lo que se pagaba era mayor que la comisión generada. Se descuenta
+        # aquí, gestor a gestor, y no del total: redondear una vez sobre la suma da un
+        # número distinto que redondear cada parte, y lo que cobra cada uno tiene que
+        # cuadrar con lo que se le descontó a cada uno.
+        comision_supervisor = round(comision * com_super, 2)
+        comision_neta = round(comision - comision_supervisor - descuento, 2)
 
         # Mix por grupo comercial ($)
         mix = {}
@@ -90,7 +100,11 @@ def compute_ventas(report, eff: dict) -> dict:
             "total_importe": total_importe, "comision": comision,
             "comision_detalle": com["detalle"],
             "sin_pedido": sin_pedido, "importe_sin_pedido": importe_sin_pedido,
-            "descuento": descuento, "comision_neta": comision_neta,
+            "descuento": descuento,
+            # Lo que se le va al supervisor, en su propia columna: un neto más bajo
+            # sin decir por qué es lo que hace que alguien piense que le robaron.
+            "comision_supervisor": comision_supervisor,
+            "comision_neta": comision_neta,
             "total_hectolitros": total_hl, "cuota_hl": cuota, "cumplimiento_pct": cumplimiento,
             "malta_330": M330, "malta_500": M500, "malta_1500": M1500,
             "parranda_330": P330, "parranda_500": P500, "parranda_1500": P1500,
@@ -98,6 +112,7 @@ def compute_ventas(report, eff: dict) -> dict:
         })
         supervisor_rows.append({
             "gestor": g, "total_venta": total_importe, "comision": comision,
+            "comision_supervisor": comision_supervisor,
             "mix": mix,
             "M330": M330, "M500": M500, "M1500": M1500,
             "P330": P330, "P500": P500, "P1500": P1500,
@@ -109,7 +124,11 @@ def compute_ventas(report, eff: dict) -> dict:
     total_comision = round(sum(r["comision"] for r in supervisor_rows), 2)
     total_sin_pedido = int(sum(g["sin_pedido"] for g in gestores_out))
     total_descuento = round(sum(g["descuento"] for g in gestores_out), 2)
-    total_comision_neta = round(total_comision - total_descuento, 2)
+    # La comisión del supervisor es la SUMA de lo que se le quitó a cada gestor, no un
+    # porcentaje del total: si se calculara aparte, por redondeo saldría un céntimo
+    # distinto de lo descontado y el cuadre no daría.
+    total_comision_supervisor = round(sum(g["comision_supervisor"] for g in gestores_out), 2)
+    total_comision_neta = round(sum(g["comision_neta"] for g in gestores_out), 2)
 
     return {
         "rango": report.rango_str, "periodo": eff.get("_period"),
@@ -117,7 +136,8 @@ def compute_ventas(report, eff: dict) -> dict:
         "meta_hectolitros": meta_total, "meta_dinero": meta_dinero,
         "total_hectolitros": total_hl, "total_importe": total_importe,
         "total_comision_gestores": total_comision,
-        "comision_supervisor": round(total_comision * com_super, 2),
+        "comision_supervisor": total_comision_supervisor,
+        "comision_supervisor_pct": com_super,
         "total_sin_pedido": total_sin_pedido, "total_descuento_sin_pedido": total_descuento,
         "total_comision_neta": total_comision_neta, "descuento_sin_pedido": desc_sin_pedido,
         "cumplimiento_pct": round((total_hl / meta_total * 100) if meta_total else 0.0, 2),
