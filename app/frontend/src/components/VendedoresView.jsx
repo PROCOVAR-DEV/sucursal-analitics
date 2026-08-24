@@ -60,7 +60,10 @@ export default function VendedoresView({ sourceId, period }) {
 
       {/* Vendor tab selector — fijo (sticky) al hacer scroll para cambiar de vendedor
           sin perderlo de vista mientras miras las tablas de abajo. */}
-      <div className="sticky top-0 z-20 -mx-3 sm:-mx-6 px-3 sm:px-6 py-3 bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-sm flex gap-2 flex-wrap">
+      {/* La tira de vendedores: se arrastra en móvil. Con nueve nombres envueltos,
+          la cabecera pegajosa ocupaba media pantalla y tapaba justo lo que se venía a
+          leer. */}
+      <div className="sticky top-0 z-20 -mx-3 sm:-mx-6 px-3 sm:px-6 py-3 bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-sm flex gap-2 overflow-x-auto scroll-thin sm:flex-wrap sm:overflow-visible">
         {data.vendedores.map((v) => {
           const active = v.gestor === activeGestor;
           const pct = v.cumplimiento_pct;
@@ -68,7 +71,7 @@ export default function VendedoresView({ sourceId, period }) {
           return (
             <button
               key={v.gestor}
-              className={`tab flex flex-col items-start gap-0.5 py-2 px-4 ${active ? "tab-active" : ""}`}
+              className={`tab shrink-0 flex flex-col items-start gap-0.5 py-2 px-4 ${active ? "tab-active" : ""}`}
               onClick={() => setSelGestor(v.gestor)}
             >
               <span className="font-semibold">{v.nombre || v.gestor}</span>

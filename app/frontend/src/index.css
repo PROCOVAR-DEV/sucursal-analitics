@@ -29,10 +29,14 @@ body {
   .card-sub { @apply text-xs text-slate-400; }
 
   .kpi-card {
-    @apply bg-white rounded-xl border border-slate-200/80 shadow-card p-4 flex flex-col gap-1;
+    /* min-w-0 para que la tarjeta pueda encoger dentro de la rejilla: sin eso, un
+       importe largo ensancha la columna y se sale de la pantalla en el móvil. */
+    @apply bg-white rounded-xl border border-slate-200/80 shadow-card p-3 sm:p-4 flex flex-col gap-1 min-w-0;
   }
-  .kpi-label { @apply text-[11px] uppercase tracking-wide text-slate-400 font-semibold; }
-  .kpi-value { @apply text-2xl font-bold text-slate-900 tabular-nums; }
+  .kpi-label { @apply text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400 font-semibold; }
+  /* Más pequeño en el móvil: "$ 188.047" a 2xl no cabe en media pantalla de teléfono,
+     y lo que hacía era romper la tarjeta en vez de encogerse. */
+  .kpi-value { @apply text-xl sm:text-2xl font-bold text-slate-900 tabular-nums break-words; }
 
   .section-title { @apply text-lg font-bold text-slate-900; }
 

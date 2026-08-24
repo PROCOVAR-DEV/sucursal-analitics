@@ -205,9 +205,14 @@ export default function App() {
               )
             ) : (
               <>
-                <nav className="flex flex-wrap gap-1.5 mb-6 border-b border-slate-200 pb-3">
+                {/* En móvil se ARRASTRA, no se apila.
+                    Son nueve pestañas: envueltas ocupan cuatro filas y se comen la
+                    pantalla entera antes de que se vea un solo dato. Arrastrando,
+                    ocupan una fila y se llega a todas con el dedo. En pantalla ancha
+                    caben todas y se envuelven como siempre. */}
+                <nav className="flex gap-1.5 mb-6 border-b border-slate-200 pb-3 overflow-x-auto scroll-thin -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible">
                   {TABS.map((t) => (
-                    <button key={t.id} className={`tab ${t.id === view ? "tab-active" : ""}`} onClick={() => go(t.id)}>
+                    <button key={t.id} className={`tab shrink-0 ${t.id === view ? "tab-active" : ""}`} onClick={() => go(t.id)}>
                       <t.icon size={16} /> {t.label}
                     </button>
                   ))}
