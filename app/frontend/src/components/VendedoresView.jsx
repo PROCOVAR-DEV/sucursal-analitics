@@ -177,10 +177,21 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
         <Kpi label="Ventas sin pedido" value={formatInt(vendor.sin_pedido || 0)} tone="slate" />
         <Kpi label="Descuento sin pedido" value={vendor.descuento ? "-" + formatMoney(vendor.descuento) : formatMoney(0)}
           tone={vendor.descuento > 0 ? "red" : "slate"} />
-        <Kpi label="Comisión supervisor"
-          value={vendor.comision_supervisor ? "-" + formatMoney(vendor.comision_supervisor) : formatMoney(0)}
-          tone={vendor.comision_supervisor > 0 ? "amber" : "slate"} />
-        <Kpi label="Comisión neta" value={formatMoney(vendor.comision_neta)} tone="brand" />
+        {/* Al supervisor no se le descuenta: se le SUMA lo del equipo. Enseñarle un
+            "descuento supervisor" a quien ES el supervisor era cobrarle su propia
+            comisión. */}
+        {vendor.es_supervisor ? (
+          <Kpi label="Comisión del equipo (10%)"
+            value={"+" + formatMoney(vendor.comision_de_los_gestores || 0)}
+            tone="green" />
+        ) : (
+          <Kpi label="Comisión supervisor"
+            value={vendor.comision_supervisor ? "-" + formatMoney(vendor.comision_supervisor) : formatMoney(0)}
+            tone={vendor.comision_supervisor > 0 ? "amber" : "slate"} />
+        )}
+        <Kpi label={vendor.es_supervisor ? "Total a cobrar" : "Comisión neta"}
+          value={formatMoney(vendor.es_supervisor ? vendor.comision_total_supervisor : vendor.comision_neta)}
+          tone="brand" />
       </div>
 
       {/* HL breakdown table — con selector de SEMANA (mismo desglose, filtrado por semana) */}

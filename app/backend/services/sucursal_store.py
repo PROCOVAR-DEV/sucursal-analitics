@@ -82,6 +82,7 @@ def default_sucursal_config(nombre: str, sid: str | None = None, seed_gestores: 
             "nombre": v["nombre"], "agencia": v["agencia"], "sector": v["sector"],
             "cuota_hl": float(v["cuota_hl"]), "cuota_ccc": float(v["cuota_ccc"]),
             "aliases": list(v.get("aliases", [])), "activo": True,
+            "es_supervisor": False,
         }
         for k, v in (DEFAULT_GESTORES.items() if seed_gestores else [])
     }
@@ -376,6 +377,9 @@ class SucursalStore:
                 "cuota_ccc": float(cfg.get("cuota_ccc", existing.get("cuota_ccc", 0.0))),
                 "aliases": list(cfg.get("aliases", existing.get("aliases", []))),
                 "activo": bool(cfg.get("activo", existing.get("activo", True))),
+                # Quién de ellos supervisa. El supervisor no paga el 10%: lo cobra,
+                # así que marcarlo mal le quita dinero a alguien.
+                "es_supervisor": bool(cfg.get("es_supervisor", existing.get("es_supervisor", False))),
                 "metas_formato": {
                     str(k): float(v)
                     for k, v in (cfg.get("metas_formato", existing.get("metas_formato", {})) or {}).items()

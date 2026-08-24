@@ -58,6 +58,9 @@ def compute_vendedores(report, eff: dict) -> dict:
     # El mismo 10% que en Ventas, leído del mismo sitio. Si aquí se calculara distinto,
     # la misma persona cobraría dos cifras según la pantalla que abriera.
     com_super = float(eff.get("comision_supervisor_pct", 0.10))
+    # El supervisor no se paga a sí mismo: ver `_quien_supervisa` en ventas.py.
+    from services.ventas import _quien_supervisa
+    supervisor_key = _quien_supervisa(eff, keys, gestores_cfg)
 
     df_all = enrich_for_sucursal(report, eff)
     df_all = only_valid(df_all, keys)
@@ -85,8 +88,10 @@ def compute_vendedores(report, eff: dict) -> dict:
         comision = com["comision"]
         sin_pedido = int(sub_all["SinPedido"].sum()) if ("SinPedido" in sub_all.columns and not sub_all.empty) else 0
         descuento = round(sin_pedido * desc_sin_pedido, 2)
-        # Lo del supervisor sale de aquí, igual que en Ventas.
-        comision_supervisor = round(comision * com_super, 2)
+        # Lo del supervisor sale de aquí, igual que en Ventas. Y a él no se le
+        # descuenta: lo que vende es suyo entero.
+        es_supervisor = g == supervisor_key
+        comision_supervisor = 0.0 if es_supervisor else round(comision * com_super, 2)
         comision_neta = round(comision - comision_supervisor - descuento, 2)
 
         top_productos: list[dict] = []
@@ -112,7 +117,8 @@ def compute_vendedores(report, eff: dict) -> dict:
             "gestor": g, "nombre": g_cfg.get("nombre", g), "sector": g_cfg.get("sector", ""),
             "total_importe": total_importe, "num_operaciones": num_ops, "num_clientes": num_clientes,
             "comision": comision, "sin_pedido": sin_pedido, "descuento": descuento,
-            "comision_supervisor": comision_supervisor, "comision_neta": comision_neta,
+            "comision_supervisor": comision_supervisor, "es_supervisor": es_supervisor,
+            "comision_neta": comision_neta,
             "total_hectolitros": total_hl, "cuota_hl": cuota,
             "cumplimiento_pct": round((total_hl / cuota * 100) if cuota else 0.0, 2),
             "malta_330": M330, "malta_500": M500, "malta_1500": M1500,
@@ -121,6 +127,18 @@ def compute_vendedores(report, eff: dict) -> dict:
             # Cómo va vendiendo por SEMANA (HL por formato, semanas de calendario).
             "sku_semanal": sku_semanal, "weeks_disponibles": weeks_disponibles,
         })
+
+    # Lo que el supervisor cobra de los demás: la suma de lo que se le descontó a cada
+    # gestor. Va en SU ficha, aparte de su comisión propia, para que se lea "esto es lo
+    # mío y esto es lo del equipo" en vez de un número mezclado que no se puede
+    # comprobar.
+    fila_super = next((v for v in vendedores_out if v.get("es_supervisor")), None)
+    if fila_super is not None:
+        del_equipo = round(sum(v["comision_supervisor"] for v in vendedores_out), 2)
+        fila_super["comision_de_los_gestores"] = del_equipo
+        fila_super["comision_total_supervisor"] = round(
+            fila_super["comision_neta"] + del_equipo, 2
+        )
 
     return {
         "rango": report.rango_str, "vendedores": vendedores_out,

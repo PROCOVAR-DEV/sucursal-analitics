@@ -14,6 +14,28 @@ def _sum_hl(sub: pd.DataFrame, mask: pd.Series, size: str) -> float:
     return round(float(sub.loc[mask & (sub[STD_COLS["size"]] == size), "Hectolitros"].sum()), 2)
 
 
+def _quien_supervisa(eff: dict, keys, gestores_cfg: dict) -> str | None:
+    """Cuál de los gestores es el supervisor, o None si ninguno.
+
+    Primero la marca explícita en su ficha; después, por compatibilidad, que su nombre
+    sea el `supervisor_nombre` de la sucursal. Lo segundo es lo que ya había, y sin
+    ello habría que ir a marcar a diez supervisores antes de que un solo número
+    saliera bien.
+    """
+    for g in keys:
+        if (gestores_cfg.get(g) or {}).get("es_supervisor"):
+            return g
+
+    nombre_super = str(eff.get("supervisor_nombre") or "").strip().upper()
+    if not nombre_super:
+        return None
+    for g in keys:
+        cfg = gestores_cfg.get(g) or {}
+        if str(cfg.get("nombre", g)).strip().upper() == nombre_super:
+            return g
+    return None
+
+
 def compute_ventas(report, eff: dict) -> dict:
     keys = gestor_keys(eff)
     gestores_cfg = eff.get("gestores") or {}
@@ -25,6 +47,13 @@ def compute_ventas(report, eff: dict) -> dict:
     reglas_com = eff.get("reglas_comision") or []
     periodo = eff.get("_period") or ""
     com_super = float(eff.get("comision_supervisor_pct", 0.10))
+    # Quién es el supervisor. Él no paga el 10%: lo COBRA.
+    #
+    # Se marca en su ficha de gestor (`es_supervisor`). Y si nadie lo marcó, se acepta
+    # que su nombre coincida con el `supervisor_nombre` de la sucursal, que es como
+    # estaba puesto hasta ahora — así funciona sin tener que ir a tocar la
+    # configuración de las diez sucursales antes de que los números salgan bien.
+    supervisor_key = _quien_supervisa(eff, keys, gestores_cfg)
     desc_sin_pedido = float(eff.get("descuento_sin_pedido", 0.0))
 
     df_all = enrich_for_sucursal(report, eff)
@@ -67,7 +96,11 @@ def compute_ventas(report, eff: dict) -> dict:
         # aquí, gestor a gestor, y no del total: redondear una vez sobre la suma da un
         # número distinto que redondear cada parte, y lo que cobra cada uno tiene que
         # cuadrar con lo que se le descontó a cada uno.
-        comision_supervisor = round(comision * com_super, 2)
+        # Al supervisor NO se le descuenta: lo que vende es suyo entero, y encima se
+        # lleva el 10% de lo que ganan los demás. Descontárselo era cobrarle su propia
+        # comisión.
+        es_supervisor = g == supervisor_key
+        comision_supervisor = 0.0 if es_supervisor else round(comision * com_super, 2)
         comision_neta = round(comision - comision_supervisor - descuento, 2)
 
         # Mix por grupo comercial ($)
@@ -104,6 +137,7 @@ def compute_ventas(report, eff: dict) -> dict:
             # Lo que se le va al supervisor, en su propia columna: un neto más bajo
             # sin decir por qué es lo que hace que alguien piense que le robaron.
             "comision_supervisor": comision_supervisor,
+            "es_supervisor": es_supervisor,
             "comision_neta": comision_neta,
             "total_hectolitros": total_hl, "cuota_hl": cuota, "cumplimiento_pct": cumplimiento,
             "malta_330": M330, "malta_500": M500, "malta_1500": M1500,
@@ -130,9 +164,20 @@ def compute_ventas(report, eff: dict) -> dict:
     total_comision_supervisor = round(sum(g["comision_supervisor"] for g in gestores_out), 2)
     total_comision_neta = round(sum(g["comision_neta"] for g in gestores_out), 2)
 
+    # Lo que cobra el supervisor: lo suyo limpio MÁS el 10% de cada gestor. Se suma
+    # aquí y no en su fila para que su fila siga diciendo lo que vendió él —mezclarlo
+    # dejaría su comisión propia imposible de leer.
+    fila_super = next((x for x in gestores_out if x.get("es_supervisor")), None)
+    if fila_super is not None:
+        fila_super["comision_de_los_gestores"] = total_comision_supervisor
+        fila_super["comision_total_supervisor"] = round(
+            fila_super["comision_neta"] + total_comision_supervisor, 2
+        )
+
     return {
         "rango": report.rango_str, "periodo": eff.get("_period"),
         "supervisor_nombre": eff.get("supervisor_nombre"),
+        "supervisor_gestor": supervisor_key,
         "meta_hectolitros": meta_total, "meta_dinero": meta_dinero,
         "total_hectolitros": total_hl, "total_importe": total_importe,
         "total_comision_gestores": total_comision,

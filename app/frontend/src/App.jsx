@@ -76,7 +76,19 @@ export default function App() {
     setSucursales(items);
     setSid((cur) => {
       if (cur === ALL_SID) { setSucursal(cur); return cur; }  // mantener "Todas las sucursales"
-      const next = cur && items.find((s) => s.id === cur) ? cur : items[0]?.id || null;
+      if (cur && items.find((s) => s.id === cur)) { setSucursal(cur); return cur; }
+
+      // Con qué sucursal se entra.
+      //
+      // Quien ve todas —administrador, analítico— entra en "Todas las sucursales" y
+      // elige. Antes caía en la PRIMERA de la lista, que es la primera por orden
+      // alfabético y no significa nada: se ponía a mirar Camagüey creyendo que miraba
+      // el conjunto, o tenía que acordarse de cambiar cada vez.
+      //
+      // Quien pertenece a una sucursal entra directo en la suya, que es la única que
+      // le interesa. Si le tocaran varias, la primera de las suyas.
+      const puedeVerTodas = user?.role === "admin" || user?.role === "analitico";
+      const next = puedeVerTodas && items.length > 1 ? ALL_SID : items[0]?.id || null;
       setSucursal(next);
       return next;
     });

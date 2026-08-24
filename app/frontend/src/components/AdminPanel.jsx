@@ -141,7 +141,7 @@ function DatosSucursal({ cfg, sid, onSaved }) {
 }
 
 // ---------------- Gestores CRUD
-const emptyGestor = { clave: "", nombre: "", sector: "", agencia: "", cuota_hl: 0, cuota_ccc: 0, aliases: "", activo: true };
+const emptyGestor = { clave: "", nombre: "", sector: "", agencia: "", cuota_hl: 0, cuota_ccc: 0, aliases: "", activo: true, es_supervisor: false };
 
 function Gestores({ cfg, sid, reload, flash }) {
   const [nuevo, setNuevo] = useState(emptyGestor);
@@ -161,6 +161,7 @@ function Gestores({ cfg, sid, reload, flash }) {
     await updateGestor(sid, clave, {
       nueva_clave: g._clave, nombre: g.nombre, sector: g.sector, agencia: g.agencia,
       aliases: (g.aliases || "").split(",").map((s) => s.trim()).filter(Boolean), activo: g.activo,
+      es_supervisor: !!g.es_supervisor,
     });
     await reload(); flash("ok", `Gestor ${clave} actualizado`);
   }
@@ -187,7 +188,7 @@ function Gestores({ cfg, sid, reload, flash }) {
       <div className="overflow-x-auto scroll-thin">
         <table className="tbl">
           <thead>
-            <tr>{["Clave", "Nombre", "Sector", "Agencia", "Alias", "Activo", `Meta HL · ${MESES[ym.m - 1]}`, "Meta CCC", ""].map((h) => <th key={h}>{h}</th>)}</tr>
+            <tr>{["Clave", "Nombre", "Sector", "Agencia", "Alias", "Activo", "Supervisor", `Meta HL · ${MESES[ym.m - 1]}`, "Meta CCC", ""].map((h) => <th key={h}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {gestores.map(([clave, g]) => (
@@ -201,7 +202,7 @@ function Gestores({ cfg, sid, reload, flash }) {
               <td className="px-2 py-1.5 border-b border-slate-100"><input className="input input-sm w-20" value={nuevo.sector} onChange={(e) => setNuevo({ ...nuevo, sector: e.target.value })} /></td>
               <td className="px-2 py-1.5 border-b border-slate-100"><input className="input input-sm w-24" value={nuevo.agencia} onChange={(e) => setNuevo({ ...nuevo, agencia: e.target.value })} /></td>
               <td className="px-2 py-1.5 border-b border-slate-100"><input className="input input-sm w-36" placeholder="alias1, alias2" value={nuevo.aliases} onChange={(e) => setNuevo({ ...nuevo, aliases: e.target.value })} /></td>
-              <td className="border-b border-slate-100" colSpan={3}></td>
+              <td className="border-b border-slate-100" colSpan={4}></td>
               <td className="px-2 py-1.5 border-b border-slate-100"><Button size="sm" icon={Plus} onClick={addRow}>Agregar</Button></td>
             </tr>
           </tbody>
@@ -224,6 +225,10 @@ function GestorRow({ clave, g, onSave, onDelete, monthConf, mg, inMonth }) {
       <td className={td}><input className="input input-sm w-24" value={row.agencia} onChange={(e) => set("agencia", e.target.value)} /></td>
       <td className={td}><input className="input input-sm w-36" value={row.aliases} onChange={(e) => set("aliases", e.target.value)} /></td>
       <td className={cn(td, "text-center")}><input type="checkbox" className="accent-brand-600 w-4 h-4" checked={!!row.activo} onChange={(e) => set("activo", e.target.checked)} /></td>
+      {/* Quién supervisa. Al supervisor NO se le descuenta el 10%: es el suyo, lo
+          cobra de los demás. Marcarlo mal le quita dinero a alguien, así que se marca
+          a mano y no se adivina. */}
+      <td className={cn(td, "text-center")}><input type="checkbox" className="accent-amber-500 w-4 h-4" checked={!!row.es_supervisor} onChange={(e) => set("es_supervisor", e.target.checked)} title="Es el supervisor de la sucursal" /></td>
       <td className={cn(td, "text-right tabular-nums font-semibold")}>{mg?.cuota_hl != null ? formatNumber2(mg.cuota_hl) : <span className="text-slate-300 italic font-normal text-xs">sin configurar</span>}</td>
       <td className={cn(td, "text-right tabular-nums")}>{mg?.cuota_ccc != null ? formatNumber2(mg.cuota_ccc) : <span className="text-slate-300 italic text-xs">—</span>}</td>
       <td className={cn(td, "whitespace-nowrap")}>
