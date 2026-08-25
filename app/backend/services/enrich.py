@@ -60,6 +60,23 @@ def _match_sheet_to_gestor(sheet, keys: list[str]) -> str | None:
     return None
 
 
+# Las columnas que esta funcion aniade. Estan aqui arriba —y no sueltas dentro— porque
+# el camino del DataFrame VACIO tiene que crear exactamente las mismas: si se aniade una
+# columna abajo y se olvida aqui, el fallo no aparece al programar, aparece el dia que
+# alguien abre una sucursal sin ventas.
+# Cada una con su tipo: las numericas tienen que salir numericas aunque no haya filas,
+# porque abajo se hacen sumas y agrupaciones sobre ellas. Una columna de texto vacia
+# pasaria la comprobacion de "existe" y reventaria igual en el primer .sum().
+COLUMNAS_ENRIQUECIDAS = {
+    "GestorDetectado": "object",
+    "GestorPunto": "object",
+    "GrupoComercial": "object",
+    "Hectolitros": "float64",
+    "Pallets": "float64",
+    "SinPedido": "bool",
+}
+
+
 def enrich_for_sucursal(report, eff: dict):
     """Devuelve un nuevo DataFrame enriquecido con las columnas dinámicas.
 
@@ -84,6 +101,21 @@ def enrich_for_sucursal(report, eff: dict):
 
     df = report.df.copy() if report is not None and report.df is not None else pd.DataFrame()
     if df.empty:
+        # Vacío TAMBIÉN sale enriquecido: con las columnas puestas, aunque sin filas.
+        #
+        # Antes se devolvía tal cual, sin columnas, y todo lo de después —ranking,
+        # market, ventas, metas, gestor_sku, la exportación— da por hecho que existe
+        # `GestorDetectado`. Resultado: `KeyError: 'GestorDetectado'` y la pantalla en
+        # blanco en cuanto se elegía una sucursal o un periodo sin ventas. Que no haya
+        # datos es una respuesta válida, no un error.
+        #
+        # Se memoiza igual que el camino normal: si no, un periodo vacío recalcula
+        # esto en cada una de las ocho llamadas del panel.
+        for c, tipo in COLUMNAS_ENRIQUECIDAS.items():
+            if c not in df.columns:
+                df[c] = pd.Series(dtype=tipo)
+        if report is not None:
+            report._enrich_memo = (firma, df)
         return df
 
     gestores = eff.get("gestores") or {}
