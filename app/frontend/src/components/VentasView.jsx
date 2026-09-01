@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import { getVentas } from "../api.js";
 import { BarCard } from "./Charts.jsx";
 import { Kpi, formatMoney, formatNumber } from "./Kpi.jsx";
+import { Buscador, ContadorFiltro, TablaScroll, useFiltroTabla } from "./ui.jsx";
 
 export default function VentasView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  // Antes de las salidas tempranas: un hook no puede llamarse a veces sí y a veces no.
+  const { q, setQ, filtradas: gestores } = useFiltroTabla(data?.gestores);
 
   useEffect(() => {
     // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
@@ -54,8 +57,12 @@ export default function VentasView({ sourceId, period }) {
       <BarCard title="Hectolitros por gestor" data={gestoresBar} xKey="gestor" yKey="hectolitros" />
 
       <div className="panel">
-        <div className="card-header"><h3 className="card-title">Detalle por gestor (Hectolitros)</h3></div>
-        <div className="overflow-x-auto scroll-thin">
+        <div className="card-header">
+          <h3 className="card-title">Detalle por gestor (Hectolitros)</h3>
+          <Buscador onChange={setQ} placeholder="Gestor…" value={q} />
+        </div>
+        <ContadorFiltro mostradas={gestores.length} q={q} total={data.gestores.length} />
+        <TablaScroll>
           <table className="text-sm border-collapse">
             <thead>
               <tr>
@@ -66,7 +73,7 @@ export default function VentasView({ sourceId, period }) {
               </tr>
             </thead>
             <tbody>
-              {data.gestores.map((g) => (
+              {gestores.map((g) => (
                 <tr key={g.gestor} className="group">
                   <td className="sticky left-0 z-10 bg-white group-hover:bg-brand-50/60 px-3 py-2 font-medium text-slate-800 border-b border-r border-slate-100 whitespace-nowrap">{g.gestor}</td>
                   <td className="px-3 py-2 text-right border-b border-slate-100 tabular-nums">{formatNumber(g.malta_330, 2)}</td>
@@ -98,7 +105,7 @@ export default function VentasView({ sourceId, period }) {
               </tr>
             </tfoot>
           </table>
-        </div>
+        </TablaScroll>
       </div>
     </div>
   );

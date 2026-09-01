@@ -5,7 +5,7 @@ import {
   addComision, addComisionGlobal, deleteComision, deleteComisionGlobal,
   listComisiones, listComisionesGlobales, updateComision, updateComisionGlobal,
 } from "../api.js";
-import { Badge, Button, Field, IconButton, Panel, PanelHeader, Select, cn } from "./ui.jsx";
+import { Badge, Buscador, Button, ContadorFiltro, Field, IconButton, Panel, PanelHeader, Select, TablaScroll, cn, useFiltroTabla } from "./ui.jsx";
 
 /**
  * Reglas de comisión por producto.
@@ -264,8 +264,19 @@ function estado(r, mes) {
 }
 
 function Tabla({ reglas, mes, puedeEditar, editando, setEditando, onGuardar, onBorrar, soloLectura }) {
+  const { q, setQ, filtradas } = useFiltroTabla(reglas);
+
   return (
-    <div className="w-full min-w-0 overflow-x-auto">
+    <div className="w-full min-w-0">
+      {/* Con veinte reglas por sucursal, encontrar la del producto que se busca a ojo es
+          justo lo que no se puede hacer en un teléfono. */}
+      {(reglas || []).length > 8 && (
+        <div className="mb-2 flex justify-end">
+          <Buscador onChange={setQ} placeholder="Regla, grupo o producto…" value={q} />
+        </div>
+      )}
+      <ContadorFiltro mostradas={filtradas.length} q={q} total={(reglas || []).length} />
+      <TablaScroll className="!mx-0 !px-0">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="text-left border-b border-slate-200 text-slate-500">
@@ -279,7 +290,7 @@ function Tabla({ reglas, mes, puedeEditar, editando, setEditando, onGuardar, onB
           </tr>
         </thead>
         <tbody>
-          {reglas.map((r) => {
+          {filtradas.map((r) => {
             const ed = editando?.id === r.id;
             const est = estado(r, mes);
 
@@ -340,6 +351,7 @@ function Tabla({ reglas, mes, puedeEditar, editando, setEditando, onGuardar, onB
           })}
         </tbody>
       </table>
+      </TablaScroll>
     </div>
   );
 }

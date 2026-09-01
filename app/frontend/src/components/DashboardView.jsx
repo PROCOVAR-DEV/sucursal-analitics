@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import { getDashboard } from "../api.js";
 import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
 import { BarCard, PieCard } from "./Charts.jsx";
+import { Buscador, ContadorFiltro, TablaScroll, useFiltroTabla } from "./ui.jsx";
 
 export default function DashboardView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  // Antes de las salidas tempranas: un hook no puede llamarse a veces sí y a veces no.
+  const { q, setQ, filtradas: cumplimiento } = useFiltroTabla(data?.cumplimiento_productos);
 
   useEffect(() => {
     // `cancelled` descarta respuestas VIEJAS: al abrir, el periodo aún es null y se pide el
@@ -98,8 +101,12 @@ export default function DashboardView({ sourceId, period }) {
       )}
 
       <div className="card">
-        <h3 className="font-semibold mb-3">Cumplimiento de metas por producto</h3>
-        <div className="overflow-x-auto">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">Cumplimiento de metas por producto</h3>
+          <Buscador onChange={setQ} placeholder="Producto o grupo…" value={q} />
+        </div>
+        <ContadorFiltro mostradas={cumplimiento.length} q={q} total={(data.cumplimiento_productos || []).length} />
+        <TablaScroll>
           <table className="min-w-full text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
@@ -115,7 +122,7 @@ export default function DashboardView({ sourceId, period }) {
               </tr>
             </thead>
             <tbody>
-              {data.cumplimiento_productos.map((p) => (
+              {cumplimiento.map((p) => (
                 <tr key={p.producto} className="border-t border-slate-100">
                   <td className="px-3 py-2 font-medium">{p.producto}</td>
                   <td className="px-3 py-2">{p.grupo ? <span className="badge-slate">{p.grupo}</span> : <span className="text-slate-300">—</span>}</td>
@@ -136,7 +143,7 @@ export default function DashboardView({ sourceId, period }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TablaScroll>
       </div>
     </div>
   );

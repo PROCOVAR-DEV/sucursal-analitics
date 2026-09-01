@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getRanking } from "../api.js";
 import { LineCard } from "./Charts.jsx";
 import { formatMoney } from "./Kpi.jsx";
+import { Buscador, ContadorFiltro, TablaScroll, useFiltroTabla } from "./ui.jsx";
 
 const MEDAL = { 1: "🥇", 2: "🥈", 3: "🥉" };
 const MONTHS_ES = {
@@ -25,6 +26,8 @@ export default function RankingView({ sourceId, period, user }) {
   const esMio = (nombre) => !!miClave && String(nombre || "").trim().toUpperCase() === miClave;
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  // Antes de las salidas tempranas: un hook no puede llamarse a veces sí y a veces no.
+  const { q, setQ, filtradas: general } = useFiltroTabla(data?.general);
   const [selMonth, setSelMonth] = useState(null);
   const [selWeek, setSelWeek] = useState(null);
 
@@ -89,8 +92,12 @@ export default function RankingView({ sourceId, period, user }) {
 
       {/* General ranking */}
       <div className="card">
-        <h3 className="font-semibold mb-3">General (acumulado total)</h3>
-        <div className="overflow-x-auto scroll-thin">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">General (acumulado total)</h3>
+          <Buscador onChange={setQ} placeholder="Vendedor…" value={q} />
+        </div>
+        <ContadorFiltro mostradas={general.length} q={q} total={data.general.length} />
+        <TablaScroll>
         <table className="min-w-full text-sm">
           <thead className="bg-slate-100">
             <tr>
@@ -100,7 +107,7 @@ export default function RankingView({ sourceId, period, user }) {
             </tr>
           </thead>
           <tbody>
-            {data.general.map((r) => (
+            {general.map((r) => (
               <tr
                 key={r.vendedor}
                 className={`border-t border-slate-100 ${esMio(r.vendedor) ? "bg-brand-50 ring-1 ring-inset ring-brand-200" : ""}`}
@@ -117,7 +124,7 @@ export default function RankingView({ sourceId, period, user }) {
             ))}
           </tbody>
         </table>
-        </div>
+        </TablaScroll>
       </div>
 
       {/* Daily evolution chart */}

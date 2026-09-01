@@ -1,6 +1,6 @@
 // Primitivos de UI reutilizables (estética shadcn, sin dependencias extra).
-import { Building2, Check, ChevronDown, ChevronsUpDown, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Building2, Check, ChevronDown, ChevronsUpDown, Search, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export function cn(...xs) {
@@ -339,5 +339,111 @@ export function Toast({ msg, onClose }) {
       </div>
     </div>,
     document.body
+  );
+}
+
+// ------------------------------------------------------------------ filtrar tablas
+
+/**
+ * Buscar dentro de una tabla, sin salir de ella.
+ *
+ * Las tablas de aquí tienen cincuenta filas y quince columnas, y para encontrar un gestor
+ * o un producto había que ir a buscarlo con la vista deslizando de lado. En el teléfono
+ * eso directamente no se hace: con un filtro es un momento, y sin él la tabla no sirve.
+ *
+ * Se busca sobre TODO lo que se ve en la fila —el nombre del gestor, el del producto, el
+ * grupo— y no sobre una columna elegida de antemano: quien busca no sabe en qué columna
+ * está lo que tiene en la cabeza, sabe la palabra.
+ */
+const sinTildes = (v) =>
+  String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/** ¿La fila dice esto en alguna de sus columnas de texto? */
+export function filaCoincide(fila, q) {
+  if (!q) return true;
+  const aguja = sinTildes(q);
+
+  return Object.values(fila || {}).some((v) => {
+    // Sólo texto: buscar dentro de los números encuentra el "3" del 1.345,30 y saca
+    // media tabla, que es peor que no filtrar.
+    if (typeof v !== "string") return false;
+
+    return sinTildes(v).includes(aguja);
+  });
+}
+
+/** Filtra una lista de filas por lo que se escribió. */
+export function filtrarFilas(filas, q) {
+  if (!q?.trim()) return filas || [];
+
+  return (filas || []).filter((f) => filaCoincide(f, q));
+}
+
+/**
+ * El estado del filtro de una tabla, con las filas ya filtradas.
+ *
+ * Devuelve también cuántas quedaron: sin ese número, una búsqueda que no encuentra nada
+ * se ve igual que una tabla vacía por otro motivo.
+ */
+export function useFiltroTabla(filas) {
+  const [q, setQ] = useState("");
+  const filtradas = useMemo(() => filtrarFilas(filas, q), [filas, q]);
+
+  return { q, setQ, filtradas, total: (filas || []).length };
+}
+
+/** La cajita de buscar. Va en la cabecera del panel, a la derecha del título. */
+export function Buscador({ value, onChange, placeholder = "Filtrar…", className, hint }) {
+  return (
+    <div className={cn("flex items-center gap-2 min-w-0", className)}>
+      {hint && <span className="hidden text-xs text-slate-400 sm:inline">{hint}</span>}
+      <div className="relative">
+        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          className="input input-sm w-36 pl-8 sm:w-52"
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          value={value}
+        />
+        {value && (
+          <button
+            aria-label="Limpiar filtro"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            onClick={() => onChange("")}
+            type="button"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * El envoltorio de una tabla.
+ *
+ * Va a sangre en el móvil (`-mx-5`) para que la tabla gane el ancho del padding del panel,
+ * que en una pantalla de teléfono son cuarenta píxeles que se notan. Y siempre con su
+ * propio desplazamiento horizontal: sin él, una tabla ancha estira la página entera y no
+ * hay forma de leer nada.
+ */
+export function TablaScroll({ children, className }) {
+  return (
+    <div className={cn("-mx-5 overflow-x-auto scroll-thin px-5 sm:mx-0 sm:px-0", className)}>
+      {children}
+    </div>
+  );
+}
+
+/** «12 de 87» cuando hay filtro puesto, y nada cuando no lo hay. */
+export function ContadorFiltro({ q, mostradas, total }) {
+  if (!q?.trim()) return null;
+
+  return (
+    <p className="px-5 py-2 text-xs text-slate-400">
+      {mostradas} de {total} {total === 1 ? "fila" : "filas"}
+      {mostradas === 0 && " · no hay nada que diga eso"}
+    </p>
   );
 }

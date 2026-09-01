@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getMetasGestor, getVendedores } from "../api.js";
 import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
 import { VendorFormatoTables } from "./MetasGestorReport.jsx";
+import { Buscador, filtrarFilas } from "./ui.jsx";
 
 export default function VendedoresView({ sourceId, period }) {
   const [data, setData] = useState(null);
@@ -101,6 +102,13 @@ export default function VendedoresView({ sourceId, period }) {
 }
 
 function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia }) {
+  /**
+   * Filtrar la lista de productos del gestor.
+   *
+   * Son todos los que vendió —no un top—, así que en un teléfono la única forma de
+   * encontrar uno era deslizando la lista entera.
+   */
+  const [qProd, setQProd] = useState("");
   const pct = vendor.cumplimiento_pct;
   const barPct = Math.min(pct, 100);
   const barColor = pct >= 100 ? "bg-emerald-500" : pct >= 80 ? "bg-amber-500" : "bg-red-500";
@@ -204,12 +212,16 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
           que la tarjeta no crezca sin límite pero se pueda ver todo lo vendido. */}
       {vendor.top_productos?.length > 0 && (
         <div className="card">
-          <h4 className="font-semibold mb-3">
-            Productos (por importe){" "}
-            <span className="font-normal text-sm text-slate-400">
-              — {vendor.top_productos.length} en total
-            </span>
-          </h4>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h4 className="font-semibold">
+              Productos (por importe){" "}
+              <span className="font-normal text-sm text-slate-400">
+                — {vendor.top_productos.length} en total
+                {qProd.trim() && `, ${filtrarFilas(vendor.top_productos, qProd).length} a la vista`}
+              </span>
+            </h4>
+            <Buscador onChange={setQProd} placeholder="Producto…" value={qProd} />
+          </div>
           {/* max-h ≈ cabecera + 10 filas: el scroll se activa a partir de 10 productos */}
           <div className="overflow-auto scroll-thin max-h-[26rem] rounded-lg border border-slate-200">
             <table className="min-w-full text-sm">
@@ -223,7 +235,7 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
                 </tr>
               </thead>
               <tbody>
-                {vendor.top_productos.map((p, i) => {
+                {filtrarFilas(vendor.top_productos, qProd).map((p, i) => {
                   const pctProd = vendor.total_importe > 0
                     ? Math.round((p.total / vendor.total_importe) * 100)
                     : "0.0";

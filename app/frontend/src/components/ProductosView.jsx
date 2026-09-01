@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { getProductos } from "../api.js";
 import { BarCard } from "./Charts.jsx";
 import { formatNumber } from "./Kpi.jsx";
-import { Badge, Panel, PanelHeader, StatTile, cn } from "./ui.jsx";
+import { Badge, Buscador, ContadorFiltro, Panel, PanelHeader, StatTile, TablaScroll, cn, useFiltroTabla } from "./ui.jsx";
 
 const GROUP_COLORS = {
   PARRANDA: "#2563eb", IMPORTACIONES: "#16a34a", CONSIGNACION: "#f59e0b", "TECNOLOGIA Y KAPITAL": "#7c3aed",
@@ -12,6 +12,9 @@ const GROUP_COLORS = {
 export default function ProductosView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  // El filtro va ANTES de los `return` de carga y error: un hook no se puede llamar a
+  // veces sí y a veces no, y aquí abajo hay dos salidas tempranas.
+  const { q, setQ, filtradas: cumplimiento } = useFiltroTabla(data?.cumplimiento);
 
   useEffect(() => {
     // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
@@ -66,8 +69,10 @@ export default function ProductosView({ sourceId, period }) {
       {/* Cumplimiento de metas por producto */}
       <Panel>
         <PanelHeader icon={Package} title="Cumplimiento de metas por producto"
-          sub={data.periodo ? `Metas del periodo ${data.periodo}` : "Metas del mes"} />
-        <div className="overflow-x-auto scroll-thin">
+          sub={data.periodo ? `Metas del periodo ${data.periodo}` : "Metas del mes"}
+          right={<Buscador onChange={setQ} placeholder="Producto o grupo…" value={q} />} />
+        <ContadorFiltro mostradas={cumplimiento.length} q={q} total={data.cumplimiento.length} />
+        <TablaScroll>
           <table className="tbl">
             <thead>
               <tr>
@@ -78,7 +83,7 @@ export default function ProductosView({ sourceId, period }) {
               </tr>
             </thead>
             <tbody>
-              {data.cumplimiento.map((p) => (
+              {cumplimiento.map((p) => (
                 <tr key={p.producto} className="hover:bg-slate-50">
                   <td className="font-medium">{p.producto}</td>
                   <td>{p.grupo ? <Badge tone="slate">{p.grupo}</Badge> : <span className="text-slate-300">—</span>}</td>
@@ -93,7 +98,7 @@ export default function ProductosView({ sourceId, period }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TablaScroll>
       </Panel>
     </div>
   );

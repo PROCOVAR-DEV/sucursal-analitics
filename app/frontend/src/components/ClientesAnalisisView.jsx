@@ -2,12 +2,20 @@ import { Download, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { downloadExport, getClientesAnalisis } from "../api.js";
 import { formatInt, formatMoney } from "./Kpi.jsx";
-import { Button, Empty, Panel, PanelHeader, StatTile, cn } from "./ui.jsx";
+import { Buscador, Button, Empty, Panel, PanelHeader, StatTile, cn, filtrarFilas } from "./ui.jsx";
 import FiltroMulti from "./FiltroMulti.jsx";
 
 export default function ClientesAnalisisView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  /**
+   * Buscar un cliente por su nombre.
+   *
+   * Es la tabla más grande de la aplicación —cientos de clientes por columnas de SKU— y
+   * hasta ahora la única forma de encontrar a uno era deslizando. `useState` y no el hook
+   * de tabla porque las filas salen del gestor seleccionado, que se calcula más abajo.
+   */
+  const [qCliente, setQCliente] = useState("");
   const [sel, setSel] = useState("__oficina__");
   const [busy, setBusy] = useState(false);
   // Grupos comerciales elegidos. Vacio = todos, que es como estaba.
@@ -48,7 +56,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
   if (!data) return <div className="p-6 text-slate-400 animate-pulse">Cargando…</div>;
 
   const skus = block.skus || [];
-  const clientes = block.clientes || [];
+  const clientes = filtrarFilas(block.clientes || [], qCliente);
   // En cantidad NO se pone el simbolo de moneda: un "$" delante de un numero de
   // empaques es sencillamente falso, y quien lo lea sacara la cuenta equivocada.
   const esCantidad = data.metrica === "cantidad";
@@ -135,13 +143,26 @@ export default function ClientesAnalisisView({ sourceId, period }) {
       </div>
 
       {clientes.length === 0 ? (
-        <Empty>Sin datos para {isOficina ? "la oficina" : sel} en este periodo.</Empty>
+        // Se distingue «no hay datos» de «el filtro no encuentra nada»: con el mismo
+        // mensaje para los dos, uno se queda pensando que el periodo está vacío cuando lo
+        // que pasa es que escribió mal un nombre.
+        qCliente.trim() ? (
+          <Empty>
+            Ningún cliente dice «{qCliente}».{" "}
+            <button className="font-semibold text-brand-600 hover:underline" onClick={() => setQCliente("")} type="button">
+              Quitar el filtro
+            </button>
+          </Empty>
+        ) : (
+          <Empty>Sin datos para {isOficina ? "la oficina" : sel} en este periodo.</Empty>
+        )
       ) : (
         <Panel>
           <PanelHeader
             icon={Users}
             title={isOficina ? "Oficina — todos los clientes" : `Cartera de ${sel}`}
-            sub={`${clientes.length} clientes · ${skus.length} SKUs · valores por SKU en dólares`}
+            sub={`${clientes.length}${qCliente.trim() ? ` de ${(block.clientes || []).length}` : ""} clientes · ${skus.length} SKUs · valores por SKU en dólares`}
+            right={<Buscador onChange={setQCliente} placeholder="Cliente…" value={qCliente} />}
           />
           <div className="overflow-auto scroll-thin max-h-[640px]">
             <table className="text-sm border-collapse">

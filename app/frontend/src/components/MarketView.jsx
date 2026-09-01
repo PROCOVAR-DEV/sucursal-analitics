@@ -1,14 +1,21 @@
 import { Fragment, useEffect, useState } from "react";
 import { getMarket } from "../api.js";
 import { Kpi, formatNumber } from "./Kpi.jsx";
+import { Buscador, ContadorFiltro, TablaScroll, useFiltroTabla } from "./ui.jsx";
 
 const DOT = { verde: "text-emerald-500", amarillo: "text-amber-500", rojo: "text-red-500" };
 
 function Tabla({ titulo, weeks, filas, cuotaKey }) {
+  const { q, setQ, filtradas } = useFiltroTabla(filas);
+
   return (
     <div className="card">
-      <h3 className="font-semibold mb-3">{titulo}</h3>
-      <div className="overflow-x-auto">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold">{titulo}</h3>
+        <Buscador onChange={setQ} placeholder="Vendedor…" value={q} />
+      </div>
+      <ContadorFiltro mostradas={filtradas.length} q={q} total={(filas || []).length} />
+      <TablaScroll>
         <table className="min-w-full text-xs">
           <thead className="bg-slate-100">
             <tr>
@@ -32,7 +39,7 @@ function Tabla({ titulo, weeks, filas, cuotaKey }) {
             </tr>
           </thead>
           <tbody>
-            {filas.map((r) => (
+            {filtradas.map((r) => (
               <tr key={r.gestor} className="border-t border-slate-100">
                 <td className="px-2 py-1.5 font-medium">{r.nombre}</td>
                 <td className="px-2 py-1.5 text-right">{formatNumber(r[cuotaKey], 0)}</td>
@@ -49,7 +56,7 @@ function Tabla({ titulo, weeks, filas, cuotaKey }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </TablaScroll>
     </div>
   );
 }
@@ -58,6 +65,7 @@ function Tabla({ titulo, weeks, filas, cuotaKey }) {
 // "Todas" muestra la matriz formato × semanas + total; una semana muestra solo esa.
 function TablaSkuSemanal({ sku, weeksDisp }) {
   const [semana, setSemana] = useState("");
+  const { q, setQ, filtradas } = useFiltroTabla(sku);
   if (!Array.isArray(sku) || sku.length === 0) return null;
   const weeks = weeksDisp && weeksDisp.length ? weeksDisp : ["S1", "S2", "S3", "S4", "S5"];
   const single = semana && weeks.includes(semana);
@@ -72,7 +80,8 @@ function TablaSkuSemanal({ sku, weeksDisp }) {
             Hectolitros por SKU de Cerveza Parranda y Malta Guajira — general
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Buscador onChange={setQ} placeholder="Formato…" value={q} />
           <label className="text-xs text-slate-500">Semana:</label>
           <select
             className="input text-xs py-1 px-2 w-auto"
@@ -86,7 +95,8 @@ function TablaSkuSemanal({ sku, weeksDisp }) {
           </select>
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <ContadorFiltro mostradas={filtradas.length} q={q} total={sku.length} />
+      <TablaScroll>
         <table className="min-w-full text-sm">
           <thead className="bg-slate-100">
             <tr>
@@ -107,7 +117,7 @@ function TablaSkuSemanal({ sku, weeksDisp }) {
             </tr>
           </thead>
           <tbody>
-            {sku.map((r) => {
+            {filtradas.map((r) => {
               const val = single ? (r.semanal[semana] || 0) : 0;
               const pct = single && weekTotal > 0 ? Math.round((val / weekTotal) * 100) : 0;
               return (
@@ -153,7 +163,7 @@ function TablaSkuSemanal({ sku, weeksDisp }) {
             </tr>
           </tfoot>
         </table>
-      </div>
+      </TablaScroll>
     </div>
   );
 }
