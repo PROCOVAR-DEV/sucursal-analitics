@@ -27,13 +27,15 @@ filas, es que este módulo está mal.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
+import urllib.error
+import urllib.request
 from datetime import date, datetime
 from typing import Any, Iterable
 
 import pandas as pd
-import requests
 
 from services.loader import STD_COLS, ReportData
 
@@ -133,19 +135,28 @@ def tipo_de_punto(objeto: str | None) -> str:
 # --------------------------------------------------------------------------------------
 
 def _get(ruta: str) -> Any:
+    """Un GET a Ventra.
+
+    Con `urllib` y no con `requests` a propósito: son tres GET, y `requests` no está en
+    las dependencias de analitics. Añadir una librería entera —y su cadena de
+    dependencias— para esto es pagar mantenimiento por comodidad.
+    """
     if not TOKEN:
         raise VentraNoDisponible("falta VENTRA_API_TOKEN")
+
+    peticion = urllib.request.Request(
+        f"{BASE_URL}{ruta}",
+        headers={"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"},
+    )
+
     try:
-        r = requests.get(
-            f"{BASE_URL}{ruta}",
-            headers={"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"},
-            timeout=TIMEOUT_S,
-        )
-    except requests.RequestException as e:
+        with urllib.request.urlopen(peticion, timeout=TIMEOUT_S) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        cuerpo = e.read().decode("utf-8", "replace")[:200]
+        raise VentraNoDisponible(f"Ventra {e.code} en {ruta}: {cuerpo}") from e
+    except Exception as e:  # URLError, timeout, JSON ilegible
         raise VentraNoDisponible(f"no se pudo llegar a Ventra: {e}") from e
-    if r.status_code != 200:
-        raise VentraNoDisponible(f"Ventra {r.status_code} en {ruta}: {r.text[:200]}")
-    return r.json()
 
 
 def bases() -> list[dict[str, Any]]:
