@@ -164,19 +164,58 @@ def load_report(content: bytes, filename: str) -> ReportData:
     return ReportData(df=df, date_min=date_min, date_max=date_max, filename=filename)
 
 
-def filter_by_period(report: ReportData, mes: str | None) -> ReportData:
-    if mes is None:
-        return report
-    try:
-        year, month = int(mes[:4]), int(mes[5:7])
-    except (ValueError, IndexError):
-        return report
+def filter_by_period(
+    report: ReportData,
+    mes: str | None,
+    desde: str | None = None,
+    hasta: str | None = None,
+) -> ReportData:
+    """Acota el informe a un mes, o a un rango de días.
+
+    `mes` es `AAAA-MM` y era lo único que había. `desde`/`hasta` son `AAAA-MM-DD` y se
+    añadieron porque «del 1 al 15» es una pregunta que se hace todo el rato y no se podía
+    contestar: había que subir un Excel recortado a esas fechas.
+
+    **El rango manda sobre el mes.** Si vienen los dos, es que alguien afinó dentro de un
+    mes ya elegido, y lo que quiere ver es el rango.
+
+    Los dos extremos se incluyen: quien escribe «hasta el 15» quiere el 15 entero, no
+    hasta el 15 a las cero horas.
+    """
     fecha = STD_COLS["fecha"]
+
     if fecha not in report.df.columns:
         return report
-    mask = (report.df[fecha].dt.year == year) & (report.df[fecha].dt.month == month)
+
+    mask = None
+
+    if desde or hasta:
+        col = report.df[fecha]
+        mask = col.notna()
+        if desde:
+            try:
+                mask &= col >= pd.Timestamp(desde)
+            except ValueError:
+                return report
+        if hasta:
+            try:
+                # El día entero, no hasta su medianoche.
+                mask &= col < pd.Timestamp(hasta) + pd.Timedelta(days=1)
+            except ValueError:
+                return report
+    elif mes:
+        try:
+            year, month = int(mes[:4]), int(mes[5:7])
+        except (ValueError, IndexError):
+            return report
+        mask = (report.df[fecha].dt.year == year) & (report.df[fecha].dt.month == month)
+
+    if mask is None:
+        return report
+
     filtered = report.df[mask].copy()
     valid = filtered[fecha].dropna()
+
     return ReportData(
         df=filtered,
         date_min=valid.min() if not valid.empty else None,
