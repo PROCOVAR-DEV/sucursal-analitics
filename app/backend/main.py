@@ -666,16 +666,22 @@ def _scope_key(user: dict) -> str:
     return "todos"
 
 
-def _compute_dashboard(suc: dict, source_id: str, mes: str | None, user: dict) -> dict:
+def _compute_dashboard(suc: dict, source_id: str, mes: str | None, user: dict,
+                       desde: str | None = None, hasta: str | None = None) -> dict:
     """Payload del Resumen para UNA sucursal, cacheado.
 
     Se invalida solo cuando cambia la sucursal (archivo nuevo/borrado o config
     editada). Sin esto, cada carga del Resumen recalculaba todo desde cero."""
-    key = ("dashboard", suc["id"], source_id, mes or "", _scope_key(user))
-    return cache.get_or_compute(key, suc["id"], lambda: _compute_dashboard_uncached(suc, source_id, mes, user))
+    # El rango entra en la CLAVE: sin eso, pedir del 1 al 15 devolvia lo que se hubiera
+    # calculado antes para el mes entero, y el numero salia mal sin que nada fallara.
+    key = ("dashboard", suc["id"], source_id, mes or "", desde or "", hasta or "", _scope_key(user))
+    return cache.get_or_compute(
+        key, suc["id"], lambda: _compute_dashboard_uncached(suc, source_id, mes, user, desde, hasta)
+    )
 
 
-def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user: dict) -> dict:
+def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user: dict,
+                                desde: str | None = None, hasta: str | None = None) -> dict:
     """Payload del Resumen para UNA sucursal (fuente = upload uuid o 'accumulated')."""
     report = repository.accumulated(suc["id"]) if source_id == "accumulated" else repository.get(suc["id"], source_id)
     if report is None:
@@ -717,7 +723,7 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/dashboard")
 def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
-    return _compute_dashboard(suc, source_id, mes, user)
+    return _compute_dashboard(suc, source_id, mes, user, desde, hasta)
 
 
 def _aggregate_dashboards(items: list[dict]) -> dict:
@@ -819,7 +825,7 @@ def _allowed_sucursales_full(user: dict) -> list[dict]:
 @app.get("/api/all/sources/{source_id}/dashboard")
 def all_dashboard(source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), user: dict = Depends(current_user)) -> dict:
     sucs = _allowed_sucursales_full(user)
-    agg = _aggregate_dashboards([_compute_dashboard(suc, source_id, mes, user) for suc in sucs])
+    agg = _aggregate_dashboards([_compute_dashboard(suc, source_id, mes, user, desde, hasta) for suc in sucs])
     agg["rango"] = mes or "Todo (acumulado)"
     return agg
 
