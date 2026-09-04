@@ -201,6 +201,49 @@ class ResultCache(Base):
     last_read_at: Mapped[datetime] = mapped_column(DateTime, index=True, default=datetime.utcnow)
 
 
+class VentaVentra(Base):
+    """Una LÍNEA de venta traída de Ventra. Es el crudo, sin calcular nada.
+
+    Existe porque los informes no pueden pedirle a Ventra un año entero cada vez que
+    alguien abre una pantalla: son ~50.000 líneas por sucursal, al otro lado de una VPN
+    que se cae. Se trae una vez, se guarda, y las pantallas leen de aquí.
+
+    # La clave es de Ventra, no nuestra
+
+    `linea_id` es el `id` que da Ventra, único por línea. Con él, volver a importar el
+    mismo día no duplica: reescribe lo mismo encima. Es lo que permite lanzar la
+    recuperación del histórico sin miedo, y repetirla si se corta a medias.
+
+    # Se guarda el crudo, no el resultado
+
+    Nada de gestor, hectolitros ni grupo comercial: eso lo calcula `enrich_for_sucursal`
+    con la configuración de cada sucursal, que se edita y cambia. Guardando el resultado,
+    editar un alias de gestor no arreglaría el pasado — habría que reimportarlo todo.
+    """
+
+    __tablename__ = "analytics_venta_ventra"
+
+    linea_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # La base de Ventra: `santiago`, `holguinmoa`, `tunas`… NO es nuestra sucursal, y son
+    # diez para ocho: `moa` y `palmasoriano` van por su cuenta.
+    database: Mapped[str] = mapped_column(String(60), primary_key=True, index=True)
+    fecha: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    oper_number: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    socio: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    mercancia: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    grupo: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    cantidad: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    importe: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    # La nota entera, tal cual. De aquí sale el vendedor (`V-`) y el folio (`P-`), y se
+    # guarda completa porque el día que haga falta otro segmento ya está.
+    nota: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # El objeto de Ventra y su tipo. El nombre crudo se guarda SIEMPRE: la clasificación
+    # es una etiqueta al lado, y si mañana se corrige, se recalcula sin haber perdido nada.
+    objeto: Mapped[str] = mapped_column(String(120), nullable=False, default="", index=True)
+    tipo_punto: Mapped[str] = mapped_column(String(30), nullable=False, default="", index=True)
+    traido_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 def init_db() -> None:
     """Crea las tablas si no existen y aplica las migraciones pendientes.
 

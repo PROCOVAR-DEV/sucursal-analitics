@@ -532,26 +532,26 @@ def src_periods(sid: str, source_id: str, suc: dict = Depends(require_access)) -
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/ventas")
-def src_ventas(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
-    report = filter_by_period(_get_source(sid, source_id), mes)
+def src_ventas(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     return compute_ventas(report, _eff_scoped(suc, report, mes, user))
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/productos")
-def src_productos(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
-    report = filter_by_period(_get_source(sid, source_id), mes)
+def src_productos(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     return compute_productos(report, _eff_scoped(suc, report, mes, user))
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/market")
-def src_market(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
-    report = filter_by_period(_get_source(sid, source_id), mes)
+def src_market(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     return compute_market(report, _eff_scoped(suc, report, mes, user))
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/ranking")
-def src_ranking(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
-    report = filter_by_period(_get_source(sid, source_id), mes)
+def src_ranking(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     # OJO: aquí NO se aplica _scope_for_user a propósito. El ranking es COMPARATIVO:
     # un usuario 'gestor' debe ver a TODOS sus compañeros para saber en qué puesto va
     # (si se recorta a lo suyo, siempre sale 1º y el ranking no le dice nada).
@@ -563,7 +563,7 @@ def src_ranking(sid: str, source_id: str, mes: str | None = Query(default=None),
 def src_clientes_analisis(
     sid: str,
     source_id: str,
-    mes: str | None = Query(default=None),
+    mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
     # Grupos comerciales a incluir. Repetible: ?grupo=PARRANDA&grupo=IMPORTACIONES.
     # Sin ninguno = todos, que es como estaba.
     grupo: list[str] = Query(default=[]),
@@ -572,15 +572,15 @@ def src_clientes_analisis(
     suc: dict = Depends(require_access),
     user: dict = Depends(current_user),
 ) -> dict:
-    report = filter_by_period(_get_source(sid, source_id), mes)
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     return compute_clientes_analisis(
         report, _eff_scoped(suc, report, mes, user), grupos=grupo, metrica=metrica
     )
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/vendedores")
-def src_vendedores(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
-    report = filter_by_period(_get_source(sid, source_id), mes)
+def src_vendedores(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     return compute_vendedores(report, _eff_scoped(suc, report, mes, user))
 
 
@@ -588,21 +588,21 @@ def src_vendedores(sid: str, source_id: str, mes: str | None = Query(default=Non
 def src_gestor_sku(
     sid: str,
     source_id: str,
-    mes: str | None = Query(default=None),
+    mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
     grupo: list[str] = Query(default=[]),
     metrica: str = Query(default="importe"),
     suc: dict = Depends(require_access),
     user: dict = Depends(current_user),
 ) -> dict:
     """Cruce gestor x producto, en importe o cantidad, con totales en ambas direcciones."""
-    report = filter_by_period(_get_source(sid, source_id), mes)
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     return compute_gestor_sku(
         report, _eff_scoped(suc, report, mes, user), grupos=grupo, metrica=metrica
     )
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/diario")
-def src_diario(sid: str, source_id: str, mes: str | None = Query(default=None), gestor: str | None = Query(default=None),
+def src_diario(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), gestor: str | None = Query(default=None),
                suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     # Reporte COMPLETO (sin filtrar por periodo) para poder comparar el día 1 con el
     # último día del mes anterior. El mes objetivo se pasa aparte.
@@ -620,9 +620,9 @@ def src_diario(sid: str, source_id: str, mes: str | None = Query(default=None), 
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/metas-gestor")
-def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=None), dia: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), dia: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     # `dia` = día de corte elegido (para mirar atrás). Sin él, el último con datos.
-    report = filter_by_period(_get_source(sid, source_id), mes)
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     # El estudio es del último día subido: se usa la meta de SU mes (no la suma multi-mes).
     if report is not None and getattr(report, "date_max", None) is not None:
         d = report.date_max
@@ -694,7 +694,7 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
                 {"producto": p, "tamano": lbl, "formato": f"{p} {lbl}", "hectolitros": 0.0}
                 for p, _f, _s, lbl in _FORMATOS_DESGLOSE],
         }
-    report = filter_by_period(report, mes)
+    report = filter_by_period(report, mes, desde, hasta)
     eff = _eff_scoped(suc, report, mes, user)
     ventas = compute_ventas(report, eff)
     productos = compute_productos(report, eff)
@@ -716,7 +716,7 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/dashboard")
-def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     return _compute_dashboard(suc, source_id, mes, user)
 
 
@@ -817,7 +817,7 @@ def _allowed_sucursales_full(user: dict) -> list[dict]:
 
 # Vista COMBINADA de todas las sucursales permitidas (admin/analitico ven todas).
 @app.get("/api/all/sources/{source_id}/dashboard")
-def all_dashboard(source_id: str, mes: str | None = Query(default=None), user: dict = Depends(current_user)) -> dict:
+def all_dashboard(source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), user: dict = Depends(current_user)) -> dict:
     sucs = _allowed_sucursales_full(user)
     agg = _aggregate_dashboards([_compute_dashboard(suc, source_id, mes, user) for suc in sucs])
     agg["rango"] = mes or "Todo (acumulado)"
@@ -845,13 +845,13 @@ _EXPORTERS = {
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/export/{modulo}.xlsx")
-def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query(default=None),
+def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
                   grupo: list[str] = Query(default=[]), metrica: str = Query(default="importe"),
                   suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> Response:
     exporter = _EXPORTERS.get(modulo)
     if exporter is None:
         raise HTTPException(status_code=404, detail="Módulo de exportación desconocido")
-    report = filter_by_period(_get_source(sid, source_id), mes)
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
 
     # Los filtros de pantalla solo los entiende este informe; a los demás se les
     # pasarían argumentos que no aceptan. Explícito y no por introspección: se
