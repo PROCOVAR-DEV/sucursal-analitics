@@ -18,6 +18,7 @@ recuperación por la mitad y volver a lanzarla sin pensar.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date, datetime, timedelta
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -184,6 +185,37 @@ def recuperar(desde: date, hasta: date | None = None, base: str | None = None) -
     return total
 
 
+def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
+    """Trae lo de los últimos días, cada hora, para siempre.
+
+    Es un bucle y no una tarea programada porque Dokploy no expone programaciones por
+    API: teniéndolo dentro, el worker se despliega como cualquier otra aplicación.
+
+    Nunca revienta. Ventra está al otro lado de una VPN que se cae, y un worker que se
+    muere en el primer fallo deja de traer datos hasta que alguien lo mira — que suele
+    ser cuando alguien pregunta por qué los informes están viejos.
+    """
+    import time
+
+    # Margen al arrancar: durante el despliegue la VPN puede no estar lista, y un fallo
+    # en el primer segundo no dice nada de si esto funciona.
+    time.sleep(int(os.environ.get("VENTRA_ESPERA_INICIAL_S", "60")))
+
+    while True:
+        try:
+            r = al_dia(dias)
+            vivas = {k: v for k, v in r.items() if v >= 0}
+            caidas = [k for k, v in r.items() if v < 0]
+            log.info(
+                "[ventra] %d lineas de %d bases%s",
+                sum(vivas.values()), len(vivas),
+                f" · fallaron {', '.join(caidas)}" if caidas else "",
+            )
+        except Exception as e:  # noqa: BLE001
+            log.exception("[ventra] la pasada fallo entera: %s", e)
+        time.sleep(cada_s)
+
+
 if __name__ == "__main__":  # pragma: no cover
     import argparse
 
@@ -193,9 +225,14 @@ if __name__ == "__main__":  # pragma: no cover
     p.add_argument("--hasta", help="AAAA-MM-DD (por defecto, hoy)")
     p.add_argument("--base", help="una sola base de Ventra (por defecto, todas)")
     p.add_argument("--dias", type=int, default=DIAS_AL_DIA, help="modo al día")
+    p.add_argument("--bucle", action="store_true", help="quedarse corriendo cada hora")
+    p.add_argument("--cada", type=int, default=3600, help="segundos entre pasadas")
     a = p.parse_args()
 
-    if a.desde:
+    if a.bucle:
+        log.info("[ventra] worker en marcha: cada %d s, %d dias atras", a.cada, a.dias)
+        bucle(a.cada, a.dias)
+    elif a.desde:
         n = recuperar(
             date.fromisoformat(a.desde),
             date.fromisoformat(a.hasta) if a.hasta else None,
