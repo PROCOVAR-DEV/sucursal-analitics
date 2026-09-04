@@ -38,12 +38,18 @@ def test_reconoce_las_tres_familias():
     assert ventra.tipo_de_punto("PTOS MONEDERO") == ventra.MONEDERO
 
 
-def test_lo_que_no_se_sabe_NO_se_adivina():
-    # AURORA, FLORIDA, HABANA HACENDADO y PUNTO J existen de verdad y nadie sabe qué son.
-    # Meterlos en "punto de venta" porque suenan a tienda es inventarse un dato que
-    # después alguien suma en un informe.
-    for desconocido in ("AURORA", "FLORIDA", "HABANA HACENDADO", "PUNTO J"):
-        assert ventra.tipo_de_punto(desconocido) == ventra.SIN_CLASIFICAR
+def test_los_que_no_dicen_su_tipo_en_el_nombre():
+    # Los cuatro mueven dinero de verdad y ninguno se puede deducir del nombre. Van en la
+    # tabla de excepciones porque alguien preguntó, no porque sonaran a algo.
+    assert ventra.tipo_de_punto("AURORA") == ventra.ALMACEN
+    assert ventra.tipo_de_punto("FLORIDA") == ventra.ALMACEN
+    assert ventra.tipo_de_punto("HABANA HACENDADO") == ventra.PUNTO_VENTA
+    # La casa matriz no es tienda ni almacén: mezclarla ensucia la comparación.
+    assert ventra.tipo_de_punto("PUNTO J") == ventra.CASA_MATRIZ
+
+
+def test_lo_que_de_verdad_no_se_sabe_no_se_adivina():
+    assert ventra.tipo_de_punto("ALGO NUEVO QUE SALGA") == ventra.SIN_CLASIFICAR
     assert ventra.tipo_de_punto(None) == ventra.SIN_CLASIFICAR
     assert ventra.tipo_de_punto("") == ventra.SIN_CLASIFICAR
 

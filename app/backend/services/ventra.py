@@ -77,21 +77,32 @@ class VentraNoDisponible(RuntimeError):
 #   sspiritus     ALM S-SPIRITUS · TIENDA S-SPIRITUS
 #   moa           ALMACEN MOA
 #
-# Tres familias con diez nombres. Se clasifica por reglas, y lo que no encaja se queda en
-# `sin_clasificar` A PROPÓSITO: meter AURORA en "punto de venta" porque suena a tienda es
-# inventarse un dato que después alguien suma.
+# Diez nombres para cuatro tipos. Se clasifica por reglas cuando el nombre lo dice, por
+# tabla cuando no, y lo que no encaje en ninguna de las dos se queda en `sin_clasificar` A
+# PROPÓSITO: adivinar el tipo por cómo suena el nombre es inventarse un dato que después
+# alguien suma en un informe.
 PUNTO_VENTA = "punto_venta"
 ALMACEN = "almacen"
 MONEDERO = "monedero"
+CASA_MATRIZ = "casa_matriz"
 SIN_CLASIFICAR = "sin_clasificar"
 
-# Los que no se pueden deducir del nombre. Hay que preguntar qué son; mientras tanto se
-# ven como lo que son —desconocidos— en vez de esconderse en un cajón equivocado.
+# Los que no se pueden deducir del nombre, dichos por Jose el 04/09/2026.
+#
+# Los cuatro mueven dinero de verdad —AURORA sola hace 300.328 en agosto, más que el
+# propio punto de venta de Santiago—, así que dejarlos sin clasificar era dejar fuera del
+# desglose la mayor parte de algunas sucursales.
 EXCEPCIONES: dict[str, str] = {
-    # "AURORA": ALMACEN,
-    # "FLORIDA": PUNTO_VENTA,
-    # "HABANA HACENDADO": ALMACEN,
-    # "PUNTO J": PUNTO_VENTA,
+    # El almacén de Santiago. Es el que más mueve de toda la base.
+    "AURORA": ALMACEN,
+    # Un almacén en Florida, que es OTRA sucursal dentro de la base de Camagüey. Ojo con
+    # esto al leer los informes de Camagüey: no todo lo que hay ahí es de Camagüey ciudad.
+    "FLORIDA": ALMACEN,
+    # El punto de venta de La Habana. El nombre no lo dice por ningún lado.
+    "HABANA HACENDADO": PUNTO_VENTA,
+    # La casa matriz. No es tienda ni almacén, y por eso tiene su propio tipo: meterla en
+    # cualquiera de los dos ensucia la comparación entre sucursales.
+    "PUNTO J": CASA_MATRIZ,
 }
 
 
