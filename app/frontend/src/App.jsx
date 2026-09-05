@@ -190,15 +190,23 @@ export default function App() {
           <Select width="flex-1 min-w-[10rem] sm:flex-none sm:w-56" value={period || ""} onChange={(v) => setPeriod(v || null)}
             options={[{ value: "", label: "Todo (acumulado)" }, ...periods.map((p) => ({ value: p, label: fmtPeriod(p) }))]} />
           {period && <span className="ml-1 px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold">{fmtPeriod(period)}</span>}
-          {/* La puerta a la carga manual. Discreta y a la derecha: existe para el día
-              que Ventra no esté, no para usarla todos los días. */}
+          {/* La puerta a la carga manual: un botón pequeño y pegado al selector, no
+              empujado al borde. Existe para el día que Ventra no esté, no para usarlo
+              todos los días, así que no tiene por qué llamar la atención. */}
           {!isAll && (
             <button
-              className="ml-auto shrink-0 text-xs font-medium text-slate-500 hover:text-brand-600 underline decoration-dotted underline-offset-4"
+              aria-pressed={verCarga}
+              className={`shrink-0 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                verCarga
+                  ? "border-brand-300 bg-brand-50 text-brand-700"
+                  : "border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700"
+              }`}
+              title="Sólo hace falta cuando Ventra no está disponible"
               type="button"
               onClick={() => setVerCarga((v) => !v)}
             >
-              {verCarga ? "Ocultar la carga manual" : "Cargar un reporte a mano"}
+              <FileSpreadsheet size={13} />
+              {verCarga ? "Ocultar carga" : "Carga manual"}
             </button>
           )}
         </div>
