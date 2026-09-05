@@ -17,6 +17,7 @@ Estructura de rutas:
 from __future__ import annotations
 
 import logging
+import os
 import threading
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
@@ -75,15 +76,13 @@ def _arrancar_sincronizador() -> None:
     vivo esperando a un `sleep` de una hora.
     """
     if os.environ.get("VENTRA_SYNC_EN_API", "true").lower() != "true":
-        log.info("[ventra] el sincronizador dentro de la API está apagado")
+        logger.info("[ventra] el sincronizador dentro de la API está apagado")
         return
-
-    import threading
 
     from services import ventra_sync
 
     threading.Thread(target=ventra_sync.bucle, daemon=True, name="ventra-sync").start()
-    log.info("[ventra] sincronizador en marcha dentro de la API")
+    logger.info("[ventra] sincronizador en marcha dentro de la API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
