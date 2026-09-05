@@ -281,8 +281,22 @@ def delete_user(username: str, user: dict = Depends(require_manage_users)) -> di
 # --------------------------------------------------------------- sucursales
 @app.get("/api/sucursales")
 def list_sucursales(user: dict = Depends(current_user)) -> dict:
-    allowed = auth_store.allowed_sucursales(user, [s["id"] for s in sucursal_store.list_summary()])
-    return {"items": [s for s in sucursal_store.list_summary() if s["id"] in allowed]}
+    """Las sucursales que este usuario puede ver, y de dónde lee cada una.
+
+    `ventra: true` quiere decir que esa sucursal ya tiene sus ventas traídas del ERP y
+    no necesita que nadie suba nada. La pantalla usa esa marca para esconder el panel de
+    archivos: sobra, y ocupa una columna entera que se aprovecha mejor en gráficos.
+
+    Se calcula por sucursal y no de golpe porque el histórico se recupera **base a
+    base**: mientras Camagüey no lo tenga, Camagüey sigue necesitando su Excel, y
+    esconderle el panel la dejaría sin forma de cargar nada.
+    """
+    todas = sucursal_store.list_summary()
+    allowed = auth_store.allowed_sucursales(user, [s["id"] for s in todas])
+
+    return {
+        "items": [{**s, "ventra": hay_datos(s["id"])} for s in todas if s["id"] in allowed]
+    }
 
 
 @app.post("/api/sucursales")

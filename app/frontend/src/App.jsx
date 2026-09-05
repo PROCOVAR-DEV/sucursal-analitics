@@ -186,11 +186,27 @@ export default function App() {
         </div>
       )}
 
-      {/* En móvil el panel de archivos se apila arriba y scrollea toda la página;
-          desde md+ vuelve a ser sidebar lateral y solo scrollea el <main>.
-          min-w-0 en <main> evita que las tablas anchas estiren el flex. */}
+      {/*
+        EL PANEL DE ARCHIVOS SOLO SALE SI ESA SUCURSAL LO NECESITA.
+
+        Las que ya tienen sus ventas traídas de Ventra no necesitan que nadie suba
+        nada: los informes leen del ERP solos. Enseñarles una columna entera para
+        subir Excel es ocupar la mitad de la pantalla con algo que ya no se usa —y esa
+        mitad se aprovecha mejor en los gráficos, que es a lo que se viene.
+
+        Va sucursal por sucursal y no de golpe porque el histórico se recupera **base
+        a base**: mientras Camagüey no lo tenga, Camagüey sigue necesitando su Excel, y
+        esconderle el panel la dejaría sin forma de cargar nada. Según se vaya
+        recuperando cada una, el panel desaparece solo.
+
+        En móvil el panel se apila arriba y scrollea toda la página; desde md+ es
+        sidebar y solo scrollea el <main>. min-w-0 en <main> evita que las tablas
+        anchas estiren el flex.
+      */}
       <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
-        {!isConfig && !isAll && <UploadPanel sourceId={sourceId} onSelect={setSourceId} onRefresh={setUploads} key={sid} />}
+        {!isConfig && !isAll && !currentSuc?.ventra && (
+          <UploadPanel sourceId={sourceId} onSelect={setSourceId} onRefresh={setUploads} key={sid} />
+        )}
         <main className="flex-1 min-w-0 md:overflow-y-auto bg-slate-50">
           <div className="max-w-7xl mx-auto p-3 sm:p-6">
             {isConfig ? (
@@ -217,7 +233,10 @@ export default function App() {
                     </button>
                   ))}
                 </nav>
-                {!isAll && uploads.length === 0 && (
+                {/* Y el aviso de «sube un archivo» tampoco, cuando ya no hay que subir
+                    ninguno. Decírselo a quien lee de Ventra es mandarle a hacer un
+                    trabajo que se acabó. */}
+                {!isAll && !currentSuc?.ventra && uploads.length === 0 && (
                   <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
                     Sube un Reporte de Venta (.xls/.xlsx) para ver datos reales de {currentSuc?.nombre}.
                   </div>
