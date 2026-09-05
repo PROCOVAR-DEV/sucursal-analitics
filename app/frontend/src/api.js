@@ -174,3 +174,18 @@ export async function downloadExport(id, modulo, mes = null, filtros = {}) {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// La carga a mano es el ÚLTIMO recurso: cuando Ventra no está disponible y hay que
+// meter las ventas igual. No es el camino normal — el normal es que las traiga el
+// sincronizador— pero tiene que existir, porque un ERP caído no puede dejar a una
+// sucursal sin poder cargar su mes.
+export async function uploadFile(file, { force = false } = {}) {
+  const form = new FormData();
+  form.append("file", file);
+  if (force) form.append("force", "true");
+  const { data } = await api.post(`${base()}/uploads`, form, { headers: { "Content-Type": "multipart/form-data" } });
+  return data;
+}
+export async function listUploads() { return (await api.get(`${base()}/uploads`)).data.items; }
+export async function deleteUpload(id) { await api.delete(`${base()}/uploads/${id}`); }
+export async function deleteAllUploads() { await api.delete(`${base()}/uploads`); }

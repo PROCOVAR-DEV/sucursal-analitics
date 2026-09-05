@@ -49,6 +49,41 @@ from services.ventas import compute_ventas
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Sucursal Analytics API", version="3.0.0")
+
+
+@app.on_event("startup")
+def _arrancar_sincronizador() -> None:
+    """Trae de Ventra lo del día, cada hora, en un hilo aparte de la API.
+
+    # Por qué aquí y no en su propia aplicación
+
+    El bucle se escribió para desplegarse como un worker suelto, y sería lo limpio. Pero
+    llevaba escrito desde el 04/09 sin que nadie lo diera de alta en Dokploy, y mientras
+    tanto **no traía nadie**: los datos de Santiago se quedaron congelados en el 04/09
+    y las demás sucursales no llegaron a empezar. Un worker que no existe no sincroniza.
+
+    Dentro de la API funciona porque el trabajo es pequeño y espaciado —unos segundos
+    cada hora— y porque `bucle()` no revienta nunca: envuelve cada pasada, y una base
+    caída no para a las otras nueve. Con una sola réplica no hay dos hilos pisándose, y
+    aunque los hubiera la escritura es idempotente: la clave es `(database, linea_id)`
+    con el `id` que da Ventra.
+
+    Si algún día se monta el worker de verdad, esto se apaga con
+    `VENTRA_SYNC_EN_API=false` y no hay que tocar código.
+
+    Va en un hilo demonio: si el proceso se para, se va con él en vez de mantenerlo
+    vivo esperando a un `sleep` de una hora.
+    """
+    if os.environ.get("VENTRA_SYNC_EN_API", "true").lower() != "true":
+        log.info("[ventra] el sincronizador dentro de la API está apagado")
+        return
+
+    import threading
+
+    from services import ventra_sync
+
+    threading.Thread(target=ventra_sync.bucle, daemon=True, name="ventra-sync").start()
+    log.info("[ventra] sincronizador en marcha dentro de la API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 

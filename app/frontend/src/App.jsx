@@ -7,6 +7,7 @@ import Login from "./components/Login.jsx";
 import MarketView from "./components/MarketView.jsx";
 import ProductosView from "./components/ProductosView.jsx";
 import RankingView from "./components/RankingView.jsx";
+import UploadPanel from "./components/UploadPanel.jsx";
 import ReportesView from "./components/ReportesView.jsx";
 import VendedoresView from "./components/VendedoresView.jsx";
 import GestorSkuView from "./components/GestorSkuView.jsx";
@@ -57,6 +58,15 @@ export default function App() {
   const [sucursales, setSucursales] = useState([]);
   const [sid, setSid] = useState(null);
   const [sourceId, setSourceId] = useState("accumulated");
+  /**
+   * Si está abierto el panel de cargar reportes a mano.
+   *
+   * Cerrado por defecto: el camino normal es que las ventas las traiga el
+   * sincronizador de Ventra, y tener siempre desplegada una columna para subir Excel
+   * es ocupar media pantalla con el último recurso. Se abre cuando hace falta —Ventra
+   * caído, una sucursal sin histórico todavía— y se cierra al terminar.
+   */
+  const [verCarga, setVerCarga] = useState(false);
   const [period, setPeriod] = useState(null);
   const [periods, setPeriods] = useState([]);
   const [path, go] = usePath();
@@ -180,6 +190,17 @@ export default function App() {
           <Select width="flex-1 min-w-[10rem] sm:flex-none sm:w-56" value={period || ""} onChange={(v) => setPeriod(v || null)}
             options={[{ value: "", label: "Todo (acumulado)" }, ...periods.map((p) => ({ value: p, label: fmtPeriod(p) }))]} />
           {period && <span className="ml-1 px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold">{fmtPeriod(period)}</span>}
+          {/* La puerta a la carga manual. Discreta y a la derecha: existe para el día
+              que Ventra no esté, no para usarla todos los días. */}
+          {!isAll && (
+            <button
+              className="ml-auto shrink-0 text-xs font-medium text-slate-500 hover:text-brand-600 underline decoration-dotted underline-offset-4"
+              type="button"
+              onClick={() => setVerCarga((v) => !v)}
+            >
+              {verCarga ? "Ocultar la carga manual" : "Cargar un reporte a mano"}
+            </button>
+          )}
         </div>
       )}
 
@@ -231,8 +252,21 @@ export default function App() {
                 {!isAll && !currentSuc?.ventra && (
                   <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
                     Las ventas de {currentSuc?.nombre} todavía no se han traído de Ventra.
-                    Lo que se ve abajo es el último reporte que se subió a mano, hasta que
-                    se recupere su histórico.
+                    Lo que se ve abajo es el último reporte que se subió a mano.{" "}
+                    <button
+                      className="font-semibold underline underline-offset-2"
+                      type="button"
+                      onClick={() => setVerCarga(true)}
+                    >
+                      Cargar uno nuevo
+                    </button>
+                  </div>
+                )}
+                {/* Ancho completo y arriba del todo cuando se abre: se usa un momento,
+                    se cierra, y la pantalla vuelve a ser lo que importa. */}
+                {verCarga && !isAll && (
+                  <div className="mb-4">
+                    <UploadPanel sourceId={sourceId} onSelect={setSourceId} key={sid} />
                   </div>
                 )}
                 {sid && (isAll && view !== "dashboard" ? (
