@@ -40,6 +40,7 @@ from services.market import compute_market
 from services.productos import compute_productos
 from services.ranking import compute_ranking
 from services.repository import OverlapError, repository
+from services.ventra_fuente import hay_datos, report_de_ventra
 from services.sucursal_store import config_for_period, config_for_report, sucursal_store
 from services.vendedores import compute_vendedores
 from services.gestor_sku import compute_gestor_sku
@@ -89,8 +90,52 @@ def _xlsx(data: bytes, filename: str) -> Response:
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
+def _fuente_o_none(sid: str, source_id: str) -> ReportData | None:
+    """Lo mismo que `_get_source`, pero devolviendo None en vez de un 404.
+
+    Lo usan las pantallas que juntan varias sucursales: que una no tenga datos no puede
+    tumbar el Resumen de las otras siete.
+    """
+    try:
+        return _get_source(sid, source_id)
+    except HTTPException:
+        return None
+
+
 def _get_source(sid: str, source_id: str) -> ReportData:
-    report = repository.accumulated(sid) if source_id == "accumulated" else repository.get(sid, source_id)
+    """De dónde salen los datos de un informe.
+
+    # Ventra manda, el Excel es el respaldo
+
+    Lo traído de Ventra es la misma venta sin pasar por las manos de nadie: no hay que
+    acordarse de exportar, ni de subirlo, ni se sube el mes equivocado. Comprobado contra
+    el Excel de Santiago de julio de 2026 — 5.050 líneas, $601.083,92 y 2.805 facturas
+    por los dos caminos, cero de diferencia.
+
+    Se prefiere cuando hay algo traído; si no, se cae al Excel subido. Esa caída es lo
+    que permite encenderlo sucursal por sucursal: las que todavía no tienen histórico
+    recuperado siguen funcionando como siempre, sin enterarse.
+
+    `source_id == "subido"` fuerza el Excel aunque haya Ventra. Existe para poder
+    comparar los dos y para el día que alguien discuta una cifra: sin forma de mirar el
+    origen viejo, «Ventra dice otra cosa» no se puede resolver.
+    """
+    if source_id in ("accumulated", "ventra"):
+        de_ventra = report_de_ventra(sid)
+
+        if de_ventra is not None:
+            return de_ventra
+        if source_id == "ventra":
+            raise HTTPException(
+                status_code=404,
+                detail="Esta sucursal todavía no tiene ventas traídas de Ventra.",
+            )
+
+    report = (
+        repository.accumulated(sid)
+        if source_id in ("accumulated", "subido")
+        else repository.get(sid, source_id)
+    )
     if report is None:
         raise HTTPException(status_code=404, detail="Fuente no encontrada. Sube un archivo.")
     return report
@@ -683,7 +728,9 @@ def _compute_dashboard(suc: dict, source_id: str, mes: str | None, user: dict,
 def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user: dict,
                                 desde: str | None = None, hasta: str | None = None) -> dict:
     """Payload del Resumen para UNA sucursal (fuente = upload uuid o 'accumulated')."""
-    report = repository.accumulated(suc["id"]) if source_id == "accumulated" else repository.get(suc["id"], source_id)
+    # Por la MISMA puerta que todo lo demás: si aquí se leyera sólo el Excel, el
+    # Resumen diría una cosa y las pantallas de detalle otra, con los mismos filtros.
+    report = _fuente_o_none(suc["id"], source_id)
     if report is None:
         eff = _scope_for_user(config_for_period(suc, None, None), user)
         return {
@@ -834,7 +881,7 @@ def all_dashboard(source_id: str, mes: str | None = Query(default=None), desde: 
 def all_periods(source_id: str, user: dict = Depends(current_user)) -> dict:
     ps: set[str] = set()
     for suc in _allowed_sucursales_full(user):
-        rep = repository.accumulated(suc["id"]) if source_id == "accumulated" else repository.get(suc["id"], source_id)
+        rep = _fuente_o_none(suc["id"], source_id)
         if rep is not None:
             ps.update(available_periods(rep))
     return {"periods": sorted(ps)}
