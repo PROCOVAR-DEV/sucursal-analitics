@@ -8,7 +8,6 @@ import MarketView from "./components/MarketView.jsx";
 import ProductosView from "./components/ProductosView.jsx";
 import RankingView from "./components/RankingView.jsx";
 import ReportesView from "./components/ReportesView.jsx";
-import UploadPanel from "./components/UploadPanel.jsx";
 import VendedoresView from "./components/VendedoresView.jsx";
 import GestorSkuView from "./components/GestorSkuView.jsx";
 import VentasView from "./components/VentasView.jsx";
@@ -58,7 +57,6 @@ export default function App() {
   const [sucursales, setSucursales] = useState([]);
   const [sid, setSid] = useState(null);
   const [sourceId, setSourceId] = useState("accumulated");
-  const [uploads, setUploads] = useState([]);
   const [period, setPeriod] = useState(null);
   const [periods, setPeriods] = useState([]);
   const [path, go] = usePath();
@@ -120,7 +118,6 @@ export default function App() {
   if (booting) return <div className="h-screen flex items-center justify-center text-slate-400">Cargando…</div>;
   if (!user) return <Login onLogin={setUser} />;
 
-  const currentUpload = uploads.find((u) => u.id === sourceId);
   const Current = TABS.find((t) => t.id === view).Comp;
   const currentSuc = sucursales.find((s) => s.id === sid);
   const viewLabel = TABS.find((t) => t.id === view)?.label;
@@ -187,26 +184,21 @@ export default function App() {
       )}
 
       {/*
-        EL PANEL DE ARCHIVOS SOLO SALE SI ESA SUCURSAL LO NECESITA.
+        SE ACABÓ SUBIR REPORTES A MANO.
 
-        Las que ya tienen sus ventas traídas de Ventra no necesitan que nadie suba
-        nada: los informes leen del ERP solos. Enseñarles una columna entera para
-        subir Excel es ocupar la mitad de la pantalla con algo que ya no se usa —y esa
-        mitad se aprovecha mejor en los gráficos, que es a lo que se viene.
+        Los informes leen de Ventra. La columna de subir ficheros y de listarlos ocupaba
+        media pantalla para un trabajo que ya no existe, y esa media pantalla se
+        aprovecha mejor en los gráficos, que es a lo que se viene.
 
-        Va sucursal por sucursal y no de golpe porque el histórico se recupera **base
-        a base**: mientras Camagüey no lo tenga, Camagüey sigue necesitando su Excel, y
-        esconderle el panel la dejaría sin forma de cargar nada. Según se vaya
-        recuperando cada una, el panel desaparece solo.
+        El respaldo sigue puesto por detrás: si una sucursal todavía no tiene su
+        histórico traído, `_get_source` le sirve el último Excel que subió, así que no
+        se queda a oscuras mientras se recupera. Lo que ya no se puede es subir uno
+        nuevo, y por eso hay que terminar de recuperar las diez bases.
 
-        En móvil el panel se apila arriba y scrollea toda la página; desde md+ es
-        sidebar y solo scrollea el <main>. min-w-0 en <main> evita que las tablas
-        anchas estiren el flex.
+        En móvil el contenido se apila y scrollea toda la página; desde md+ sólo
+        scrollea el <main>. min-w-0 evita que las tablas anchas estiren el flex.
       */}
       <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
-        {!isConfig && !isAll && !currentSuc?.ventra && (
-          <UploadPanel sourceId={sourceId} onSelect={setSourceId} onRefresh={setUploads} key={sid} />
-        )}
         <main className="flex-1 min-w-0 md:overflow-y-auto bg-slate-50">
           <div className="max-w-7xl mx-auto p-3 sm:p-6">
             {isConfig ? (
@@ -233,12 +225,14 @@ export default function App() {
                     </button>
                   ))}
                 </nav>
-                {/* Y el aviso de «sube un archivo» tampoco, cuando ya no hay que subir
-                    ninguno. Decírselo a quien lee de Ventra es mandarle a hacer un
-                    trabajo que se acabó. */}
-                {!isAll && !currentSuc?.ventra && uploads.length === 0 && (
+                {/* Y si una sucursal no tiene NADA —ni Ventra ni un Excel viejo—, se
+                    dice qué pasa y qué falta, en vez de enseñar todo a cero, que se
+                    lee como que esa sucursal no vendió nada. */}
+                {!isAll && !currentSuc?.ventra && (
                   <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-                    Sube un Reporte de Venta (.xls/.xlsx) para ver datos reales de {currentSuc?.nombre}.
+                    Las ventas de {currentSuc?.nombre} todavía no se han traído de Ventra.
+                    Lo que se ve abajo es el último reporte que se subió a mano, hasta que
+                    se recupere su histórico.
                   </div>
                 )}
                 {sid && (isAll && view !== "dashboard" ? (

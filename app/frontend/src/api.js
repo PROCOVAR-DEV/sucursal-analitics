@@ -96,16 +96,6 @@ function base() {
   const sid = getSucursalId();
   return sid === ALL_SID ? "/all" : `/sucursales/${sid}`;
 }
-export async function uploadFile(file, { force = false } = {}) {
-  const form = new FormData();
-  form.append("file", file);
-  if (force) form.append("force", "true");
-  const { data } = await api.post(`${base()}/uploads`, form, { headers: { "Content-Type": "multipart/form-data" } });
-  return data;
-}
-export async function listUploads() { return (await api.get(`${base()}/uploads`)).data.items; }
-export async function deleteUpload(id) { await api.delete(`${base()}/uploads/${id}`); }
-export async function deleteAllUploads() { await api.delete(`${base()}/uploads`); }
 
 // ---- Consultas (id = uuid | "accumulated") ----
 function q(mes) { return mes ? `?mes=${encodeURIComponent(mes)}` : ""; }
