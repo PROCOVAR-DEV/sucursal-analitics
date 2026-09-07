@@ -1,31 +1,38 @@
-import { BarChart3, CalendarDays, Calendar, FileSpreadsheet, LogOut, Package, Settings as SettingsIcon, ShoppingCart, Target, Trophy, UserCheck, Users, Grid3x3 } from "lucide-react";
+import { Calendar, FileSpreadsheet, LogOut, Package, Settings as SettingsIcon, Target, Trophy, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import AdminPanel from "./components/AdminPanel.jsx";
 import ClientesAnalisisView from "./components/ClientesAnalisisView.jsx";
-import DashboardView from "./components/DashboardView.jsx";
+import ComoVamosView from "./components/ComoVamosView.jsx";
+import QuienVendeView from "./components/QuienVendeView.jsx";
 import Login from "./components/Login.jsx";
-import MarketView from "./components/MarketView.jsx";
 import ProductosView from "./components/ProductosView.jsx";
-import RankingView from "./components/RankingView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import ReportesView from "./components/ReportesView.jsx";
-import VendedoresView from "./components/VendedoresView.jsx";
-import GestorSkuView from "./components/GestorSkuView.jsx";
-import VentasView from "./components/VentasView.jsx";
 import { ALL_SID, getPeriods, getToken, listSucursales, logout, me, setSucursal } from "./api.js";
 import { Picker } from "./components/ui.jsx";
 import { SelectorPeriodo, rotuloPeriodo } from "./components/SelectorPeriodo.jsx";
 
+/**
+ * CUATRO PREGUNTAS, NO NUEVE PESTAÑAS.
+ *
+ * Eran nueve y muchas contestaban lo mismo desde otra profundidad: Resumen, Ventas (HL) y
+ * Market son las tres «¿cómo vamos?»; Ranking, Vendedores y Gestor × Producto son las tres
+ * «¿quién vende?». Puestas al mismo nivel parecían nueve temas, y había que abrirlas una a
+ * una para acordarse de cuál era cuál.
+ *
+ * Ahora arriba se elige la PREGUNTA y dentro la profundidad. Nada se ha borrado: las nueve
+ * pantallas siguen enteras, dos niveles mejor colocadas.
+ *
+ * «Descargas» se queda al final y cambia de nombre: llamarla «Reportes» dentro de una
+ * aplicación de informes no distinguía nada, porque todo son reportes. Lo que hace es
+ * bajar Excel.
+ */
 const TABS = [
-  { id: "dashboard", label: "Resumen", icon: BarChart3, Comp: DashboardView },
-  { id: "ventas", label: "Ventas (HL)", icon: Target, Comp: VentasView },
-  { id: "market", label: "Market", icon: ShoppingCart, Comp: MarketView },
-  { id: "productos", label: "Productos", icon: Package, Comp: ProductosView },
-  { id: "ranking", label: "Ranking", icon: Trophy, Comp: RankingView },
-  { id: "vendedores", label: "Vendedores", icon: UserCheck, Comp: VendedoresView },
-  { id: "gestor-sku", label: "Gestor × Producto", icon: Grid3x3, Comp: GestorSkuView },
-  { id: "clientes", label: "Análisis Clientes", icon: Users, Comp: ClientesAnalisisView },
-  { id: "reportes", label: "Reportes", icon: FileSpreadsheet, Comp: ReportesView },
+  { id: "comovamos", label: "Cómo vamos", icon: Target, Comp: ComoVamosView },
+  { id: "quienvende", label: "Quién vende", icon: Trophy, Comp: QuienVendeView },
+  { id: "productos", label: "Qué se vende", icon: Package, Comp: ProductosView },
+  { id: "clientes", label: "Clientes", icon: Users, Comp: ClientesAnalisisView },
+  { id: "reportes", label: "Descargas", icon: FileSpreadsheet, Comp: ReportesView },
 ];
 const VIEW_IDS = TABS.map((t) => t.id);
 export const CONFIG_LABELS = {
@@ -80,7 +87,21 @@ export default function App() {
 
   const isConfig = path === "config" || path.startsWith("config/");
   const configSection = isConfig ? (path.split("/")[1] || "sucursal") : "sucursal";
-  const view = !isConfig && VIEW_IDS.includes(path) ? path : "dashboard";
+  /**
+   * Los nombres viejos siguen llevando a donde toca.
+   *
+   * Las pestañas se llamaban `dashboard`, `ventas`, `market`, `ranking`, `vendedores` y
+   * `gestor-sku`, y esa palabra va en la dirección. Quien tenga un enlace guardado —o el
+   * navegador con el historial— caería en la vista por defecto sin entender por qué. Con
+   * esto llega a la vista que se comió a la suya.
+   */
+  const VIEJAS = {
+    dashboard: "comovamos", ventas: "comovamos", market: "comovamos",
+    ranking: "quienvende", vendedores: "quienvende", "gestor-sku": "quienvende",
+  };
+  const view = !isConfig && VIEW_IDS.includes(path)
+    ? path
+    : (!isConfig && VIEJAS[path]) || "comovamos";
 
   useEffect(() => {
     if (!getToken()) { setBooting(false); return; }
@@ -150,7 +171,7 @@ export default function App() {
   const canConfig = user.role === "admin" || user.role === "supervisor";
   const canSeeAll = user.role === "admin" || user.role === "analitico";  // ven todas las sucursales
   const isAll = sid === ALL_SID;
-  if (isConfig && !canConfig) { go("dashboard"); }
+  if (isConfig && !canConfig) { go("comovamos"); }
 
   function doLogout() { logout(); setUser(null); setSucursales([]); setSid(null); }
 
@@ -184,7 +205,7 @@ export default function App() {
               ]} />
             {canConfig && (
               <button className={`btn ${isConfig ? "bg-white text-brand-700" : "bg-white/10 hover:bg-white/20 text-white"}`} onClick={() => {
-                if (isConfig) { go("dashboard"); return; }
+                if (isConfig) { go("comovamos"); return; }
                 if (user.role === "supervisor") { go("config/metas"); return; }
                 go("config/sucursal");
               }}>
@@ -301,15 +322,17 @@ export default function App() {
                     <UploadPanel sourceId={sourceId} onSelect={setSourceId} key={sid} />
                   </div>
                 )}
-                {sid && (isAll && view !== "dashboard" ? (
+                {sid && (isAll && view !== "comovamos" ? (
                   <div className="p-8 text-center text-slate-400">
-                    Elige una sucursal específica para ver «{viewLabel}». La vista combinada solo está disponible en el <b>Resumen</b>.
+                    Elige una sucursal específica para ver «{viewLabel}». Combinar sucursales sólo
+                    funciona en <b>Cómo vamos</b>, y ahí sólo en el panorama: el detalle por gestor,
+                    la semana a semana y todo lo de personas son de una sucursal concreta.
                   </div>
                 ) : periodoListo ? (
                   // Hasta que no se sabe el periodo no se pide nada: pintar con
                   // `period=null` traeria el historico entero para tirarlo un segundo
                   // despues, que es el parpadeo con cifras distintas que se veia.
-                  <Current sourceId={sourceId} period={period} user={user} />
+                  <Current isAll={isAll} period={period} sourceId={sourceId} user={user} />
                 ) : (
                   <div className="py-16 text-center text-sm text-slate-400">Cargando…</div>
                 ))}
