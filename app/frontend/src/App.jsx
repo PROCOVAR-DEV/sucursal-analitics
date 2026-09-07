@@ -13,14 +13,8 @@ import VendedoresView from "./components/VendedoresView.jsx";
 import GestorSkuView from "./components/GestorSkuView.jsx";
 import VentasView from "./components/VentasView.jsx";
 import { ALL_SID, getPeriods, getToken, listSucursales, logout, me, setSucursal } from "./api.js";
-import { Picker, Select } from "./components/ui.jsx";
-
-const MONTHS_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-function fmtPeriod(p) {
-  if (!p) return "Todo (global)";
-  const [y, m] = p.split("-");
-  return `${MONTHS_ES[parseInt(m, 10) - 1]} ${y}`;
-}
+import { Picker } from "./components/ui.jsx";
+import { SelectorPeriodo, rotuloPeriodo } from "./components/SelectorPeriodo.jsx";
 
 const TABS = [
   { id: "dashboard", label: "Resumen", icon: BarChart3, Comp: DashboardView },
@@ -187,9 +181,17 @@ export default function App() {
         <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-2 flex items-center gap-2 sm:gap-3 text-sm shrink-0 flex-wrap">
           <Calendar size={15} className="text-slate-400 shrink-0" />
           <span className="text-slate-500 font-medium shrink-0">Periodo:</span>
-          <Select width="flex-1 min-w-[10rem] sm:flex-none sm:w-56" value={period || ""} onChange={(v) => setPeriod(v || null)}
-            options={[{ value: "", label: "Todo (acumulado)" }, ...periods.map((p) => ({ value: p, label: fmtPeriod(p) }))]} />
-          {period && <span className="ml-1 px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold">{fmtPeriod(period)}</span>}
+          {/* Mes entero o rango de días, en el mismo sitio. Antes sólo había meses, así
+              que «del 1 al 15» no se podía contestar: había que subir un Excel recortado
+              a esas fechas. El backend ya aceptaba `desde`/`hasta`; lo que faltaba era
+              por dónde pedirlo. */}
+          <SelectorPeriodo
+            className="flex-1 min-w-[12rem] sm:flex-none sm:w-64"
+            meses={periods}
+            value={period}
+            onChange={setPeriod}
+          />
+          {period && <span className="ml-1 px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold">{rotuloPeriodo(period)}</span>}
           {/* La puerta a la carga manual: un botón pequeño y pegado al selector, no
               empujado al borde. Existe para el día que Ventra no esté, no para usarlo
               todos los días, así que no tiene por qué llamar la atención. */}

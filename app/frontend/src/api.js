@@ -98,7 +98,40 @@ function base() {
 }
 
 // ---- Consultas (id = uuid | "accumulated") ----
-function q(mes) { return mes ? `?mes=${encodeURIComponent(mes)}` : ""; }
+/**
+ * El periodo, en la forma que espera el backend.
+ *
+ * La pantalla lo maneja como UNA cadena para no tener que tocar las quince vistas que se
+ * la pasan tal cual:
+ *
+ *     null                      todo el acumulado
+ *     "2026-09"                 un mes entero
+ *     "2026-09-01..2026-09-15"  un rango de días
+ *
+ * Aquí se parte: el backend acepta `mes=` o `desde=`/`hasta=`, y el rango manda sobre el
+ * mes. Se hace en un solo sitio a propósito — hay seis llamadas que arman su propia
+ * cadena de consulta, y si cada una lo interpretara por su cuenta bastaría con olvidarse
+ * de una para que esa pantalla enseñara el mes entero mientras las demás enseñan el rango,
+ * sin que nada falle a la vista.
+ */
+export function paramsDePeriodo(mes) {
+  if (!mes) return [];
+  if (String(mes).includes("..")) {
+    const [desde, hasta] = String(mes).split("..");
+
+    return [["desde", desde], ["hasta", hasta]];
+  }
+
+  return [["mes", mes]];
+}
+
+function q(mes) {
+  const pares = paramsDePeriodo(mes);
+
+  if (!pares.length) return "";
+
+  return `?${pares.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&")}`;
+}
 const src = (id) => `${base()}/sources/${id}`;
 
 export async function getDashboard(id, mes = null)  { return (await api.get(`${src(id)}/dashboard${q(mes)}`)).data; }
@@ -111,7 +144,7 @@ export async function getRanking(id, mes = null)    { return (await api.get(`${s
 export async function getClientesAnalisis(id, mes = null, grupos = [], metrica = "importe") {
   const p = new URLSearchParams();
 
-  if (mes) p.set("mes", mes);
+  for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
   for (const g of grupos) p.append("grupo", g);
   if (metrica && metrica !== "importe") p.set("metrica", metrica);
 
@@ -124,7 +157,7 @@ export async function getVendedores(id, mes = null) { return (await api.get(`${s
 export async function getGestorSku(id, mes = null, grupos = [], metrica = "importe") {
   const p = new URLSearchParams();
 
-  if (mes) p.set("mes", mes);
+  for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
   for (const g of grupos) p.append("grupo", g);
   if (metrica && metrica !== "importe") p.set("metrica", metrica);
 
@@ -133,12 +166,22 @@ export async function getGestorSku(id, mes = null, grupos = [], metrica = "impor
   return (await api.get(`${src(id)}/gestor-sku${qs ? `?${qs}` : ""}`)).data;
 }
 export async function getDiario(id, mes = null, gestor = null) {
-  const qs = [mes ? `mes=${encodeURIComponent(mes)}` : "", gestor ? `gestor=${encodeURIComponent(gestor)}` : ""].filter(Boolean).join("&");
+  const p = new URLSearchParams();
+
+  for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
+  if (gestor) p.set("gestor", gestor);
+
+  const qs = p.toString();
   return (await api.get(`${src(id)}/diario${qs ? "?" + qs : ""}`)).data;
 }
 // `dia` = día de corte elegido (para mirar días anteriores). Sin él, el último con datos.
 export async function getMetasGestor(id, mes = null, dia = null) {
-  const qs = [mes ? `mes=${encodeURIComponent(mes)}` : "", dia ? `dia=${encodeURIComponent(dia)}` : ""].filter(Boolean).join("&");
+  const p = new URLSearchParams();
+
+  for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
+  if (dia) p.set("dia", dia);
+
+  const qs = p.toString();
   return (await api.get(`${src(id)}/metas-gestor${qs ? "?" + qs : ""}`)).data;
 }
 export async function getPeriods(id)                { return (await api.get(`${src(id)}/periods`)).data; }
@@ -151,7 +194,11 @@ export async function getPeriods(id)                { return (await api.get(`${s
 export async function downloadExport(id, modulo, mes = null, filtros = {}) {
   const p = new URLSearchParams();
 
-  if (mes) p.set("mes", mes);
+  // El mismo periodo que la pantalla, rango incluido. El endpoint de exportación acepta
+  // `desde`/`hasta` igual que los informes: si aquí se mandara sólo `mes`, el Excel de un
+  // rango saldría con el mes entero — y un fichero que no cuadra con la pantalla de la que
+  // salió acaba reenviado por correo y discutido, sin que nadie sepa cuál mira cuál.
+  for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
   for (const g of filtros.grupos || []) p.append("grupo", g);
   if (filtros.metrica && filtros.metrica !== "importe") p.set("metrica", filtros.metrica);
 
@@ -163,7 +210,8 @@ export async function downloadExport(id, modulo, mes = null, filtros = {}) {
   // que los dos digan lo mismo.
   const partes = [modulo];
 
-  if (mes) partes.push(mes);
+  // En el nombre del fichero, los dos puntos del rango no valen: se escribe `desde_hasta`.
+  if (mes) partes.push(String(mes).replace("..", "_"));
   if ((filtros.grupos || []).length) partes.push(filtros.grupos.map((g) => g.replace(/ /g, "")).join("-"));
   if (filtros.metrica === "cantidad") partes.push("cantidad");
 
