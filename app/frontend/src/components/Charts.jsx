@@ -3,11 +3,10 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -31,17 +30,6 @@ function CustomBarTooltip({ active, payload, label }) {
           {fmt(p.value)}
         </p>
       ))}
-    </div>
-  );
-}
-
-function CustomPieTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null;
-  const p = payload[0];
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-sm">
-      <p className="font-semibold text-slate-700 mb-1">{p.name}</p>
-      <p style={{ color: p.payload.fill }}>{fmt(p.value)}</p>
     </div>
   );
 }
@@ -87,31 +75,75 @@ export function BarCard({ title, data, xKey, yKey, subtitle, tone = "#2563eb" })
   );
 }
 
-export function PieCard({ title, data, nameKey, valueKey, subtitle }) {
+/**
+ * El ranking, en BARRAS HORIZONTALES. Sustituye a la tarta.
+ *
+ * # Por que se quito la tarta
+ *
+ * Repartia el ranking entre mas de VEINTICINCO vendedores. Las etiquetas se montaban unas
+ * encima de otras y la mitad eran ilegibles; y aunque se leyeran, comparar angulos de
+ * porciones parecidas es imposible. Una tarta deja de funcionar pasadas seis porciones.
+ *
+ * En barras horizontales el nombre cabe entero, se ordena solo y se compara de un vistazo,
+ * que es justo lo que se viene a hacer aqui: ver quien va delante.
+ *
+ * # Top N y "otros"
+ *
+ * Con veinticinco barras la pantalla se va de alto y las de abajo no se miran nunca.
+ * Se enseñan las `tope` primeras y el resto se suma en una barra gris "otros", que ademas
+ * dice cuantos son: asi el total sigue cuadrando y nadie cree que faltan vendedores.
+ *
+ * # Un solo color
+ *
+ * El color aqui no significa nada —son personas, no categorias— asi que gastar veinticinco
+ * colores solo hace ruido. Van todas del color de marca, y la unica distinta es "otros",
+ * que si es otra cosa.
+ */
+export function RankingBarras({ title, subtitle, data, nameKey, valueKey, tope = 10, unidad = "" }) {
+  const ordenadas = [...(data || [])].sort((a, b) => (b[valueKey] || 0) - (a[valueKey] || 0));
+  const cabeza = ordenadas.slice(0, tope);
+  const resto = ordenadas.slice(tope);
+  const filas = cabeza.map((d) => ({ nombre: d[nameKey], valor: d[valueKey], otros: false }));
+
+  if (resto.length) {
+    filas.push({
+      nombre: `Otros (${resto.length})`,
+      valor: resto.reduce((s, d) => s + (d[valueKey] || 0), 0),
+      otros: true,
+    });
+  }
+
+  // El alto crece con las filas: con alto fijo, once barras salen aplastadas y una sola
+  // sale como una franja gigante.
+  const alto = Math.max(200, filas.length * 30 + 30);
+
   return (
     <div className="card">
       <div className="mb-2">
         <h3 className="font-semibold text-slate-800">{title}</h3>
         {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
       </div>
-      <div className="h-72">
+      <div style={{ height: alto }}>
         <ResponsiveContainer>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey={valueKey}
-              nameKey={nameKey}
-              cx="50%"
-              cy="50%"
-              outerRadius={90}
-              label={(e) => `${e[nameKey]}: ${fmt(e[valueKey])}`}
-            >
-              {data.map((_, i) => (
-                <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+          <BarChart data={filas} layout="vertical" margin={{ left: 4, right: 56, top: 4, bottom: 4 }}>
+            <CartesianGrid horizontal={false} stroke="#e2e8f0" strokeDasharray="3 3" />
+            <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={fmt} />
+            {/* 130 px de ancho: los nombres son largos y sin esto salen cortados con "…" */}
+            <YAxis type="category" dataKey="nombre" width={130} tick={{ fontSize: 11 }} interval={0} />
+            <Tooltip content={<CustomBarTooltip />} cursor={{ fill: "#f1f5f9" }} />
+            <Bar dataKey="valor" radius={[0, 5, 5, 0]}>
+              {filas.map((f, i) => (
+                <Cell key={i} fill={f.otros ? "#94a3b8" : "#2563eb"} />
               ))}
-            </Pie>
-            <Tooltip content={<CustomPieTooltip />} />
-          </PieChart>
+              {/* El numero al final de cada barra: sin el hay que ir al eje y estimar. */}
+              <LabelList
+                dataKey="valor"
+                position="right"
+                formatter={(v) => `${fmt(v)}${unidad}`}
+                style={{ fontSize: 11, fill: "#475569" }}
+              />
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
       </div>
     </div>

@@ -630,6 +630,69 @@ def src_ventas(sid: str, source_id: str, mes: str | None = Query(default=None), 
     return compute_ventas(report, _eff_scoped(suc, report, mes, user))
 
 
+@app.get("/api/sucursales/{sid}/sources/{source_id}/competencia")
+def src_competencia(sid: str, source_id: str, mes: str | None = Query(default=None),
+                    desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
+                    suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    """La tabla de posiciones de la sucursal: cómo va cada gestor contra su cuota.
+
+    # Por qué existe
+
+    Un gestor sólo ve SUS datos —`_scope_for_user` le recorta la configuración al suyo— y
+    eso está bien: no tiene por qué ver el detalle de la cartera de otro. Pero entonces no
+    puede saber si va bien o mal, porque un 78 % de cumplimiento no significa nada sin saber
+    si los demás van por 60 o por 95.
+
+    Esto le devuelve la tabla de posiciones de su sucursal: quién va delante y en qué puesto
+    está él. Es lo que se pide siempre en un equipo de ventas y es lo que hace que la cifra
+    propia signifique algo.
+
+    # Qué se enseña y qué NO
+
+    Sólo hectolitros, cuota y porcentaje: es lo que se compite y es la meta que todos
+    conocen. **El importe no sale**, ni la comisión, ni el detalle por producto ni por
+    cliente. Saber que un compañero va por delante en hectolitros es sano; saber cuánto
+    dinero hizo, no es asunto suyo.
+
+    Por eso se calcula con `_eff` y NO con `_eff_scoped`: aquí hace falta a propósito la
+    configuración sin recortar, para poder ver a todos. Lo que limita es qué campos salen,
+    no cuántas filas.
+    """
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
+    datos = compute_ventas(report, _eff(suc, report, mes))
+
+    filas = sorted(
+        (
+            {
+                "gestor": g.get("gestor", ""),
+                "hectolitros": float(g.get("total_hectolitros") or 0),
+                "cuota": float(g.get("cuota_hl") or 0),
+                "cumplimiento_pct": float(g.get("cumplimiento_pct") or 0),
+            }
+            for g in (datos.get("gestores") or [])
+        ),
+        # Por cumplimiento y no por hectolitros: quien tiene una cuota pequeña y la cumple
+        # va mejor que quien vende más pero no llega a la suya. Es lo que se premia.
+        key=lambda f: f["cumplimiento_pct"],
+        reverse=True,
+    )
+
+    for i, f in enumerate(filas, start=1):
+        f["puesto"] = i
+
+    # Quién es el que mira, para que la pantalla pueda señalar su fila sin adivinar por
+    # nombre —que se escribe de diez maneras— ni mandar el usuario al navegador.
+    yo = str(user.get("gestor") or "").upper()
+    mio = next((f for f in filas if str(f["gestor"]).upper() == yo), None)
+
+    return {
+        "total": len(filas),
+        "yo": mio["gestor"] if mio else None,
+        "mi_puesto": mio["puesto"] if mio else None,
+        "filas": filas,
+    }
+
+
 @app.get("/api/sucursales/{sid}/sources/{source_id}/productos")
 def src_productos(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)

@@ -184,6 +184,11 @@ export async function getMetasGestor(id, mes = null, dia = null) {
   const qs = p.toString();
   return (await api.get(`${src(id)}/metas-gestor${qs ? "?" + qs : ""}`)).data;
 }
+// La tabla de posiciones de la sucursal: como va cada gestor contra SU cuota.
+// Solo hectolitros y porcentaje — el importe y la comision de los demas no salen.
+export async function getCompetencia(id, mes = null) {
+  return (await api.get(`${src(id)}/competencia${q(mes)}`)).data;
+}
 export async function getPeriods(id)                { return (await api.get(`${src(id)}/periods`)).data; }
 
 // ---- Descarga de export (con auth → blob) ----

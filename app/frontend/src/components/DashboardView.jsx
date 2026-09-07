@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
 import { getDashboard } from "../api.js";
 import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
-import { BarCard, PieCard } from "./Charts.jsx";
-import { Buscador, ContadorFiltro, TablaScroll, useFiltroTabla } from "./ui.jsx";
+import { RankingBarras } from "./Charts.jsx";
+import { Competencia } from "./Competencia.jsx";
 
 export default function DashboardView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
-  // Antes de las salidas tempranas: un hook no puede llamarse a veces sí y a veces no.
-  const { q, setQ, filtradas: cumplimiento } = useFiltroTabla(data?.cumplimiento_productos);
-
   useEffect(() => {
     // `cancelled` descarta respuestas VIEJAS: al abrir, el periodo aún es null y se pide el
     // acumulado (lento, muchas filas); cuando entra el mes se pide lo filtrado (rápido). Sin
@@ -26,11 +23,6 @@ export default function DashboardView({ sourceId, period }) {
   if (!data) return <div className="p-6">Cargando…</div>;
 
   const { kpis } = data;
-  const gestoresBar = data.gestores_ventas.map((g) => ({
-    gestor: g.gestor,
-    hectolitros: g.total_hectolitros,
-  }));
-  const rankingPie = data.ranking_general.map((r) => ({ name: r.vendedor, value: r.ventas }));
 
   return (
     <div className="space-y-6">
@@ -40,6 +32,15 @@ export default function DashboardView({ sourceId, period }) {
           <p className="text-sm text-slate-500">
             {sourceId === "accumulated" ? "Acumulado global · " : ""}
             Periodo: {data.rango} · {data.filas.toLocaleString("es-CO")} filas
+          </p>
+          {/* Dónde fue a parar lo que estaba aquí.
+              Se quitaron dos bloques que eran copia literal de otras pestañas —el gráfico
+              de hectolitros por gestor y la tabla de cumplimiento por producto—, y quien
+              los buscaba tiene que poder encontrarlos sin preguntar. Este aviso se borra
+              cuando la gente ya sepa dónde están. */}
+          <p className="text-xs text-slate-400 mt-1">
+            Los hectolitros por gestor están en <b>Ventas (HL)</b> · el cumplimiento por
+            producto, en <b>Productos</b>.
           </p>
         </div>
       </div>
@@ -53,10 +54,26 @@ export default function DashboardView({ sourceId, period }) {
           hint={`${formatInt(kpis.total_skus)} SKUs vendidos`} tone="brand" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <BarCard title="Hectolitros por gestor" subtitle="MALTA + PARRANDA" data={gestoresBar} xKey="gestor" yKey="hectolitros" />
-        <PieCard title="Ranking general de ventas" subtitle="Participación por vendedor" data={rankingPie} nameKey="name" valueKey="value" />
-      </div>
+      {/* UN SOLO GRÁFICO PRINCIPAL, y es el que contesta «¿quién está tirando?».
+          Aquí había dos del mismo tamaño compitiendo: «Hectolitros por gestor» —que es
+          EXACTAMENTE el mismo panel que abre la pestaña Ventas (HL)— y la tarta del
+          ranking. El primero se quitó por repetido; el segundo pasó a barras porque una
+          tarta con veinticinco porciones no se puede leer. */}
+      <RankingBarras
+        data={data.ranking_general}
+        nameKey="vendedor"
+        subtitle="Los diez primeros por importe vendido. El resto va sumado en «otros»."
+        title="Quién vende más"
+        valueKey="ventas"
+      />
+
+      {/* LA TABLA DE POSICIONES.
+          Va aquí, en la primera pantalla, y no en una pestaña propia: es lo primero que
+          quiere saber quien entra —«¿voy bien?»— y una cifra de cumplimiento no significa
+          nada sin saber por dónde van los demás.
+          Se pinta sola o no se pinta: en «Todas las sucursales» no aplica y desaparece sin
+          dejar un hueco. */}
+      <Competencia period={period} sourceId={sourceId} />
 
       {/* Desglose GENERAL por formato (hectolitros, no dinero) — cada SKU de Parranda y Malta */}
       {Array.isArray(data.desglose_formato) && data.desglose_formato.length > 0 && (
@@ -100,51 +117,6 @@ export default function DashboardView({ sourceId, period }) {
         </div>
       )}
 
-      <div className="card">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-semibold">Cumplimiento de metas por producto</h3>
-          <Buscador onChange={setQ} placeholder="Producto o grupo…" value={q} />
-        </div>
-        <ContadorFiltro mostradas={cumplimiento.length} q={q} total={(data.cumplimiento_productos || []).length} />
-        <TablaScroll>
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th className="px-3 py-2 text-left">Producto</th>
-                <th className="px-3 py-2 text-left">Grupo</th>
-                <th className="px-3 py-2 text-right">Meta</th>
-                <th className="px-3 py-2 text-right">Real</th>
-                <th className="px-3 py-2 text-right">% Cumpl.</th>
-                <th className="px-3 py-2 text-right">Debería</th>
-                <th className="px-3 py-2 text-right">Delta</th>
-                <th className="px-3 py-2 text-right">Nec/día</th>
-                <th className="px-3 py-2 text-center">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cumplimiento.map((p) => (
-                <tr key={p.producto} className="border-t border-slate-100">
-                  <td className="px-3 py-2 font-medium">{p.producto}</td>
-                  <td className="px-3 py-2">{p.grupo ? <span className="badge-slate">{p.grupo}</span> : <span className="text-slate-300">—</span>}</td>
-                  <td className="px-3 py-2 text-right">{formatNumber(p.meta, 0)}</td>
-                  <td className="px-3 py-2 text-right">{formatNumber(p.real, 2)}</td>
-                  <td className="px-3 py-2 text-right">{formatNumber(p.cumplimiento_pct, 1)}%</td>
-                  <td className="px-3 py-2 text-right">{formatNumber(p.deberia, 2)}</td>
-                  <td className={`px-3 py-2 text-right font-semibold ${p.delta >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {formatNumber(p.delta, 2)}
-                  </td>
-                  <td className="px-3 py-2 text-right">{formatNumber(p.necesario_por_dia, 2)}</td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${
-                      p.estado === "ok" ? "bg-emerald-500" : p.estado === "alerta" ? "bg-amber-500" : "bg-red-500"
-                    }`} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TablaScroll>
-      </div>
     </div>
   );
 }
