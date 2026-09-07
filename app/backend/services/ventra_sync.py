@@ -185,11 +185,34 @@ def recuperar(desde: date, hasta: date | None = None, base: str | None = None) -
     return total
 
 
+# Cada cuántas vueltas se hace el repaso ancho en vez de traer sólo el día. Con una
+# vuelta por hora, 12 son dos veces al día.
+VUELTAS_POR_REPASO = int(os.environ.get("VENTRA_VUELTAS_POR_REPASO", "12"))
+
+
 def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
-    """Trae lo de los últimos días, cada hora, para siempre.
+    """Trae lo nuevo cada hora, y de vez en cuando repasa unos días atrás.
 
     Es un bucle y no una tarea programada porque Dokploy no expone programaciones por
     API: teniéndolo dentro, el worker se despliega como cualquier otra aplicación.
+
+    # Por qué no se traen tres días CADA hora
+
+    Se hacía así, y era caro para nada: tres días de las diez bases son unas quince mil
+    líneas por hora, cruzando una VPN que se cae, para reescribir encima casi siempre lo
+    mismo. El histórico ya está traído —149.459 líneas desde enero, el 07/09/2026—, así
+    que lo único que se mueve de verdad es el día en curso.
+
+    Ahora la vuelta normal trae **sólo hoy**, que es un tercio de eso. El repaso de varios
+    días sigue existiendo pero se hace cada `VUELTAS_POR_REPASO` vueltas (por defecto 12,
+    o sea dos veces al día).
+
+    # Y por qué el repaso no se puede quitar del todo
+
+    Una factura puede entrar en Ventra con un día o dos de retraso, y Ventra también las
+    corrige. Trayendo sólo hoy y nada más, esa entrada tardía no la alcanzaría nadie y el
+    informe de ese día se quedaría corto para siempre, sin que nada fallara a la vista.
+    Repetir un tramo no duplica: se escribe con ON CONFLICT DO UPDATE.
 
     Nunca revienta. Ventra está al otro lado de una VPN que se cae, y un worker que se
     muere en el primer fallo deja de traer datos hasta que alguien lo mira — que suele
@@ -201,18 +224,28 @@ def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
     # en el primer segundo no dice nada de si esto funciona.
     time.sleep(int(os.environ.get("VENTRA_ESPERA_INICIAL_S", "60")))
 
+    vuelta = 0
+
     while True:
+        # La primera vuelta sí repasa: si el proceso acaba de arrancar, puede llevar
+        # horas parado y lo de esos días no lo ha traído nadie.
+        repaso = vuelta % VUELTAS_POR_REPASO == 0
+        cuantos = dias if repaso else 1
+
         try:
-            r = al_dia(dias)
+            r = al_dia(cuantos)
             vivas = {k: v for k, v in r.items() if v >= 0}
             caidas = [k for k, v in r.items() if v < 0]
             log.info(
-                "[ventra] %d lineas de %d bases%s",
+                "[ventra] %d lineas de %d bases · %s%s",
                 sum(vivas.values()), len(vivas),
+                f"repaso de {cuantos} dias" if repaso else "sólo hoy",
                 f" · fallaron {', '.join(caidas)}" if caidas else "",
             )
         except Exception as e:  # noqa: BLE001
             log.exception("[ventra] la pasada fallo entera: %s", e)
+
+        vuelta += 1
         time.sleep(cada_s)
 
 
