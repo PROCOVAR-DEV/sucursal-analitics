@@ -24,34 +24,115 @@ import FiltroMulti from "./FiltroMulti.jsx";
  * evitar.
  */
 /**
- * El nombre del producto, corto, para que quepa de cabecera.
+ * Etiquetas cortas para las cabeceras, calculadas MIRANDO TODA LA TABLA.
+ *
+ * # Por qué no vale acortar cada nombre por su cuenta
  *
  * «CERVEZA PARRANDA 1500 ML BLISTER 6U» de cabecera ocupa media pantalla, y con veinte
- * productos la tabla se va tan a la derecha que no se lee ni una fila entera. Pero cortar
- * por la mitad tampoco vale: «CERVEZA PARRAN…» y «CERVEZA PARRAN…» de dos formatos
- * distintos se leen igual.
+ * productos la tabla se va tan a la derecha que no se lee una fila entera. Pero la primera
+ * versión de esto acortaba cada nombre aislado, y al probarla contra los productos de
+ * verdad **cuatro de cada cuarenta quedaban con la misma etiqueta**:
  *
- * Lo que distingue de verdad a un producto de otro son dos cosas: de qué es y de qué
- * tamaño. Así que se queda la primera palabra con contenido y el TAMAÑO —el número con su
- * unidad— y se tiran las de relleno, que están en todos y no separan nada.
+ *     DETERGENTE KAPITAL 1000ML   <- INDUSTRIAL, LAVADO 10U y LAVADO 12U
+ *     ENERGIZANTE GO+ 24U         <- AZUL, DAY ROJO y NIGHT NEGRO
  *
- * El nombre entero sigue estando, en el `title`: pasando por encima se lee completo.
+ * Dos columnas con el mismo rótulo son peores que un rótulo largo: se lee mal y encima no
+ * se sabe cuál es cuál.
+ *
+ * Lo que distingue a un producto no está en el nombre suelto: está en **con cuáles
+ * compite**. «LAVADO» sobra si no hay ningún «INDUSTRIAL» al lado, y hace falta si lo hay.
+ * Así que se corta contra el conjunto: se prueba con dos palabras, y sólo si choca con otro
+ * se le añade una más, hasta que sea única.
+ *
+ * El nombre entero sigue estando en el `title`.
  */
-const RELLENO = new Set(["DE", "DEL", "LA", "EL", "CON", "PACA", "BLISTER", "CAJA", "PACK", "UND", "U"]);
+const RELLENO = new Set(["DE", "DEL", "LA", "EL", "CON", "PARA", "PACA", "BLISTER", "CAJA", "PACK", "UND", "SACO"]);
+// Dos clases de unidad, y no valen lo mismo.
+// MEDIDA es lo que contiene el envase —500 G, 1500 ML, 13 PIES— y es lo que distingue un
+// formato de otro. CUENTA es cuántos vienen en la caja —24 U— y es de logística.
+const MEDIDA = /^(ML|L|KG|G|M|CM|WH|PIES)$/;
+const CUENTA = /^(U|UND|P|PUERTA)$/;
+// Anclada, y escrita entera. Construirla juntando las otras dos con `.source` dejaba una
+// expresión SIN anclas, y entonces «AZUCAR» contaba como unidad por llevar una U dentro y
+// «ENERGY» por la G: el cuerpo del nombre se vaciaba y la etiqueta quedaba en «10KG».
+const UNIDADES = /^(ML|L|KG|G|M|CM|WH|PIES|U|UND|P|PUERTA)$/;
 
-export function nombreCorto(nombre) {
-  const limpio = String(nombre || "").trim().toUpperCase();
+/**
+ * El tamaño que va en la etiqueta.
+ *
+ * Se prefiere la MEDIDA sobre la cuenta. «DETERGENTE BOW 500 G PACA 40U» es el de medio
+ * kilo; que vengan cuarenta por paca no lo distingue de nada, porque la paca cambia sin que
+ * cambie el producto. Cogiendo el último número con unidad salía «BOW 40U», que dice lo de
+ * menos.
+ *
+ * Se busca de derecha a izquierda porque cuando hay varios números el del final suele ser
+ * el del envase: «AZUCAR ENERGY ICUMSA 45 10 KG» son diez kilos, no cuarenta y cinco.
+ */
+function tamanoDe(palabras) {
+  const buscar = (unidad) => {
+    for (let i = palabras.length - 1; i >= 0; i--) {
+      const w = palabras[i];
+      const pegado = /^(\d+([.,]\d+)?)([A-Z]+)$/.exec(w);
 
-  if (limpio.length <= 16) return limpio;
+      if (pegado && unidad.test(pegado[3])) return pegado[0];
+      if (/^\d+([.,]\d+)?$/.test(w) && unidad.test(palabras[i + 1] || "")) {
+        return w + palabras[i + 1];
+      }
+    }
 
-  const palabras = limpio.split(/\s+/);
-  // El tamaño: un número pegado o seguido de su unidad. Es lo que separa un formato de otro.
-  const tamano = palabras.find((w) => /^\d+([.,]\d+)?(ML|L|KG|G|M|CM|U)?$/.test(w));
-  const i = tamano ? palabras.indexOf(tamano) : -1;
-  const unidad = i >= 0 && /^(ML|L|KG|G|M|CM|U)$/.test(palabras[i + 1] || "") ? palabras[i + 1] : "";
-  const cuerpo = palabras.filter((w, j) => j !== i && j !== (unidad ? i + 1 : -1) && !RELLENO.has(w) && !/^\d/.test(w));
+    return "";
+  };
 
-  return [...cuerpo.slice(0, 2), tamano ? tamano + unidad : ""].filter(Boolean).join(" ");
+  return buscar(MEDIDA) || buscar(CUENTA);
+}
+
+export function etiquetasCortas(nombres) {
+  const desglose = new Map();
+
+  for (const n of nombres) {
+    const limpio = String(n || "").trim().toUpperCase();
+    const palabras = limpio.split(/\s+/);
+    const tam = tamanoDe(palabras);
+    // Fuera el relleno, los números sueltos y los trozos del tamaño: lo que queda son las
+    // palabras que de verdad nombran el producto.
+    // La PRIMERA palabra no se tira nunca, aunque esté en la lista de relleno: es la que
+    // dice de qué es el producto. En «CAJA PARA BUFFET», CAJA es el producto —son cajas de
+    // cartón— y quitarla dejaba «PARA BUFFET», que no se entiende. En «ACEITE SOYA CAJA
+    // 20U», la de en medio sí sobra.
+    const cuerpo = palabras.filter(
+      (w, j) => (j === 0 || !RELLENO.has(w)) && !/^\d/.test(w) && !UNIDADES.test(w),
+    );
+
+    desglose.set(n, { cuerpo, tam, limpio });
+  }
+
+  const salida = new Map();
+
+  for (const n of nombres) {
+    const { cuerpo, tam, limpio } = desglose.get(n);
+    let etiqueta = limpio;
+
+    for (let k = 2; k <= Math.max(2, cuerpo.length); k++) {
+      const cand = [...cuerpo.slice(0, k), tam].filter(Boolean).join(" ");
+      // ¿La comparte con algún otro producto de esta misma tabla?
+      const choca = nombres.some((m) => {
+        if (m === n) return false;
+
+        const o = desglose.get(m);
+
+        return [...o.cuerpo.slice(0, k), o.tam].filter(Boolean).join(" ") === cand;
+      });
+
+      if (!choca) {
+        etiqueta = cand;
+        break;
+      }
+    }
+
+    salida.set(n, etiqueta || limpio);
+  }
+
+  return salida;
 }
 
 export default function GestorSkuView({ sourceId, period }) {
@@ -141,6 +222,11 @@ export default function GestorSkuView({ sourceId, period }) {
 
     return !q || !porProducto.length ? data.productos : porProducto;
   }, [data, filtro]);
+
+  // Las etiquetas se calculan contra LAS COLUMNAS QUE SE VEN, y por eso va aquí y no
+  // arriba: al filtrar por grupo quedan menos productos, y con menos competencia hacen
+  // falta menos palabras para distinguirlos.
+  const etiquetas = useMemo(() => etiquetasCortas(columnas), [columnas]);
 
   const filasMatriz = useMemo(() => {
     if (!data) return [];
@@ -286,7 +372,7 @@ export default function GestorSkuView({ sourceId, period }) {
                       className="py-2 px-3 text-right align-bottom text-xs font-semibold leading-tight max-w-[7.5rem]"
                       title={p}
                     >
-                      {nombreCorto(p)}
+                      {etiquetas.get(p) || p}
                     </th>
                   ))}
                   <th className="py-2 pl-3 text-right font-semibold sticky right-0 bg-white z-20 shadow-[-2px_0_4px_-2px_rgba(0,0,0,.15)]">Total</th>
