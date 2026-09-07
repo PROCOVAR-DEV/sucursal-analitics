@@ -988,6 +988,137 @@ def all_dashboard(source_id: str, mes: str | None = Query(default=None), desde: 
     return agg
 
 
+def _aggregate_productos(items: list[dict]) -> dict:
+    """Combina el informe de Productos de varias sucursales en uno.
+
+    # Qué se suma y qué se recalcula
+
+    Los importes, las cantidades, las metas y lo real se SUMAN por producto. El porcentaje
+    de cumplimiento NO se promedia: se vuelve a calcular sobre los totales. Promediar
+    porcentajes da un número que no significa nada —una sucursal con meta de 10 pesaría lo
+    mismo que una con meta de 1.000—.
+
+    Los días laborales se toman por el máximo y no sumados: son los días del MES, los
+    mismos para todas; sumarlos daría ochenta días de septiembre.
+
+    # Por qué se puede combinar
+
+    Cada sucursal llega ya calculada con SU configuración —sus metas, sus grupos, sus
+    alias—, así que aquí sólo se suman resultados. No se cruzan gestores ni metas entre
+    sucursales, que es lo que haría que los números dejaran de cuadrar con los de cada una.
+    """
+    dias_tot = max((it.get("dias_laborales_totales") or 0) for it in items) if items else 0
+    dias_trans = max((it.get("dias_laborales_transcurridos") or 0) for it in items) if items else 0
+    dias_rest = max(0, dias_tot - dias_trans)
+
+    def sumar_resumen(clave: str) -> list[dict]:
+        acc: dict[str, dict] = {}
+
+        for it in items:
+            for r in it.get(clave) or []:
+                e = acc.setdefault(str(r.get("producto", "")).upper(),
+                                   {"producto": r.get("producto", ""), "total": 0.0, "cantidad": 0.0})
+                e["total"] += r.get("total") or 0
+                e["cantidad"] += r.get("cantidad") or 0
+
+        return sorted(
+            ({"producto": e["producto"], "total": round(e["total"], 2), "cantidad": round(e["cantidad"], 2)}
+             for e in acc.values()),
+            key=lambda x: -x["total"],
+        )
+
+    # Los grupos, en el orden en que los tenga la primera sucursal que los traiga: son los
+    # mismos para todas, pero si alguna añade uno nuevo entra al final en vez de perderse.
+    orden: list[str] = []
+    for it in items:
+        for g in it.get("groups_order") or []:
+            if g not in orden:
+                orden.append(g)
+
+    por_grupo: dict[str, list[dict]] = {}
+    for g in orden:
+        acc: dict[str, dict] = {}
+        for it in items:
+            for r in (it.get("resumen_por_grupo") or {}).get(g) or []:
+                e = acc.setdefault(str(r.get("producto", "")).upper(),
+                                   {"producto": r.get("producto", ""), "total": 0.0, "cantidad": 0.0})
+                e["total"] += r.get("total") or 0
+                e["cantidad"] += r.get("cantidad") or 0
+        por_grupo[g] = sorted(
+            ({"producto": e["producto"], "total": round(e["total"], 2), "cantidad": round(e["cantidad"], 2)}
+             for e in acc.values()),
+            key=lambda x: -x["total"],
+        )
+
+    cump: dict[str, dict] = {}
+    for it in items:
+        for c in it.get("cumplimiento") or []:
+            e = cump.setdefault(str(c.get("producto", "")).upper(), {
+                "producto": c.get("producto", ""), "grupo": c.get("grupo"),
+                "meta": 0.0, "real": 0.0, "deberia": 0.0,
+            })
+            e["meta"] += c.get("meta") or 0
+            e["real"] += c.get("real") or 0
+            e["deberia"] += c.get("deberia") or 0
+
+    cumplimiento = []
+    for e in cump.values():
+        meta, real, deberia = round(e["meta"], 2), round(e["real"], 2), round(e["deberia"], 2)
+        delta = round(real - deberia, 2)
+        cumplimiento.append({
+            "producto": e["producto"], "grupo": e["grupo"], "meta": meta, "real": real,
+            "cumplimiento_pct": round((real / meta * 100) if meta else 0.0, 2),
+            "deberia": deberia, "delta": delta,
+            "prom_diario": round(real / dias_trans, 2) if dias_trans else 0.0,
+            "necesario_por_dia": round(max(0.0, (meta - real) / dias_rest), 2) if dias_rest else 0.0,
+            # El mismo criterio que en una sola sucursal, para que el semáforo diga lo mismo.
+            "estado": "ok" if delta >= 0 else ("alerta" if real >= 0.8 * deberia else "critico"),
+        })
+    cumplimiento.sort(key=lambda x: -x["real"])
+
+    return {
+        "rango": "", "periodo": None,
+        "dias_laborales_totales": dias_tot,
+        "dias_laborales_transcurridos": dias_trans,
+        "dias_laborales_restantes": dias_rest,
+        "resumen_ces": sumar_resumen("resumen_ces"),
+        "resumen_procovar": sumar_resumen("resumen_procovar"),
+        "resumen_por_grupo": por_grupo,
+        "groups_order": orden,
+        "cumplimiento": cumplimiento,
+        # El detalle por gestor NO se combina: un gestor pertenece a una sucursal y
+        # juntarlos aquí mezclaría metas de configuraciones distintas. Para eso está la
+        # vista de la sucursal.
+        "por_gestor": [],
+    }
+
+
+@app.get("/api/all/sources/{source_id}/productos")
+def all_productos(source_id: str, mes: str | None = Query(default=None),
+                  desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
+                  user: dict = Depends(current_user)) -> dict:
+    """«Qué se vende» en TODAS las sucursales a la vez.
+
+    Es la pregunta de dirección: qué producto se mueve en la empresa y cuál no llega a su
+    meta. Antes había que entrar sucursal por sucursal y sumar a mano en un Excel.
+    """
+    salida = []
+
+    for suc in _allowed_sucursales_full(user):
+        rep = _fuente_o_none(suc["id"], source_id)
+
+        if rep is None:
+            continue
+
+        rep = filter_by_period(rep, mes, desde, hasta)
+        salida.append(compute_productos(rep, _eff_scoped(suc, rep, mes, user)))
+
+    agg = _aggregate_productos(salida)
+    agg["rango"] = mes or "Todo (acumulado)"
+
+    return agg
+
+
 @app.get("/api/all/sources/{source_id}/periods")
 def all_periods(source_id: str, user: dict = Depends(current_user)) -> dict:
     ps: set[str] = set()

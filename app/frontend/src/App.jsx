@@ -322,7 +322,12 @@ export default function App() {
                     <UploadPanel sourceId={sourceId} onSelect={setSourceId} key={sid} />
                   </div>
                 )}
-                {sid && (isAll && view !== "comovamos" ? (
+                {/* Las que SÍ se pueden combinar entre sucursales.
+                  «Cómo vamos» y «Qué se vende» tienen su endpoint `/api/all` que suma las
+                  sucursales permitidas; las demás son de una sucursal concreta —metas,
+                  cuotas y gestores son suyos— y combinarlas daría números que no cuadran
+                  con los de ninguna. */}
+                {sid && (isAll && !["comovamos", "productos"].includes(view) ? (
                   <div className="p-8 text-center text-slate-400">
                     Elige una sucursal específica para ver «{viewLabel}». Combinar sucursales sólo
                     funciona en <b>Cómo vamos</b>, y ahí sólo en el panorama: el detalle por gestor,
