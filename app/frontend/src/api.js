@@ -189,6 +189,11 @@ export async function getMetasGestor(id, mes = null, dia = null) {
 export async function getCompetencia(id, mes = null) {
   return (await api.get(`${src(id)}/competencia${q(mes)}`)).data;
 }
+// Cuando entro por ultima vez algo de Ventra. Para la linea de la cabecera que dice si
+// los datos estan al dia: hasta ahora habia que entrar al servidor para saberlo.
+export async function getVentraEstado() {
+  return (await api.get("/ventra/estado")).data;
+}
 export async function getPeriods(id)                { return (await api.get(`${src(id)}/periods`)).data; }
 
 // ---- Descarga de export (con auth → blob) ----

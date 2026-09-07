@@ -179,30 +179,73 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
         </div>
       )}
 
-      {/* Comisión individual del vendedor.
-          El descuento del supervisor va en su propia casilla: un neto más bajo sin
-          decir de dónde salió la diferencia es lo que hace que alguien piense que le
-          quitaron dinero sin avisar. */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <Kpi label="Comisión" value={formatMoney(vendor.comision)} tone="green" />
-        <Kpi label="Ventas sin pedido" value={formatInt(vendor.sin_pedido || 0)} tone="slate" />
-        <Kpi label="Descuento sin pedido" value={vendor.descuento ? "-" + formatMoney(vendor.descuento) : formatMoney(0)}
-          tone={vendor.descuento > 0 ? "red" : "slate"} />
-        {/* Al supervisor no se le descuenta: se le SUMA lo del equipo. Enseñarle un
-            "descuento supervisor" a quien ES el supervisor era cobrarle su propia
-            comisión. */}
-        {vendor.es_supervisor ? (
-          <Kpi label="Comisión del equipo (10%)"
-            value={"+" + formatMoney(vendor.comision_de_los_gestores || 0)}
-            tone="green" />
-        ) : (
-          <Kpi label="Comisión supervisor"
-            value={vendor.comision_supervisor ? "-" + formatMoney(vendor.comision_supervisor) : formatMoney(0)}
-            tone={vendor.comision_supervisor > 0 ? "amber" : "slate"} />
-        )}
-        <Kpi label={vendor.es_supervisor ? "Total a cobrar" : "Comisión neta"}
-          value={formatMoney(vendor.es_supervisor ? vendor.comision_total_supervisor : vendor.comision_neta)}
-          tone="brand" />
+      {/* LA COMISIÓN, COMO UNA CUENTA — no como cinco recuadros sueltos.
+          Eran cinco casillas en fila y una comisión no son cinco cifras independientes:
+          es una resta. En recuadros no se ve que el neto salga de las de al lado, así
+          que quien cobraba menos de lo que esperaba no tenía forma de comprobar de
+          dónde salió la diferencia — que es justo lo que hace pensar que le quitaron
+          dinero sin avisar.
+          Escrita como un recibo, la cuenta se sigue con el dedo y cuadra a la vista. */}
+      <div className="card">
+        <h3 className="font-semibold text-slate-800 mb-1">
+          {vendor.es_supervisor ? "Lo que cobra el supervisor" : "Lo que cobra el gestor"}
+        </h3>
+        <p className="text-xs text-slate-500 mb-3">
+          De la comisión bruta al neto, línea a línea.
+        </p>
+        <table className="w-full text-sm">
+          <tbody>
+            <tr className="border-b border-slate-100">
+              <td className="py-2 text-slate-600">Comisión sobre lo vendido</td>
+              <td className="py-2 text-right tabular-nums font-medium">{formatMoney(vendor.comision)}</td>
+            </tr>
+            <tr className="border-b border-slate-100">
+              <td className="py-2 text-slate-600">
+                Descuento por ventas sin pedido
+                {/* Cuántas fueron, aquí y no en su propio recuadro: el número solo no
+                    dice nada, lo que importa es cuánto costaron. */}
+                <span className="ml-1 text-xs text-slate-400">
+                  ({formatInt(vendor.sin_pedido || 0)} {vendor.sin_pedido === 1 ? "venta" : "ventas"})
+                </span>
+              </td>
+              <td className={`py-2 text-right tabular-nums ${vendor.descuento > 0 ? "text-red-600" : "text-slate-400"}`}>
+                {vendor.descuento ? `− ${formatMoney(vendor.descuento)}` : formatMoney(0)}
+              </td>
+            </tr>
+            {/* Al supervisor no se le descuenta: se le SUMA lo del equipo. Enseñarle un
+                «descuento supervisor» a quien ES el supervisor era cobrarle su propia
+                comisión. */}
+            {vendor.es_supervisor ? (
+              <tr className="border-b border-slate-100">
+                <td className="py-2 text-slate-600">
+                  Comisión del equipo
+                  <span className="ml-1 text-xs text-slate-400">(10 % de cada gestor)</span>
+                </td>
+                <td className="py-2 text-right tabular-nums text-emerald-600">
+                  + {formatMoney(vendor.comision_de_los_gestores || 0)}
+                </td>
+              </tr>
+            ) : (
+              <tr className="border-b border-slate-100">
+                <td className="py-2 text-slate-600">
+                  Parte del supervisor
+                  <span className="ml-1 text-xs text-slate-400">(10 % de la tuya)</span>
+                </td>
+                <td className={`py-2 text-right tabular-nums ${vendor.comision_supervisor > 0 ? "text-amber-600" : "text-slate-400"}`}>
+                  {vendor.comision_supervisor ? `− ${formatMoney(vendor.comision_supervisor)}` : formatMoney(0)}
+                </td>
+              </tr>
+            )}
+            <tr>
+              <td className="pt-3 font-semibold text-slate-800">
+                {vendor.es_supervisor ? "Total a cobrar" : "Comisión neta"}
+              </td>
+              <td className="pt-3 text-right tabular-nums text-lg font-bold text-brand-700">
+                {formatMoney(vendor.es_supervisor ? vendor.comision_total_supervisor : vendor.comision_neta)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {/* HL breakdown table — con selector de SEMANA (mismo desglose, filtrado por semana) */}

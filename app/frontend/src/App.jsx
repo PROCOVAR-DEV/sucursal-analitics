@@ -11,6 +11,7 @@ import ReportesView from "./components/ReportesView.jsx";
 import { ALL_SID, getPeriods, getToken, listSucursales, logout, me, setSucursal } from "./api.js";
 import { Picker } from "./components/ui.jsx";
 import { SelectorPeriodo, rotuloPeriodo } from "./components/SelectorPeriodo.jsx";
+import { FrescuraDatos } from "./components/FrescuraDatos.jsx";
 
 /**
  * CUATRO PREGUNTAS, NO NUEVE PESTAÑAS.
@@ -235,6 +236,9 @@ export default function App() {
             onChange={setPeriod}
           />
           {period && <span className="ml-1 px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold">{rotuloPeriodo(period)}</span>}
+          {/* Cuándo entraron los datos por última vez. Va aquí, al lado del periodo,
+              porque es la misma pregunta: qué estoy mirando exactamente. */}
+          <span className="ml-auto shrink-0"><FrescuraDatos /></span>
           {/* La puerta a la carga manual: un botón pequeño y pegado al selector, no
               empujado al borde. Existe para el día que Ventra no esté, no para usarlo
               todos los días, así que no tiene por qué llamar la atención. */}
@@ -323,11 +327,11 @@ export default function App() {
                   </div>
                 )}
                 {/* Las que SÍ se pueden combinar entre sucursales.
-                  «Cómo vamos» y «Qué se vende» tienen su endpoint `/api/all` que suma las
-                  sucursales permitidas; las demás son de una sucursal concreta —metas,
-                  cuotas y gestores son suyos— y combinarlas daría números que no cuadran
+                  «Cómo vamos», «Qué se vende» y «Clientes» tienen su endpoint `/api/all`
+                  que suma las sucursales permitidas. «Quién vende» no: metas, cuotas y
+                  gestores son de cada sucursal, y combinarlos daría números que no cuadran
                   con los de ninguna. */}
-                {sid && (isAll && !["comovamos", "productos"].includes(view) ? (
+                {sid && (isAll && !["comovamos", "productos", "clientes"].includes(view) ? (
                   <div className="p-8 text-center text-slate-400">
                     Elige una sucursal específica para ver «{viewLabel}». Combinar sucursales sólo
                     funciona en <b>Cómo vamos</b>, y ahí sólo en el panorama: el detalle por gestor,

@@ -1119,6 +1119,144 @@ def all_productos(source_id: str, mes: str | None = Query(default=None),
     return agg
 
 
+def _aggregate_clientes(items: list[tuple[str, dict]]) -> dict:
+    """Junta el análisis de clientes de varias sucursales.
+
+    # Los clientes NO se fusionan por nombre
+
+    Un cliente pertenece a UNA sucursal —así está en PEDIDO—, así que dos clientes con el
+    mismo nombre en dos sucursales no son el mismo negocio: son dos. Sumarlos por nombre
+    inventaría un cliente que compra el doble y que no existe.
+
+    Por eso las filas se apilan tal cual y se les pega su sucursal al lado. Dos «CAFETERÍA
+    EL SOL» se ven como lo que son, dos, y se distinguen sin adivinar.
+
+    # Los SKU sí se suman
+
+    Un producto es el mismo en todas partes, así que ahí sumar es correcto y es lo que se
+    quiere: qué se vende más en la empresa entera.
+    """
+    skus: dict[str, dict] = {}
+    clientes: list[dict] = []
+    disponibles: list[str] = []
+
+    for sucursal, it in items:
+        of = it.get("oficina") or {}
+
+        for s in of.get("skus") or []:
+            e = skus.setdefault(str(s.get("sku", "")), {"sku": s.get("sku", ""), "total": 0.0})
+            e["total"] += s.get("total") or 0
+
+        for c in of.get("clientes") or []:
+            fila = dict(c)
+            # De qué sucursal es, en su propio campo y también en la etiqueta: la tabla
+            # enseña el nombre, y sin esto dos negocios distintos se leen como uno mal
+            # sumado.
+            fila["sucursal"] = sucursal
+            fila["cliente"] = f"{c.get('cliente', '')} · {sucursal}"
+            clientes.append(fila)
+
+        for g in it.get("grupos_disponibles") or []:
+            if g not in disponibles:
+                disponibles.append(g)
+
+    clientes.sort(key=lambda c: -(c.get("total") or 0))
+    lista_skus = sorted(
+        ({"sku": e["sku"], "total": round(e["total"], 2)} for e in skus.values()),
+        key=lambda s: -s["total"],
+    )
+
+    return {
+        "rango": "",
+        "periodo": None,
+        "grupos_disponibles": disponibles,
+        "grupos": [],
+        "metrica": items[0][1].get("metrica", "importe") if items else "importe",
+        "oficina": {
+            "skus": lista_skus,
+            "clientes": clientes,
+            "total": round(sum(c.get("total") or 0 for c in clientes), 2),
+            "num_clientes": len(clientes),
+            "num_skus": len(lista_skus),
+        },
+        # El desglose por gestor no se combina: un gestor es de una sucursal.
+        "por_gestor": [],
+    }
+
+
+@app.get("/api/all/sources/{source_id}/clientes-analisis")
+def all_clientes_analisis(source_id: str, mes: str | None = Query(default=None),
+                          desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
+                          grupo: list[str] = Query(default=[]), metrica: str = Query(default="importe"),
+                          user: dict = Depends(current_user)) -> dict:
+    """«A quién le vendemos» en TODAS las sucursales a la vez."""
+    salida = []
+
+    for suc in _allowed_sucursales_full(user):
+        rep = _fuente_o_none(suc["id"], source_id)
+
+        if rep is None:
+            continue
+
+        rep = filter_by_period(rep, mes, desde, hasta)
+        salida.append((
+            suc.get("nombre") or suc["id"],
+            compute_clientes_analisis(rep, _eff_scoped(suc, rep, mes, user), grupo, metrica),
+        ))
+
+    agg = _aggregate_clientes(salida)
+    agg["rango"] = mes or "Todo (acumulado)"
+
+    return agg
+
+
+@app.get("/api/ventra/estado")
+def ventra_estado(user: dict = Depends(current_user)) -> dict:
+    """Cuándo se trajeron por última vez los datos de Ventra, base por base.
+
+    # Por qué hace falta enseñarlo
+
+    Los datos los trae una corrida diaria y hasta ahora no había forma de saber si había
+    corrido: el hilo no deja traza en el registro, así que para responder «¿esto está al
+    día?» había que entrar al servidor y mirar la base. Es la pregunta que se hace antes de
+    creerse cualquier número de esta pantalla, y no tenía respuesta.
+
+    Devuelve lo justo para una línea en la cabecera: cuándo fue la última vez que entró
+    algo, y el detalle por base para quien quiera mirarlo.
+    """
+    from sqlalchemy import func, select
+
+    from services.db import VentaVentra, session_scope
+
+    with session_scope() as s:
+        filas = s.execute(
+            select(
+                VentaVentra.database,
+                func.max(VentaVentra.traido_at),
+                func.max(VentaVentra.fecha),
+                func.count(),
+            ).group_by(VentaVentra.database)
+        ).all()
+
+    bases = [
+        {
+            "base": b,
+            "traido": t.isoformat() if t else None,
+            "ultima_venta": f.isoformat()[:10] if f else None,
+            "lineas": int(n),
+        }
+        for b, t, f, n in filas
+    ]
+    bases.sort(key=lambda x: x["base"])
+    traidos = [b["traido"] for b in bases if b["traido"]]
+
+    return {
+        # El más reciente de todos: es lo que se enseña en la cabecera.
+        "traido": max(traidos) if traidos else None,
+        "bases": bases,
+    }
+
+
 @app.get("/api/all/sources/{source_id}/periods")
 def all_periods(source_id: str, user: dict = Depends(current_user)) -> dict:
     ps: set[str] = set()
