@@ -63,6 +63,19 @@ export default function App() {
   const [verCarga, setVerCarga] = useState(false);
   const [period, setPeriod] = useState(null);
   const [periods, setPeriods] = useState([]);
+  /**
+   * Si YA se sabe qué periodo hay que enseñar.
+   *
+   * Sin esto la pantalla cargaba dos veces. `period` arranca en `null`, que significa
+   * «todo el acumulado», así que la vista se pintaba con la consulta MÁS PESADA que
+   * existe —el histórico entero— y en cuanto `getPeriods` contestaba se cambiaba al mes y
+   * se volvía a pedir todo. Se veía como un parpadeo con datos distintos antes y después,
+   * y el usuario llegaba a leer unas cifras que no eran las suyas.
+   *
+   * `null` es un periodo válido —«todo»— así que no sirve para saber si ya está decidido.
+   * Hace falta esta bandera aparte.
+   */
+  const [periodoListo, setPeriodoListo] = useState(false);
   const [path, go] = usePath();
 
   const isConfig = path === "config" || path.startsWith("config/");
@@ -102,11 +115,13 @@ export default function App() {
     setSucursal(sid);
     setSourceId("accumulated");
     setPeriod(null);
+    setPeriodoListo(false);
   }, [sid]);
 
   useEffect(() => {
     if (!sid) return;
     setPeriods([]);
+    setPeriodoListo(false);
     getPeriods(sourceId).then((d) => {
       const ps = d.periods || [];
       setPeriods(ps);
@@ -116,7 +131,14 @@ export default function App() {
       const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const latest = ps.slice().sort().reverse()[0];
       setPeriod(ps.includes(cur) ? cur : (latest || null));
-    }).catch(() => { setPeriods([]); setPeriod(null); });
+      setPeriodoListo(true);
+    }).catch(() => {
+      // Si no se pueden saber los periodos se enseña el acumulado, que es lo que había
+      // antes. Pero se marca como decidido: si no, la vista no se pintaría nunca.
+      setPeriods([]);
+      setPeriod(null);
+      setPeriodoListo(true);
+    });
   }, [sourceId, sid]);
 
   if (booting) return <div className="h-screen flex items-center justify-center text-slate-400">Cargando…</div>;
@@ -283,8 +305,13 @@ export default function App() {
                   <div className="p-8 text-center text-slate-400">
                     Elige una sucursal específica para ver «{viewLabel}». La vista combinada solo está disponible en el <b>Resumen</b>.
                   </div>
-                ) : (
+                ) : periodoListo ? (
+                  // Hasta que no se sabe el periodo no se pide nada: pintar con
+                  // `period=null` traeria el historico entero para tirarlo un segundo
+                  // despues, que es el parpadeo con cifras distintas que se veia.
                   <Current sourceId={sourceId} period={period} user={user} />
+                ) : (
+                  <div className="py-16 text-center text-sm text-slate-400">Cargando…</div>
                 ))}
               </>
             )}
