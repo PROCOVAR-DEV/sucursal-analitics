@@ -191,43 +191,40 @@ export function SelectorPeriodo({ value, meses = [], onChange, className }) {
 
       {abierto && (
         <div className="absolute left-0 z-30 mt-1 w-[19rem] rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
-          {/* Los meses de siempre, arriba: es lo que se elige el 90 % de las veces y no
-              tiene por qué costar más que antes por haber añadido el calendario. */}
+          {/* Los meses, en un desplegable.
+              Estuvieron como pastillas, una por mes, y con nueve meses de datos ocupaban
+              cuatro filas: el calendario quedaba empujado hasta abajo y había que buscarlo.
+              Y el año que viene serían el doble.
+
+              Desplegable NATIVO y no el `Select` de la casa: el nuestro dibuja su menú en
+              otro sitio del documento, y desde dentro de este panel un clic ahí contaría
+              como «has pulsado fuera» y cerraría el panel entero antes de elegir nada. */}
           <div className="mb-3">
-            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
               Mes completo
-            </div>
-            <div className="flex flex-wrap gap-1">
-              <button
-                className={cn(
-                  "rounded-md px-2 py-1 text-xs",
-                  !value ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-                )}
-                type="button"
-                onClick={() => {
-                  onChange(null);
-                  setAbierto(false);
-                }}
-              >
-                Todo
-              </button>
-              {meses.map((m) => (
-                <button
-                  key={m}
-                  className={cn(
-                    "rounded-md px-2 py-1 text-xs",
-                    value === m ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-                  )}
-                  type="button"
-                  onClick={() => {
-                    onChange(m);
-                    setAbierto(false);
-                  }}
-                >
+            </label>
+            <select
+              className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-brand-500 focus:outline-none"
+              value={esRango(value) ? "" : value || "todo"}
+              onChange={(e) => {
+                const v = e.target.value;
+
+                if (!v) return;   // el hueco de «rango elegido»: no es una opción
+                onChange(v === "todo" ? null : v);
+                setAbierto(false);
+              }}
+            >
+              <option value="todo">Todo (acumulado)</option>
+              {/* Del más reciente al más viejo: septiembre se busca mucho más que enero. */}
+              {[...meses].sort().reverse().map((m) => (
+                <option key={m} value={m}>
                   {rotuloPeriodo(m)}
-                </button>
+                </option>
               ))}
-            </div>
+              {/* Con un rango puesto, ningún mes está elegido. Sin esta opción vacía el
+                  desplegable enseñaría «Todo» y diría una cosa distinta de la de arriba. */}
+              {esRango(value) && <option value="">— rango de días —</option>}
+            </select>
           </div>
 
           <div className="mb-1.5 flex items-center justify-between">
