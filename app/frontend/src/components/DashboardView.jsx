@@ -62,7 +62,7 @@ export default function DashboardView({ sourceId, period }) {
       <RankingBarras
         data={data.ranking_general}
         nameKey="vendedor"
-        subtitle="Los diez primeros por importe vendido. El resto va sumado en «otros»."
+        subtitle="Por vendedor, tal como viene el nombre en Ventra — un gestor puede aparecer con varios. Los diez primeros por importe; el resto, sumado en «otros»."
         title="Quién vende más"
         valueKey="ventas"
       />

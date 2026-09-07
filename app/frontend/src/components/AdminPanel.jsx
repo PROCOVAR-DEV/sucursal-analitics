@@ -47,14 +47,14 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
         ...(isAdmin ? [{ id: "comisiones", label: "Comisiones (todas)", icon: Percent }] : []),
       ]
     : [
-        { id: "sucursal", label: "Sucursal", icon: Building2 },
+        { id: "sucursal", label: "Datos de esta sucursal", icon: Building2 },
         { id: "gestores", label: "Gestores", icon: Users },
         { id: "metas", label: "Metas", icon: Target },
         { id: "calculadora", label: "Calculadora de metas", icon: Calculator },
         { id: "grupos", label: "Grupos y productos", icon: Layers },
         { id: "parametros", label: "Parámetros", icon: SlidersHorizontal },
         { id: "comisiones", label: "Comisiones", icon: Percent },
-        ...(isAdmin ? [{ id: "sucursales", label: "Sucursales", icon: Building2 }] : []),
+        ...(isAdmin ? [{ id: "sucursales", label: "Alta de sucursales", icon: Building2 }] : []),
         ...((isAdmin || isSup) ? [{ id: "usuarios", label: "Usuarios", icon: UserPlus }] : []),
       ];
   // El supervisor gestiona SU sucursal: gestores, metas, calculadora y usuarios
@@ -62,6 +62,23 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
   const TABS = isSup
     ? ALL_TABS.filter((t) => ["gestores", "metas", "calculadora", "comisiones", "usuarios"].includes(t.id))
     : ALL_TABS;
+  /**
+   * Las cuatro preguntas que contesta esta pantalla.
+   *
+   * El orden importa y es de dentro hacia fuera: primero la sucursal y su gente, luego lo
+   * que tienen que vender, luego el catálogo con el que se vende, y al final lo del
+   * sistema —usuarios y alta de sucursales— que se toca una vez al año.
+   *
+   * Una pestaña que no exista para el rol se cae sola: los grupos se filtran contra `TABS`,
+   * que ya viene recortado por permisos.
+   */
+  const GRUPOS = [
+    { titulo: "La sucursal", ids: ["sucursal", "gestores"] },
+    { titulo: "Lo que hay que vender", ids: ["metas", "calculadora", "comisiones"] },
+    { titulo: "El catálogo", ids: ["grupos", "parametros"] },
+    { titulo: "Sistema", ids: ["sucursales", "usuarios"] },
+  ];
+
   // Si la sección actual no está permitida para el rol, ir a la primera válida.
   // OJO: este useEffect debe ir ANTES de cualquier return temprano; si queda
   // después de `if (!cfg) return`, el nº de hooks cambia entre renders y React
@@ -94,13 +111,39 @@ export default function AdminPanel({ sid, user, sucursales, onSucursalesChanged,
 
       <Toast msg={msg} onClose={() => setMsg(null)} />
 
-      {/* Sub-navegación */}
-      <div className="flex items-center gap-1.5 overflow-x-auto scroll-thin border-b border-slate-200 pb-2">
-        {TABS.map((t) => (
-          <button key={t.id} className={cn("tab shrink-0", tab === t.id && "tab-active")} onClick={() => setTab(t.id)}>
-            <t.icon size={15} /> {t.label}
-          </button>
-        ))}
+      {/* SUB-NAVEGACIÓN, AGRUPADA.
+
+          Eran nueve pestañas en fila, todas iguales y sin orden: «Sucursal», «Gestores»,
+          «Metas», «Calculadora», «Grupos», «Parámetros», «Comisiones», «Sucursales»,
+          «Usuarios». Con «Sucursal» y «Sucursales» una al lado de la otra, que son cosas
+          distintas y se llaman casi igual.
+
+          Agrupadas se leen solas, porque contestan cuatro preguntas distintas: quién
+          trabaja aquí, qué tiene que vender, qué vendemos, y quién entra al sistema. No
+          cambia nada de lo que hay dentro — sólo se ve de dónde agarrar. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-200 pb-2">
+        {GRUPOS.map((g) => {
+          const suyas = TABS.filter((x) => g.ids.includes(x.id));
+
+          if (!suyas.length) return null;
+
+          return (
+            <div key={g.titulo} className="flex items-center gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 shrink-0">
+                {g.titulo}
+              </span>
+              {suyas.map((x) => (
+                <button
+                  key={x.id}
+                  className={cn("tab shrink-0", tab === x.id && "tab-active")}
+                  onClick={() => setTab(x.id)}
+                >
+                  <x.icon size={15} /> {x.label}
+                </button>
+              ))}
+            </div>
+          );
+        })}
       </div>
 
       {!isAll && tab === "sucursal" && <DatosSucursal cfg={cfg} sid={sid} onSaved={(c) => { setCfg(c); flash("ok", "Datos guardados"); onSucursalesChanged?.(); }} />}
@@ -176,8 +219,14 @@ function Gestores({ cfg, sid, reload, flash }) {
 
   return (
     <Panel>
-      <PanelHeader icon={Users} title="Gestores / Vendedores"
-        sub={`${gestores.length} · identidad e historial de meta por mes. Las metas se editan en “Calculadora de metas”.`}
+      {/* «Gestor», y no «Gestores / Vendedores».
+          Los dos nombres juntos hacían pensar que era lo mismo. No lo es: un GESTOR es la
+          persona que tiene cuota, con su clave, su sector y su meta —o sea, esto—, y un
+          VENDEDOR es el nombre tal como viene escrito en los datos de Ventra. Un gestor
+          agrupa varios de esos nombres a través de la columna Alias, que es justo para lo
+          que existe. Por eso el ranking del Resumen tiene más filas que gestores hay. */}
+      <PanelHeader icon={Users} title="Gestores"
+        sub={`${gestores.length} · la persona con cuota. En «Alias» se ponen los nombres con que aparece en los datos de Ventra, para que todos sumen a la suya. Las metas se editan en “Calculadora de metas”.`}
         right={
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500">Revisar mes:</span>
