@@ -2,7 +2,7 @@ import { Calculator, Check, Copy, Download, Info, Plus, RotateCcw, Save, Trash2 
 import { useEffect, useMemo, useState } from "react";
 import { getSucursal, getSucursalId, updateSucursal } from "../api.js";
 import { formatNumber } from "./Kpi.jsx";
-import { Button, IconButton, Panel, PanelHeader, Segmented, Select, Toast, cn } from "./ui.jsx";
+import { Button, IconButton, Panel, PanelHeader, SearchSelect, Segmented, Select, Toast, cn } from "./ui.jsx";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const pkeyOf = (y, m) => `${y}-${String(m).padStart(2, "0")}`;
@@ -64,12 +64,33 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
   //
   // La lista sale de la familia PARRANDA de la configuración, no escrita a mano: si
   // mañana entra otro formato de malta, aparece solo.
+  // Los que SÍ se miden en hectolitros: la familia PARRANDA. Solo esos tienen formato,
+  // pallets y blísters.
   const productos = useMemo(() => {
     const kw = params.product_groups_keywords || {};
     const deParranda = kw.PARRANDA || kw.Parranda || [];
 
     return [...new Set(deParranda.length ? deParranda : ["PARRANDA", "MALTA"])];
   }, [params]);
+
+  // Y el catálogo entero, por familias, para el desplegable.
+  //
+  // Cada gestor tiene metas de todo lo que vende, no solo de cerveza. Las del resto van
+  // en CANTIDAD —un saco de arroz no tiene formato de 330 ml ni hectolitros—, así que la
+  // fila cambia de forma según el producto: o pallets/blísters/HL, o una cantidad y ya.
+  const catalogoPorGrupo = useMemo(() => {
+    const kw = params.product_groups_keywords || {};
+    const entradas = Object.entries(kw)
+      .map(([grupo, prods]) => [grupo, [...new Set(prods || [])]])
+      .filter(([, prods]) => prods.length);
+
+    return entradas.length ? entradas : [["PARRANDA", productos]];
+  }, [params, productos]);
+  const catalogo = useMemo(
+    () => catalogoPorGrupo.flatMap(([grupo, prods]) => prods.map((n) => ({ value: n, label: n, hint: grupo }))),
+    [catalogoPorGrupo],
+  );
+  const esHL = (producto) => productos.includes(producto);
 
   const gestores = useMemo(() => Object.entries(cfg?.gestores || {}).filter(([, g]) => g.activo !== false), [cfg]);
 
@@ -89,6 +110,15 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
       if (mfNonZero) initPlans[k] = rowsFromFormato(mf, prm);
       else if (plan) initPlans[k] = rowsFromFormato(plan.formato, prm);
       else initPlans[k] = seedRows(prm);
+      // Y las que van por cantidad, detrás de las de formato.
+      const mc = mg.metas_cantidad || {};
+
+      initPlans[k] = [
+        ...initPlans[k],
+        ...Object.entries(mc).map(([producto, cantidad]) => ({
+          id: ++_uid, producto, size: "", pallets: 0, cantidad: Number(cantidad) || 0,
+        })),
+      ];
       initQuick[k] = mg.cuota_hl != null ? Number(mg.cuota_hl) : (plan ? plan.total : 0);
       initCcc[k] = mg.cuota_ccc != null ? Number(mg.cuota_ccc) : Number(gv.cuota_ccc ?? 0);
     });
@@ -125,16 +155,38 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
   }
 
   function calc(row) {
+    if (!esHL(row.producto)) {
+      // Sin formato no hay pallets ni hectolitros: la meta es la cantidad, tal cual.
+      return { upp: 0, mult: 0, pallets: 0, blisters: 0, hl: 0, cantidad: Number(row.cantidad) || 0, porCantidad: true };
+    }
     const upp = Number(unitsPP[row.size] || 0);
     const mult = Number(sizeMult[row.size] || 0);
     const pallets = Number(row.pallets) || 0;
     const blisters = pallets * upp;
-    return { upp, mult, pallets, blisters, hl: blisters * mult };
+    return { upp, mult, pallets, blisters, hl: blisters * mult, cantidad: 0, porCantidad: false };
   }
   const vendorRows = (k) => plans[k] || [];
   const detalleHL = (k) => vendorRows(k).reduce((s, r) => s + calc(r).hl, 0);
   const vendorHL = (k) => (mode === "rapido" ? (Number(quick[k]) || 0) : detalleHL(k));
-  function vendorFormato(k) { const out = {}; vendorRows(k).forEach((r) => { out[codeOf(r)] = round2(calc(r).hl); }); return out; }
+  function vendorFormato(k) {
+    const out = {};
+
+    vendorRows(k).filter((r) => esHL(r.producto)).forEach((r) => { out[codeOf(r)] = round2(calc(r).hl); });
+
+    return out;
+  }
+  /** Las metas que van por cantidad, una por producto. */
+  function vendorCantidad(k) {
+    const out = {};
+
+    vendorRows(k).filter((r) => !esHL(r.producto)).forEach((r) => {
+      // Si el mismo producto sale en dos filas, se suman: partir la meta en dos líneas
+      // es una forma legítima de llegar al número, y quedarse con la última la perdería.
+      out[r.producto] = round2((out[r.producto] || 0) + (Number(r.cantidad) || 0));
+    });
+
+    return out;
+  }
   const enMes = (k) => incluidos[k] !== false;
   const grandTotal = gestores.reduce((s, [k]) => s + (enMes(k) ? vendorHL(k) : 0), 0);
   const grandTotalCcc = gestores.reduce((s, [k]) => s + (enMes(k) ? (Number(quickCcc[k]) || 0) : 0), 0);
@@ -143,7 +195,10 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
   function setRows(k, up) { setPlans((p) => ({ ...p, [k]: typeof up === "function" ? up(p[k] || []) : up })); }
   const update = (k, id, pallets) => setRows(k, (rs) => rs.map((r) => (r.id === id ? { ...r, pallets } : r)));
   const setField = (k, id, f, v) => setRows(k, (rs) => rs.map((r) => (r.id === id ? { ...r, [f]: v } : r)));
-  const addRow = (k) => setRows(k, (rs) => [...rs, { id: ++_uid, producto: productos[0] || "PARRANDA", size: sizes[0], pallets: 0 }]);
+  // Nace como fila de cerveza y se convierte sola en fila de cantidad al elegir un
+  // producto que no se mide en hectolitros. Lleva los dos campos desde el principio para
+  // que cambiar de producto no pierda lo escrito.
+  const addRow = (k) => setRows(k, (rs) => [...rs, { id: ++_uid, producto: productos[0] || "PARRANDA", size: sizes[0], pallets: 0, cantidad: 0 }]);
   const removeRow = (k, id) => setRows(k, (rs) => rs.filter((r) => r.id !== id));
   const resetVendor = (k) => setRows(k, seedRows(cfg?.parametros));
   function copyToAll(k) {
@@ -156,7 +211,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
   async function saveVendor(k) {
     try {
       // Siempre guardamos el desglose por formato (lo usan Vendedores y el reporte).
-      const g = { cuota_hl: round2(vendorHL(k)), cuota_ccc: Number(quickCcc[k]) || 0, metas_formato: vendorFormato(k) };
+      const g = { cuota_hl: round2(vendorHL(k)), cuota_ccc: Number(quickCcc[k]) || 0, metas_formato: vendorFormato(k), metas_cantidad: vendorCantidad(k) };
       const fresh = await updateSucursal(sid, { metas_mensuales: { [pkey]: { gestores: { [k]: g } } } });
       setCfg(fresh);
       flash("ok", `Meta de ${k} guardada en ${MESES[ym.m - 1]} ${ym.y}: ${formatNumber(vendorHL(k), 2)} HL.`);
@@ -168,7 +223,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
       const gestoresPayload = {};
       gestores.forEach(([k]) => {
         if (!enMes(k)) return;   // no incluir en el roster del mes
-        gestoresPayload[k] = { cuota_hl: round2(vendorHL(k)), cuota_ccc: Number(quickCcc[k]) || 0, metas_formato: vendorFormato(k) };
+        gestoresPayload[k] = { cuota_hl: round2(vendorHL(k)), cuota_ccc: Number(quickCcc[k]) || 0, metas_formato: vendorFormato(k), metas_cantidad: vendorCantidad(k) };
       });
       // Reemplaza el roster del mes por los vendedores incluidos.
       const fresh = await updateSucursal(sid, { metas_mensuales: { [pkey]: null } })
@@ -270,25 +325,46 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
             </div>} />
           <div className="overflow-x-auto scroll-thin">
             <table className="tbl">
-              <thead><tr><th>Producto</th><th>Formato</th><th className="!text-right">Pallets</th><th className="!text-right">Blísters</th><th className="!text-right">Hectolitros</th><th></th></tr></thead>
+              <thead><tr><th>Producto</th><th>Formato</th><th className="!text-right">Pallets</th><th className="!text-right">Blísters</th><th className="!text-right">Hectolitros</th><th className="!text-right">Cantidad</th><th></th></tr></thead>
               <tbody>
                 {rows.map((r) => {
                   const c = calc(r);
                   return (
                     <tr key={r.id} className="hover:bg-slate-50">
                       <td>
-                        <Select
-                          width="w-44"
+                        {/* Todo el catálogo, con buscador y la familia al lado: son
+                            sesenta y pico y en una lista a secas hay que ir a ojo. */}
+                        <SearchSelect
+                          width="w-56"
                           value={r.producto}
-                          options={(productos.includes(r.producto) ? productos : [r.producto, ...productos])
-                            .map((p) => ({ value: p, label: p }))}
+                          searchPlaceholder="Buscar producto o familia…"
+                          options={catalogo.some((o) => o.value === r.producto)
+                            ? catalogo
+                            : [{ value: r.producto, label: r.producto, hint: "ya planificado" }, ...catalogo]}
                           onChange={(v) => setField(sel, r.id, "producto", v)}
                         />
                       </td>
-                      <td><select className="input input-sm w-24" value={r.size} onChange={(e) => setField(sel, r.id, "size", e.target.value)}>{sizes.map((s) => <option key={s} value={s}>{s} ml</option>)}</select></td>
-                      <td className="text-right"><input type="number" step="0.01" className="input input-sm w-24 num font-semibold" value={num(c.pallets)} onChange={(e) => update(sel, r.id, Number(e.target.value) || 0)} /></td>
-                      <td className="text-right"><input type="number" step="1" className="input input-sm w-24 num" value={num(c.blisters)} onChange={(e) => update(sel, r.id, c.upp ? (Number(e.target.value) || 0) / c.upp : 0)} /></td>
-                      <td className="text-right"><input type="number" step="0.01" className="input input-sm w-24 num text-brand-700 font-semibold" value={num(c.hl)} onChange={(e) => update(sel, r.id, c.upp && c.mult ? (Number(e.target.value) || 0) / (c.upp * c.mult) : 0)} /></td>
+                      {/* Una fila que no es de cerveza no tiene formato, ni pallets, ni
+                          blísters, ni hectolitros. Se marcan con una raya en vez de con
+                          ceros: un cero se lee como «hay cero», y aquí lo cierto es que
+                          esa columna no aplica. */}
+                      {c.porCantidad ? (
+                        <>
+                          <td className="text-slate-300">—</td>
+                          <td className="text-right text-slate-300">—</td>
+                          <td className="text-right text-slate-300">—</td>
+                          <td className="text-right text-slate-300">—</td>
+                          <td className="text-right"><input type="number" step="1" className="input input-sm w-24 num text-brand-700 font-semibold" value={num(c.cantidad)} onChange={(e) => setField(sel, r.id, "cantidad", Number(e.target.value) || 0)} /></td>
+                        </>
+                      ) : (
+                        <>
+                          <td><select className="input input-sm w-24" value={r.size} onChange={(e) => setField(sel, r.id, "size", e.target.value)}>{sizes.map((s) => <option key={s} value={s}>{s} ml</option>)}</select></td>
+                          <td className="text-right"><input type="number" step="0.01" className="input input-sm w-24 num font-semibold" value={num(c.pallets)} onChange={(e) => update(sel, r.id, Number(e.target.value) || 0)} /></td>
+                          <td className="text-right"><input type="number" step="1" className="input input-sm w-24 num" value={num(c.blisters)} onChange={(e) => update(sel, r.id, c.upp ? (Number(e.target.value) || 0) / c.upp : 0)} /></td>
+                          <td className="text-right"><input type="number" step="0.01" className="input input-sm w-24 num text-brand-700 font-semibold" value={num(c.hl)} onChange={(e) => update(sel, r.id, c.upp && c.mult ? (Number(e.target.value) || 0) / (c.upp * c.mult) : 0)} /></td>
+                          <td className="text-right text-slate-300">—</td>
+                        </>
+                      )}
                       <td className="text-center"><IconButton variant="ghost" icon={Trash2} size={14} className="text-slate-300 hover:text-red-500" onClick={() => removeRow(sel, r.id)} /></td>
                     </tr>
                   );
@@ -300,13 +376,16 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
                   <td className="px-3 py-2 text-right tabular-nums">{formatNumber(rows.reduce((s, r) => s + calc(r).pallets, 0), 2)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatNumber(rows.reduce((s, r) => s + calc(r).blisters, 0), 0)}</td>
                   <td className="px-3 py-2 text-right text-brand-700 tabular-nums">{formatNumber(detalleHL(sel), 2)}</td>
+                  {/* Las cantidades NO se suman con los hectolitros: son unidades de
+                      cosas distintas. Van en su propia columna y con su propio total. */}
+                  <td className="px-3 py-2 text-right text-brand-700 tabular-nums">{formatNumber(rows.reduce((s, r) => s + calc(r).cantidad, 0), 0)}</td>
                   <td></td>
                 </tr>
               </tfoot>
             </table>
           </div>
           <div className="flex items-center justify-between flex-wrap gap-2 px-4 py-3 border-t border-slate-100">
-            <Button variant="subtle" size="sm" icon={Plus} onClick={() => addRow(sel)}>Agregar SKU</Button>
+            <Button variant="subtle" size="sm" icon={Plus} onClick={() => addRow(sel)}>Agregar producto</Button>
             <p className="text-xs text-slate-400">Factores: {sizes.map((s) => `${s}ml → ${unitsPP[s]} u/pallet · ${sizeMult[s]} HL/u`).join("  |  ")}</p>
           </div>
         </Panel>

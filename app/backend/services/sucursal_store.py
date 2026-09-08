@@ -166,6 +166,11 @@ def config_for_period(suc: dict, year: int | None, month: int | None) -> dict:
                         base["cuota_ccc"] = float(ov["cuota_ccc"])
                     if isinstance(ov.get("metas_formato"), dict):
                         base["metas_formato"] = {str(k): float(v) for k, v in ov["metas_formato"].items()}
+                    # Las metas de lo que NO es cerveza: arroz, papel, baterías. Van por
+                    # cantidad y no por formato — no tienen 330/500/1500 ni hectolitros—,
+                    # así que no caben en `metas_formato` y necesitan su propio hueco.
+                    if isinstance(ov.get("metas_cantidad"), dict):
+                        base["metas_cantidad"] = {str(k): float(v) for k, v in ov["metas_cantidad"].items()}
                 base["activo"] = True
                 roster[clave] = base
             # Un gestor ACTIVO en el global pero ausente del roster del mes (ej. se
