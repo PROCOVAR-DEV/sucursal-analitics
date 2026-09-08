@@ -2,7 +2,7 @@ import { Calculator, Check, Copy, Download, Info, Plus, RotateCcw, Save, Trash2 
 import { useEffect, useMemo, useState } from "react";
 import { getSucursal, getSucursalId, updateSucursal } from "../api.js";
 import { formatNumber } from "./Kpi.jsx";
-import { Button, IconButton, Panel, PanelHeader, Segmented, Select, Toast, cn } from "./ui.jsx";
+import { Button, IconButton, Panel, PanelHeader, Segmented, Select, SelectBuscable, Toast, cn } from "./ui.jsx";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const pkeyOf = (y, m) => `${y}-${String(m).padStart(2, "0")}`;
@@ -78,6 +78,17 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
     () => [...new Set(gruposDeProductos.flatMap(([, prods]) => prods))],
     [gruposDeProductos],
   );
+  /**
+   * Los grupos, y si el producto ya guardado no esta en ninguno, uno propio para el.
+   *
+   * Sin esto el selector enseñaria otro valor —o ninguno— y el plan cambiaria solo al
+   * guardar, sin que nadie lo hubiera tocado. Pasa con cualquier producto que se
+   * quitara del catalogo despues de planificarlo.
+   */
+  const gruposConEl = (producto) =>
+    !producto || productos.includes(producto)
+      ? gruposDeProductos
+      : [["YA PLANIFICADO", [producto]], ...gruposDeProductos];
   const gestores = useMemo(() => Object.entries(cfg?.gestores || {}).filter(([, g]) => g.activo !== false), [cfg]);
 
   // Construye el estado para el mes seleccionado (metas_mensuales[pkey].gestores).
@@ -284,17 +295,13 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
                   return (
                     <tr key={r.id} className="hover:bg-slate-50">
                       <td>
-                        <select className="input input-sm w-56" value={r.producto} onChange={(e) => setField(sel, r.id, "producto", e.target.value)}>
-                          {/* Un producto guardado que ya no este en la lista sigue
-                              saliendo: si no, el desplegable enseñaria otro valor y el
-                              plan cambiaria solo al guardar, sin que nadie lo tocara. */}
-                          {!productos.includes(r.producto) && <option value={r.producto}>{r.producto}</option>}
-                          {gruposDeProductos.map(([grupo, prods]) => (
-                            <optgroup key={grupo} label={grupo}>
-                              {prods.map((p) => <option key={`${grupo}-${p}`} value={p}>{p}</option>)}
-                            </optgroup>
-                          ))}
-                        </select>
+                        <SelectBuscable
+                          width="w-56"
+                          buscar="Buscar producto…"
+                          value={r.producto}
+                          grupos={gruposConEl(r.producto)}
+                          onChange={(v) => setField(sel, r.id, "producto", v)}
+                        />
                       </td>
                       <td><select className="input input-sm w-24" value={r.size} onChange={(e) => setField(sel, r.id, "size", e.target.value)}>{sizes.map((s) => <option key={s} value={s}>{s} ml</option>)}</select></td>
                       <td className="text-right"><input type="number" step="0.01" className="input input-sm w-24 num font-semibold" value={num(c.pallets)} onChange={(e) => update(sel, r.id, Number(e.target.value) || 0)} /></td>
