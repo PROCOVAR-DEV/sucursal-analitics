@@ -54,7 +54,30 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
   const sizeMult = params.size_mult || { 330: 0.02, 500: 0.03, 1500: 0.09 };
   const unitsPP = params.units_per_pallet || { 330: 496, 500: 336, 1500: 110 };
   const sizes = params.sizes || ["330", "500", "1500"];
-  const productos = useMemo(() => [...new Set(["PARRANDA", "MALTA", ...Object.keys(params.product_groups_keywords || {})])], [params]);
+  // Los PRODUCTOS de cada grupo, no los nombres de los grupos.
+  //
+  // Aqui habia `Object.keys(product_groups_keywords)`, que son las FAMILIAS
+  // —PARRANDA, IMPORTACIONES, CONSIGNACION, TECNOLOGIA Y KAPITAL—, asi que
+  // "Agregar SKU" agregaba un grupo entero y no un producto. Colaba porque
+  // PARRANDA y MALTA son a la vez familia y producto, y esos dos si se veian
+  // bien; los otros tres no son productos de nada.
+  //
+  // Los valores del mapa SI son los nombres con los que se casan las metas
+  // (`productos.py` los busca con `contains` sobre la mercancia), asi que son
+  // exactamente la lista que hay que ofrecer. Van por grupo, que es como se
+  // piensan al planificar.
+  const gruposDeProductos = useMemo(() => {
+    const kw = params.product_groups_keywords || {};
+    const entradas = Object.entries(kw)
+      .map(([grupo, prods]) => [grupo, [...new Set(prods || [])]])
+      .filter(([, prods]) => prods.length);
+
+    return entradas.length ? entradas : [["PARRANDA", ["PARRANDA", "MALTA"]]];
+  }, [params]);
+  const productos = useMemo(
+    () => [...new Set(gruposDeProductos.flatMap(([, prods]) => prods))],
+    [gruposDeProductos],
+  );
   const gestores = useMemo(() => Object.entries(cfg?.gestores || {}).filter(([, g]) => g.activo !== false), [cfg]);
 
   // Construye el estado para el mes seleccionado (metas_mensuales[pkey].gestores).
@@ -260,7 +283,19 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
                   const c = calc(r);
                   return (
                     <tr key={r.id} className="hover:bg-slate-50">
-                      <td><select className="input input-sm w-40" value={r.producto} onChange={(e) => setField(sel, r.id, "producto", e.target.value)}>{productos.map((p) => <option key={p} value={p}>{p}</option>)}</select></td>
+                      <td>
+                        <select className="input input-sm w-56" value={r.producto} onChange={(e) => setField(sel, r.id, "producto", e.target.value)}>
+                          {/* Un producto guardado que ya no este en la lista sigue
+                              saliendo: si no, el desplegable enseñaria otro valor y el
+                              plan cambiaria solo al guardar, sin que nadie lo tocara. */}
+                          {!productos.includes(r.producto) && <option value={r.producto}>{r.producto}</option>}
+                          {gruposDeProductos.map(([grupo, prods]) => (
+                            <optgroup key={grupo} label={grupo}>
+                              {prods.map((p) => <option key={`${grupo}-${p}`} value={p}>{p}</option>)}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </td>
                       <td><select className="input input-sm w-24" value={r.size} onChange={(e) => setField(sel, r.id, "size", e.target.value)}>{sizes.map((s) => <option key={s} value={s}>{s} ml</option>)}</select></td>
                       <td className="text-right"><input type="number" step="0.01" className="input input-sm w-24 num font-semibold" value={num(c.pallets)} onChange={(e) => update(sel, r.id, Number(e.target.value) || 0)} /></td>
                       <td className="text-right"><input type="number" step="1" className="input input-sm w-24 num" value={num(c.blisters)} onChange={(e) => update(sel, r.id, c.upp ? (Number(e.target.value) || 0) / c.upp : 0)} /></td>
