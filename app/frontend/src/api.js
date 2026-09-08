@@ -152,7 +152,16 @@ export async function getClientesAnalisis(id, mes = null, grupos = [], metrica =
 
   return (await api.get(`${src(id)}/clientes-analisis${qs ? `?${qs}` : ""}`)).data;
 }
-export async function getVendedores(id, mes = null) { return (await api.get(`${src(id)}/vendedores${q(mes)}`)).data; }
+export async function getVendedores(id, mes = null, grupos = []) {
+  const p = new URLSearchParams();
+
+  for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
+  for (const g of grupos) p.append("grupo", g);
+
+  const qs = p.toString();
+
+  return (await api.get(`${src(id)}/vendedores${qs ? `?${qs}` : ""}`)).data;
+}
 // Informe cruzado gestor x producto por importe, con totales en ambas direcciones.
 export async function getGestorSku(id, mes = null, grupos = [], metrica = "importe") {
   const p = new URLSearchParams();

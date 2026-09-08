@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getMetasGestor, getVendedores } from "../api.js";
 import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
 import { VendorFormatoTables } from "./MetasGestorReport.jsx";
+import FiltroMulti from "./FiltroMulti.jsx";
 import { Buscador, filtrarFilas } from "./ui.jsx";
 
 export default function VendedoresView({ sourceId, period }) {
@@ -12,16 +13,25 @@ export default function VendedoresView({ sourceId, period }) {
   const [selGestor, setSelGestor] = useState(null);
   // Día de corte elegido (null = el último con datos). Permite mirar días anteriores.
   const [selDia, setSelDia] = useState(null);
+  // Grupos comerciales elegidos. Vacío = todos, que es como estaba.
+  //
+  // Esta pantalla se movía solo con Parranda y Malta —la cuota, la barra y las dos
+  // tablas de formato son de hectolitros— y el estudio de un gestor tenía que poder ser
+  // de cualquier familia: arroz, papel, baterías. Con «todos» sale todo, como siempre.
+  const [grupos, setGrupos] = useState([]);
 
   useEffect(() => {
     // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
     let cancelled = false;
     setData(null); setErr(null); setSelGestor(null); setSelDia(null);
-    getVendedores(sourceId, period)
+    getVendedores(sourceId, period, grupos)
       .then((d) => { if (!cancelled) setData(d); })
       .catch((e) => { if (!cancelled) setErr(e?.response?.data?.detail || e.message); });
     return () => { cancelled = true; };
-  }, [sourceId, period]);
+    // `grupos` se serializa: como array suelto sería uno nuevo en cada render y el
+    // efecto se dispararía sin parar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceId, period, grupos.join("|")]);
 
   // Las tablas de cumplimiento se recargan solas al cambiar el día de corte.
   useEffect(() => {
@@ -36,26 +46,55 @@ export default function VendedoresView({ sourceId, period }) {
   if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!data) return <div className="p-6">Cargando…</div>;
 
+  // ¿Lo que se está mirando tiene hectolitros? Solo Parranda y Malta se miden así, y
+  // enseñar una cuota de HL, una barra al 0% y dos tablas de formato vacías para el
+  // arroz no es enseñar poco: es enseñar que va mal algo que ni existe.
+  const hayHL = grupos.length === 0 || grupos.some((g) => String(g).toUpperCase() === "PARRANDA");
+  const disponibles = data.grupos_disponibles || [];
+
+  const totalCantidad = data.vendedores.reduce((a, v) => a + (v.total_cantidad || 0), 0);
+
   const activeGestor = selGestor ?? data.vendedores[0]?.gestor ?? null;
   const vendor = data.vendedores.find((v) => v.gestor === activeGestor);
   const metasBlock = metas?.por_gestor?.find((g) => g.gestor === activeGestor) || null;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center flex-wrap gap-3">
+      {/* Cabecera: qué se está mirando, y el mando para cambiarlo al lado del título.
+          Estaba abajo del todo en la otra pestaña y aquí no había ninguno: el filtro es
+          lo primero que se toca, así que va donde se mira primero. */}
+      <div className="flex justify-between items-start flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <UserCheck className="text-brand-600" /> Por Vendedor
           </h2>
-          <p className="text-sm text-slate-500">{data.rango}</p>
+          <p className="text-sm text-slate-500">
+            {data.rango} · {grupos.length ? grupos.join(", ") : "todos los grupos"}
+          </p>
         </div>
+        {disponibles.length > 1 && (
+          <FiltroMulti
+            etiqueta="Grupo"
+            opciones={disponibles}
+            valor={grupos}
+            onChange={setGrupos}
+            textoTodos="Todos los grupos"
+          />
+        )}
       </div>
 
-      {/* Office summary KPIs */}
+      {/* Totales de la oficina. La casilla del medio cambia con lo que se mira: los
+          hectolitros solo existen en cerveza y malta, y para el arroz o el papel la
+          medida es la cantidad. Enseñar "0 HL" ahí no es enseñar poco, es enseñar que
+          va mal algo que ni siquiera existe. */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <Kpi label="Total Oficina (importe)" value={formatMoney(data.total_importe)} />
-        <Kpi label="Total Hectolitros" value={formatNumber(data.total_hectolitros, 2)} tone="brand" />
+        {hayHL ? (
+          <Kpi label="Total Hectolitros" value={formatNumber(data.total_hectolitros, 2)} tone="brand" />
+        ) : (
+          <Kpi label="Cantidad total" value={formatNumber(totalCantidad, 2)} tone="brand"
+            hint="Unidades vendidas: este grupo no se mide en hectolitros" />
+        )}
         <Kpi label="Total Operaciones" value={formatInt(data.total_operaciones)} tone="slate" />
       </div>
 
@@ -77,7 +116,11 @@ export default function VendedoresView({ sourceId, period }) {
             >
               <span className="font-semibold">{v.nombre || v.gestor}</span>
               {!active && (
-                <span className={`text-[10px] font-bold ${tone}`}>{Math.round(pct)}% HL</span>
+                hayHL
+                  ? <span className={`text-[10px] font-bold ${tone}`}>{Math.round(pct)}% HL</span>
+                  // Sin hectolitros el porcentaje de cuota no significa nada, y todos
+                  // saldrían en rojo al 0%. Lo que sí se puede comparar es lo vendido.
+                  : <span className="text-[10px] font-bold text-slate-500">{formatMoney(v.total_importe)}</span>
               )}
             </button>
           );
@@ -95,13 +138,16 @@ export default function VendedoresView({ sourceId, period }) {
           diaAnterior={metas?.dia_anterior}
           selDia={selDia}
           onSelDia={setSelDia}
+          hayHL={hayHL}
+          grupos={grupos}
+          comisionSobreTodo={!!data.comision_sobre_todo}
         />
       )}
     </div>
   );
 }
 
-function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia }) {
+function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia, hayHL = true, grupos = [], comisionSobreTodo = false }) {
   /**
    * Filtrar la lista de productos del gestor.
    *
@@ -123,36 +169,49 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
             <h3 className="text-xl font-bold">{vendor.nombre}</h3>
             <p className="text-sm text-slate-500">{vendor.sector} · {vendor.gestor}</p>
           </div>
-          <span className={`px-3 py-1 rounded-full text-sm font-bold ${badgeBg}`}>
-            {Math.round(pct)}% cumplimiento HL
-          </span>
+          {hayHL && (
+            <span className={`px-3 py-1 rounded-full text-sm font-bold ${badgeBg}`}>
+              {Math.round(pct)}% cumplimiento HL
+            </span>
+          )}
         </div>
 
-        {/* HL progress bar */}
-        <div className="mt-4">
-          <div className="flex justify-between text-xs text-slate-500 mb-1">
-            <span>Hectolitros: {formatNumber(vendor.total_hectolitros, 2)}</span>
-            <span>Cuota: {formatNumber(vendor.cuota_hl, 2)} HL</span>
+        {/* La cuota es de hectolitros y solo hay hectolitros en cerveza y malta. Con un
+            grupo sin HL, esta barra saldría siempre en rojo al 0% — la lectura sería
+            "va fatal" cuando la verdad es "esto no se mide así". */}
+        {hayHL ? (
+          <div className="mt-4">
+            <div className="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Hectolitros: {formatNumber(vendor.total_hectolitros, 2)}</span>
+              <span>Cuota: {formatNumber(vendor.cuota_hl, 2)} HL</span>
+            </div>
+            <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full ${barColor} rounded-full transition-all`}
+                style={{ width: `${barPct}%` }}
+              />
+            </div>
           </div>
-          <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
-            <div
-              className={`h-full ${barColor} rounded-full transition-all`}
-              style={{ width: `${barPct}%` }}
-            />
-          </div>
-        </div>
+        ) : (
+          <p className="mt-3 text-xs text-slate-500">
+            Viendo <b>{grupos.join(", ")}</b>. No se mide en hectolitros, así que aquí no
+            hay cuota ni cumplimiento: lo que cuenta es la cantidad y el importe.
+          </p>
+        )}
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi label="Total Ventas" value={formatMoney(vendor.total_importe)} />
-        <Kpi label="Hectolitros" value={formatNumber(vendor.total_hectolitros, 2)} tone="brand" />
+        {hayHL
+          ? <Kpi label="Hectolitros" value={formatNumber(vendor.total_hectolitros, 2)} tone="brand" />
+          : <Kpi label="Cantidad" value={formatNumber(vendor.total_cantidad, 2)} tone="brand" hint="Unidades vendidas" />}
         <Kpi label="Operaciones" value={formatInt(vendor.num_operaciones)} tone="slate" />
         <Kpi label="Clientes Únicos" value={formatInt(vendor.num_clientes)} tone="slate" />
       </div>
 
       {/* Estudio diario/mensual por formato (individual) — como el reporte */}
-      {metasBlock && (
+      {hayHL && metasBlock && (
         <div className="card space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h4 className="font-semibold">Cumplimiento por formato · {vendor.gestor}</h4>
@@ -193,6 +252,17 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
         <p className="text-xs text-slate-500 mb-3">
           De la comisión bruta al neto, línea a línea.
         </p>
+        {/* Una comisión NO se paga por familia: se paga sobre todo lo que la persona
+            vendió. Calcularla sobre el grupo elegido daría una cifra más baja que parece
+            lo que cobra y no lo es — y de eso no se vuelve: quien la vea una vez ya no se
+            fía de ninguna. Así que se calcula sobre el total SIEMPRE, y se dice. */}
+        {comisionSobreTodo && (
+          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Esta cuenta es sobre <b>todo</b> lo que vendió, no solo sobre el grupo que
+            estás mirando. La comisión no se paga por familia, así que no cuadra a
+            propósito con las ventas de arriba.
+          </p>
+        )}
         <table className="w-full text-sm">
           <tbody>
             <tr className="border-b border-slate-100">
@@ -248,8 +318,9 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
         </table>
       </div>
 
-      {/* HL breakdown table — con selector de SEMANA (mismo desglose, filtrado por semana) */}
-      <HLBreakdown vendor={vendor} />
+      {/* El desglose es de Malta y Parranda por formato: sin hectolitros a la vista es
+          una tabla de ceros con selector de semana incluido. */}
+      {hayHL && <HLBreakdown vendor={vendor} />}
 
       {/* TODOS los productos (ya no es un top): scroll interno + cabecera fija, para
           que la tarjeta no crezca sin límite pero se pueda ver todo lo vendido. */}

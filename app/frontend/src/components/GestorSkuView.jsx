@@ -86,6 +86,25 @@ function tamanoDe(palabras) {
   return buscar(MEDIDA) || buscar(CUENTA);
 }
 
+/**
+ * Parte la etiqueta en nombre y tamaño, para poder pintarlos en dos renglones.
+ *
+ * «CERVEZA PARRANDA 1500ML» en una columna estrecha se parte en tres renglones por donde
+ * el navegador quiera, y quince columnas así son una cabecera más alta que la tabla.
+ * Puesto el tamaño debajo y en gris, la cabecera baja a dos renglones fijos y el ojo lee
+ * los nombres en una sola línea horizontal.
+ */
+export function partirEtiqueta(etiqueta) {
+  const partes = String(etiqueta || "").trim().split(/\s+/);
+  const ultimo = partes[partes.length - 1] || "";
+
+  // El tamaño siempre empieza por número («1500ML», «15M», «6U»). Si el nombre entero
+  // es el tamaño, no se parte: quedaría una columna sin nombre.
+  return partes.length > 1 && /^\d/.test(ultimo)
+    ? { nombre: partes.slice(0, -1).join(" "), tam: ultimo }
+    : { nombre: etiqueta, tam: "" };
+}
+
 export function etiquetasCortas(nombres) {
   const desglose = new Map();
 
@@ -372,7 +391,16 @@ export default function GestorSkuView({ sourceId, period }) {
                       className="py-2 px-3 text-right align-bottom text-xs font-semibold leading-tight max-w-[7.5rem]"
                       title={p}
                     >
-                      {etiquetas.get(p) || p}
+                      {(() => {
+                        const { nombre, tam } = partirEtiqueta(etiquetas.get(p) || p);
+
+                        return (
+                          <>
+                            <span className="block">{nombre}</span>
+                            {tam && <span className="block font-normal text-[10px] text-slate-400">{tam}</span>}
+                          </>
+                        );
+                      })()}
                     </th>
                   ))}
                   <th className="py-2 pl-3 text-right font-semibold sticky right-0 bg-white z-20 shadow-[-2px_0_4px_-2px_rgba(0,0,0,.15)]">Total</th>
@@ -412,7 +440,12 @@ export default function GestorSkuView({ sourceId, period }) {
                                oscuro y parecería que todos venden lo mismo. */
                             style={v ? { background: `rgba(37, 99, 235, ${0.05 + 0.35 * Math.min(1, v / maxCelda)})` } : undefined}
                           >
-                            {formatNumber(v)}
+                            {/* Un punto en vez de un cero. En esta matriz la mitad de
+                                las celdas están vacías, y doscientos ceros escritos
+                                pesan lo mismo a la vista que los números que sí
+                                importan: hay que leerlos para descartarlos. El punto
+                                dice «aquí no hay nada» sin pedir que lo leas. */}
+                            {v ? formatNumber(v) : "·"}
                           </td>
                         );
                       })}
