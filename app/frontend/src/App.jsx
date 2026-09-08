@@ -54,6 +54,13 @@ function usePath() {
   return [path, go];
 }
 
+/** Qué se está viendo, según la fuente elegida. Las claves son las del servidor. */
+const ETIQUETA_FUENTE = {
+  accumulated: "Se está viendo todo: Ventra y, los días que Ventra aún no ha traído, de los reportes subidos a mano.",
+  ventra: "Se está viendo solo Ventra. Los días que aún no ha traído salen vacíos.",
+  subido: "Se están viendo solo los reportes subidos a mano. Ventra no se está mirando.",
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(true);
@@ -326,17 +333,18 @@ export default function App() {
                     en el código y ya nada lo abría: quien subía el reporte del día no
                     podía elegirlo, y el suyo salía en cero. Ahora está siempre. */}
                 {!isAll && currentSuc?.ventra && canConfig && !verCarga && (
-                  <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
-                    <span>
-                      Se está viendo <b>Ventra</b>, y los reportes subidos a mano cubren
-                      los días que Ventra todavía no ha traído.
-                    </span>
+                  <div className="mb-4 flex items-center gap-2 flex-wrap text-sm text-slate-500">
+                    {/* Lo que dice esta linea sale de la fuente ELEGIDA. La primera
+                        version llevaba el texto fijo ("se esta usando Ventra") pusieras
+                        lo que pusieras, y eso es peor que no poner nada: un cartel que
+                        miente sobre de donde salen las cifras hace dudar de las cifras. */}
+                    <span>{ETIQUETA_FUENTE[sourceId] || "Se está viendo un archivo suelto."}</span>
                     <button
                       className="font-semibold text-brand-700 underline underline-offset-2"
                       type="button"
                       onClick={() => setVerCarga(true)}
                     >
-                      Elegir fuente o subir un reporte
+                      Cambiar fuente
                     </button>
                   </div>
                 )}
