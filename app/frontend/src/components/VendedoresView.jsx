@@ -199,7 +199,6 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
           </p>
         )}
       </div>
-
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi label="Total Ventas" value={formatMoney(vendor.total_importe)} />
@@ -209,6 +208,104 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
         <Kpi label="Operaciones" value={formatInt(vendor.num_operaciones)} tone="slate" />
         <Kpi label="Clientes Únicos" value={formatInt(vendor.num_clientes)} tone="slate" />
       </div>
+
+
+      {/* EN QUÉ SE LE FUE EL MES.
+          Con todos los grupos puestos, dos personas que facturan lo mismo pueden haber
+          hecho trabajos distintos: una vive de la cerveza y otra reparte entre cuatro
+          familias. Eso no salía por ningún lado — había una lista de productos y a sumar
+          de cabeza. Va antes que el detalle a propósito: primero en qué anda, después
+          producto a producto. */}
+      {vendor.por_grupo?.length > 1 && (
+        <div className="card">
+          <h4 className="font-semibold">En qué se le fue el mes</h4>
+          <p className="text-xs text-slate-500 mb-3">Cómo reparte lo que vendió entre familias.</p>
+          <div className="space-y-2">
+            {vendor.por_grupo.map((gr) => (
+              <div key={gr.grupo} className="flex items-center gap-3">
+                <span className="w-32 sm:w-44 shrink-0 truncate text-sm font-medium">{gr.grupo}</span>
+                <div className="h-2 flex-1 min-w-[3rem] overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.min(100, gr.pct)}%` }} />
+                </div>
+                <span className="w-12 shrink-0 text-right text-xs tabular-nums text-slate-500">{formatNumber(gr.pct, 0)}%</span>
+                <span className="w-24 shrink-0 text-right text-sm tabular-nums font-semibold">{formatMoney(gr.importe)}</span>
+                <span className="hidden md:block w-40 shrink-0 text-right text-xs text-slate-400">
+                  {formatInt(gr.productos)} productos · {formatInt(gr.clientes)} clientes
+                  {gr.hectolitros > 0 && ` · ${formatNumber(gr.hectolitros, 1)} HL`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+
+      {/* QUÉ VENDIÓ, CON LO QUE HACE FALTA PARA JUZGARLO.
+          Eran tres columnas —producto, importe y una barra de porcentaje— y con eso se
+          ve cuánto facturó y nada más: ni a cuántos clientes, ni si repitió, ni a qué
+          precio, ni si en ese producto es de los que tiran o de los que van a rastras.
+          Que es justo lo que hay que saber para sentarse a hablar con la persona.
+
+          «% oficina» es la columna que convierte una cifra en un juicio: 619 de arroz no
+          dice si es mucho o poco; «el 21% de todo el arroz que se vendió aquí» sí. */}
+      {vendor.top_productos?.length > 0 && (
+        <div className="card">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h4 className="font-semibold">Qué vendió</h4>
+              <p className="text-xs text-slate-500">
+                {vendor.top_productos.length} productos
+                {qProd.trim() && `, ${filtrarFilas(vendor.top_productos, qProd).length} a la vista`}
+              </p>
+            </div>
+            <Buscador onChange={setQProd} placeholder="Producto o familia…" value={qProd} />
+          </div>
+          <div className="max-h-[30rem] overflow-auto scroll-thin rounded-lg border border-slate-200">
+            <table className="min-w-full text-sm">
+              {/* Cabecera pegajosa: son todos los productos, no un top, y al bajar por
+                  una lista larga se pierde de qué es cada columna. */}
+              <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Producto</th>
+                  <th className="px-3 py-2 text-left font-semibold">Familia</th>
+                  <th className="px-3 py-2 text-right font-semibold">Importe</th>
+                  <th className="px-3 py-2 text-right font-semibold">% suyo</th>
+                  <th className="px-3 py-2 text-right font-semibold">% oficina</th>
+                  <th className="px-3 py-2 text-right font-semibold">Cantidad</th>
+                  {hayHL && <th className="px-3 py-2 text-right font-semibold">HL</th>}
+                  <th className="px-3 py-2 text-right font-semibold">Precio medio</th>
+                  <th className="px-3 py-2 text-right font-semibold">Clientes</th>
+                  <th className="px-3 py-2 text-right font-semibold">Oper.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrarFilas(vendor.top_productos, qProd).map((p) => (
+                  <tr key={p.producto} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-3 py-1.5 font-medium">{p.producto}</td>
+                    <td className="px-3 py-1.5 text-xs text-slate-500">{p.grupo || "—"}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{formatMoney(p.total)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{formatNumber(p.pct_del_gestor, 1)}%</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">
+                      {/* Teñida: de un vistazo se ve en qué productos manda él. */}
+                      <span
+                        className="inline-block rounded px-1.5 py-0.5"
+                        style={p.pct_de_la_oficina ? { background: `rgba(37, 99, 235, ${0.05 + 0.35 * Math.min(1, p.pct_de_la_oficina / 50)})` } : undefined}
+                      >
+                        {formatNumber(p.pct_de_la_oficina, 1)}%
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{formatNumber(p.cantidad, 2)}</td>
+                    {hayHL && <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{formatNumber(p.hectolitros, 2)}</td>}
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{formatMoney(p.precio_medio)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{formatInt(p.clientes)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{formatInt(p.operaciones)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Estudio diario/mensual por formato (individual) — como el reporte */}
       {hayHL && metasBlock && (
@@ -237,7 +334,9 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
           <VendorFormatoTables block={metasBlock} formatos={formatos} />
         </div>
       )}
-
+      {/* El desglose es de Malta y Parranda por formato: sin hectolitros a la vista es
+          una tabla de ceros con selector de semana incluido. */}
+      {hayHL && <HLBreakdown vendor={vendor} />}
       {/* LA COMISIÓN, COMO UNA CUENTA — no como cinco recuadros sueltos.
           Eran cinco casillas en fila y una comisión no son cinco cifras independientes:
           es una resta. En recuadros no se ve que el neto salga de las de al lado, así
@@ -317,67 +416,6 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
           </tbody>
         </table>
       </div>
-
-      {/* El desglose es de Malta y Parranda por formato: sin hectolitros a la vista es
-          una tabla de ceros con selector de semana incluido. */}
-      {hayHL && <HLBreakdown vendor={vendor} />}
-
-      {/* TODOS los productos (ya no es un top): scroll interno + cabecera fija, para
-          que la tarjeta no crezca sin límite pero se pueda ver todo lo vendido. */}
-      {vendor.top_productos?.length > 0 && (
-        <div className="card">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h4 className="font-semibold">
-              Productos (por importe){" "}
-              <span className="font-normal text-sm text-slate-400">
-                — {vendor.top_productos.length} en total
-                {qProd.trim() && `, ${filtrarFilas(vendor.top_productos, qProd).length} a la vista`}
-              </span>
-            </h4>
-            <Buscador onChange={setQProd} placeholder="Producto…" value={qProd} />
-          </div>
-          {/* max-h ≈ cabecera + 10 filas: el scroll se activa a partir de 10 productos */}
-          <div className="overflow-auto scroll-thin max-h-[26rem] rounded-lg border border-slate-200">
-            <table className="min-w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr>
-                  <th className="px-3 py-2 text-left bg-slate-100">#</th>
-                  <th className="px-3 py-2 text-left bg-slate-100">Producto</th>
-                  <th className="px-3 py-2 text-right bg-slate-100">Empaques</th>
-                  <th className="px-3 py-2 text-right bg-slate-100">Importe</th>
-                  <th className="px-3 py-2 text-right bg-slate-100">% del total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtrarFilas(vendor.top_productos, qProd).map((p, i) => {
-                  const pctProd = vendor.total_importe > 0
-                    ? Math.round((p.total / vendor.total_importe) * 100)
-                    : "0.0";
-                  return (
-                    <tr key={i} className="border-t border-slate-100">
-                      <td className="px-3 py-2 text-slate-400">{i + 1}</td>
-                      <td className="px-3 py-2 font-medium">{p.producto}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{formatNumber(p.cantidad ?? 0, 0)}</td>
-                      <td className="px-3 py-2 text-right">{formatMoney(p.total)}</td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="h-2 bg-slate-200 rounded-full w-16 overflow-hidden">
-                            <div
-                              className="h-full bg-brand-500 rounded-full"
-                              style={{ width: `${pctProd}%` }}
-                            />
-                          </div>
-                          <span className="text-slate-600 w-10 text-right">{pctProd}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

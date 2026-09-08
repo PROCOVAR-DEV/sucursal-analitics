@@ -93,6 +93,15 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None) -> di
 
     imp, op, socio, merc = STD_COLS["importe"], STD_COLS["op"], STD_COLS["socio"], STD_COLS["merc"]
     cant = STD_COLS["cant"]  # cantidad vendida (blisters/unidades de venta)
+
+    # Lo que vendió la OFICINA de cada producto. Se calcula una vez y sirve para lo único
+    # que convierte una cifra suelta en un juicio: «de todo el arroz que se vendió aquí,
+    # él puso el 18%». Sin eso, "vendió 619 de arroz" no dice si es mucho o poco.
+    oficina_por_producto = (
+        df_vista.groupby(merc)[imp].sum().to_dict()
+        if (not df_vista.empty and merc in df_vista.columns and imp in df_vista.columns) else {}
+    )
+
     vendedores_out: list[dict] = []
 
     for g in keys:
@@ -127,21 +136,76 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None) -> di
         comision_supervisor = 0.0 if es_supervisor else round(comision * com_super, 2)
         comision_neta = round(comision - comision_supervisor - descuento, 2)
 
+        # Cada producto, con lo que hace falta para saber QUÉ hizo con él.
+        #
+        # Antes eran tres columnas: nombre, importe y cantidad. Con eso se ve cuánto
+        # facturó y nada más — no si lo vendió a un cliente o a treinta, ni si repitió, ni
+        # a qué precio, ni si en ese producto es de los que tiran o de los que no. Que es
+        # justo lo que hay que saber para hablar con la persona.
         top_productos: list[dict] = []
         if not sub_all.empty and merc in sub_all.columns and imp in sub_all.columns:
             aggs = {"total": (imp, "sum")}
             if cant in sub_all.columns:
                 aggs["cantidad"] = (cant, "sum")  # cantidad vendida por producto
+            if op in sub_all.columns:
+                aggs["operaciones"] = (op, "nunique")
+            if socio in sub_all.columns:
+                aggs["clientes"] = (socio, "nunique")
+            if "Hectolitros" in sub_all.columns:
+                aggs["hectolitros"] = ("Hectolitros", "sum")
+            if "GrupoComercial" in sub_all.columns:
+                aggs["grupo"] = ("GrupoComercial", "first")
             # TODOS los productos (antes era top 10): el vendedor tiene que ver todo lo
             # que vende, no solo la cabeza. La tabla del front scrollea por dentro.
             agg = sub_all.groupby(merc).agg(**aggs).sort_values("total", ascending=False).reset_index()
-            top_productos = [
+            for _, r in agg.iterrows():
+                nombre = str(r[merc])
+                tot = round(float(r["total"]), 2)
+                qty = round(float(r.get("cantidad", 0) or 0), 2)
+                de_oficina = float(oficina_por_producto.get(nombre, 0.0))
+                top_productos.append({
+                    "producto": nombre,
+                    "grupo": str(r.get("grupo", "") or ""),
+                    "total": tot,
+                    "cantidad": qty,
+                    "hectolitros": round(float(r.get("hectolitros", 0) or 0), 2),
+                    "operaciones": int(r.get("operaciones", 0) or 0),
+                    "clientes": int(r.get("clientes", 0) or 0),
+                    # Precio medio: delata un descuento que no cuadra o una unidad mal
+                    # cargada mucho antes de que se note en el total.
+                    "precio_medio": round(tot / qty, 2) if qty else 0.0,
+                    # Cuánto pesa este producto en LO SUYO.
+                    "pct_del_gestor": round(tot / total_importe * 100, 2) if total_importe else 0.0,
+                    # Y cuánto puso él de lo que vendió la oficina de ese producto.
+                    "pct_de_la_oficina": round(tot / de_oficina * 100, 2) if de_oficina else 0.0,
+                })
+
+        # Cómo se reparte lo suyo entre familias. Con «todos los grupos» puestos, esto es
+        # lo que contesta «¿qué hizo?» de un vistazo: uno que vende 90% cerveza y otro que
+        # lo reparte en cuatro familias no hacen el mismo trabajo aunque facturen igual.
+        por_grupo: list[dict] = []
+        if not sub_all.empty and "GrupoComercial" in sub_all.columns:
+            g_aggs = {"importe": (imp, "sum")}
+            if cant in sub_all.columns:
+                g_aggs["cantidad"] = (cant, "sum")
+            if "Hectolitros" in sub_all.columns:
+                g_aggs["hectolitros"] = ("Hectolitros", "sum")
+            if socio in sub_all.columns:
+                g_aggs["clientes"] = (socio, "nunique")
+            if merc in sub_all.columns:
+                g_aggs["productos"] = (merc, "nunique")
+            gg = sub_all.groupby("GrupoComercial").agg(**g_aggs).sort_values("importe", ascending=False).reset_index()
+            por_grupo = [
                 {
-                    "producto": str(r[merc]),
-                    "total": round(float(r["total"]), 2),
-                    "cantidad": round(float(r.get("cantidad", 0)), 2),
+                    "grupo": str(r["GrupoComercial"]),
+                    "importe": round(float(r["importe"]), 2),
+                    "cantidad": round(float(r.get("cantidad", 0) or 0), 2),
+                    "hectolitros": round(float(r.get("hectolitros", 0) or 0), 2),
+                    "clientes": int(r.get("clientes", 0) or 0),
+                    "productos": int(r.get("productos", 0) or 0),
+                    "pct": round(float(r["importe"]) / total_importe * 100, 2) if total_importe else 0.0,
                 }
-                for _, r in agg.iterrows()
+                for _, r in gg.iterrows()
             ]
 
         sku_semanal, weeks_disponibles = _sku_semanal_vendedor(sub_mp)
@@ -157,7 +221,7 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None) -> di
             "cumplimiento_pct": round((total_hl / cuota * 100) if cuota else 0.0, 2),
             "malta_330": M330, "malta_500": M500, "malta_1500": M1500,
             "parranda_330": P330, "parranda_500": P500, "parranda_1500": P1500,
-            "top_productos": top_productos,
+            "top_productos": top_productos, "por_grupo": por_grupo,
             # Cómo va vendiendo por SEMANA (HL por formato, semanas de calendario).
             "sku_semanal": sku_semanal, "weeks_disponibles": weeks_disponibles,
         })
