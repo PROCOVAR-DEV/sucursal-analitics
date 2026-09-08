@@ -810,6 +810,7 @@ def src_gestor_sku(
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/diario")
 def src_diario(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), gestor: str | None = Query(default=None),
+               grupo: str | None = Query(default=None),
                suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     # Reporte COMPLETO (sin filtrar por periodo) para poder comparar el día 1 con el
     # último día del mes anterior. El mes objetivo se pasa aparte.
@@ -823,7 +824,9 @@ def src_diario(sid: str, source_id: str, mes: str | None = Query(default=None), 
         eff = _scope_for_user(config_for_period(suc, y, m), user)
     else:
         eff = _eff_scoped(suc, report, mes, user)
-    return compute_diario(report, eff, mes=target, gestor=gestor)
+    # `gestor` no puede colarse por encima del alcance: para el rol gestor, `eff` ya
+    # viene con SU clave y nada mas, asi que pedir el de otro devuelve vacio, no ajeno.
+    return compute_diario(report, eff, mes=target, gestor=gestor, grupo=grupo)
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/metas-gestor")

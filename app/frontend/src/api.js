@@ -165,11 +165,12 @@ export async function getGestorSku(id, mes = null, grupos = [], metrica = "impor
 
   return (await api.get(`${src(id)}/gestor-sku${qs ? `?${qs}` : ""}`)).data;
 }
-export async function getDiario(id, mes = null, gestor = null) {
+export async function getDiario(id, mes = null, gestor = null, grupo = null) {
   const p = new URLSearchParams();
 
   for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
   if (gestor) p.set("gestor", gestor);
+  if (grupo) p.set("grupo", grupo);
 
   const qs = p.toString();
   return (await api.get(`${src(id)}/diario${qs ? "?" + qs : ""}`)).data;

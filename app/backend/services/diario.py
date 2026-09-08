@@ -1,5 +1,12 @@
 """Servicio Diario: meta diaria vs. real por día, con comparación contra el día
-anterior (incluye el último día del mes previo). Global o por vendedor."""
+anterior (incluye el último día del mes previo). Global o por vendedor.
+
+Cada día trae además QUÉ hizo esa persona ese día: a quién le vendió y qué le vendió.
+Los números solos —importe, hectolitros, operaciones— dicen si el día fue bueno o malo,
+pero no dejan hacer nada al respecto; para eso hay que ver los nombres. Se puede acotar
+a un grupo comercial (Parranda, Importaciones, Consignación, Tecnología y Kapital) o
+mirarlo todo junto.
+"""
 from __future__ import annotations
 
 import calendar
@@ -25,12 +32,54 @@ def _working_days(year: int, month: int, eff: dict) -> int:
     return max(1, len(rng))
 
 
-def compute_diario(report, eff: dict, mes: str | None = None, gestor: str | None = None) -> dict:
+def _por(sub, columna: str, imp: str, hl_col: str | None, con_grupo: bool = False) -> list[dict]:
+    """Lo del día partido por cliente o por producto, de más a menos importe.
+
+    De más a menos y no por orden alfabético: la lista se lee de arriba, y lo primero
+    que hay que ver es dónde estuvo el día — no la letra A.
+
+    No se recorta a los diez primeros. Aquí es UNA persona en UN día: son unas pocas
+    líneas, y la pregunta que se viene a contestar («¿a quién le vendió?») no admite un
+    «y otros 4» al final.
+    """
+    if columna not in sub.columns:
+        return []
+
+    filas = []
+
+    for nombre, g in sub.groupby(sub[columna].astype(str)):
+        fila = {
+            "nombre": nombre,
+            "importe": round(float(g[imp].sum()) if imp in g.columns else 0.0, 2),
+            "hectolitros": round(float(g[hl_col].sum()), 2) if hl_col else 0.0,
+            "operaciones": int(len(g)),
+        }
+        if con_grupo and "GrupoComercial" in g.columns:
+            fila["grupo"] = str(g["GrupoComercial"].iloc[0])
+        if con_grupo and STD_COLS["cant"] in g.columns:
+            fila["cantidad"] = round(float(pd.to_numeric(g[STD_COLS["cant"]], errors="coerce").fillna(0).sum()), 2)
+        filas.append(fila)
+
+    return sorted(filas, key=lambda f: f["importe"], reverse=True)
+
+
+def compute_diario(report, eff: dict, mes: str | None = None, gestor: str | None = None,
+                   grupo: str | None = None) -> dict:
     keys = gestor_keys(eff)
     df = only_valid(enrich_for_sucursal(report, eff), keys)
+
+    # Los grupos que ESTA persona ha tocado, antes de filtrar por uno: si se calcularan
+    # despues, elegir un grupo dejaria la lista con un solo elemento y no habria forma
+    # de volver a los otros.
+    grupos_disponibles = (
+        sorted(x for x in df["GrupoComercial"].dropna().astype(str).unique() if x)
+        if "GrupoComercial" in df.columns else []
+    )
     imp, fec, socio = STD_COLS["importe"], STD_COLS["fecha"], STD_COLS["socio"]
     if gestor:
         df = df[df["GestorDetectado"].astype(str).str.upper() == str(gestor).upper()].copy()
+    if grupo and "GrupoComercial" in df.columns:
+        df = df[df["GrupoComercial"].astype(str).str.upper() == str(grupo).upper()].copy()
 
     # Mes objetivo (del estudio): el indicado, o el del último día con datos.
     if not df.empty and fec in df.columns:
@@ -53,6 +102,7 @@ def compute_diario(report, eff: dict, mes: str | None = None, gestor: str | None
 
     empty = {
         "rango": report.rango_str, "periodo": mes, "gestor": gestor, "vendedores": keys,
+        "grupo": grupo, "grupos": grupos_disponibles,
         "dias": [], "meta_dia_hl": meta_dia_hl, "meta_hl_total": meta_hl_total,
         "dias_laborales_totales": dias_totales,
         "totales": {"importe": 0.0, "hectolitros": 0.0, "operaciones": 0, "dias": 0},
@@ -90,6 +140,8 @@ def compute_diario(report, eff: dict, mes: str | None = None, gestor: str | None
             "meta_hl": meta_dia_hl, "delta_meta_hl": delta_meta, "cumplimiento_pct": _pct(hl, meta_dia_hl),
             "vs_anterior_hl": vs_ant, "fecha_anterior": pd_.strftime("%Y-%m-%d") if pd_ is not None else None,
             "estado": "ok" if delta_meta >= 0 else ("alerta" if hl >= 0.8 * meta_dia_hl else "critico"),
+            "clientes_del_dia": _por(sub, socio, imp, hl_col),
+            "productos_del_dia": _por(sub, STD_COLS["merc"], imp, hl_col, con_grupo=True),
         })
 
     tot_imp = round(sum(d["importe"] for d in dias_out), 2)
@@ -100,6 +152,7 @@ def compute_diario(report, eff: dict, mes: str | None = None, gestor: str | None
 
     return {
         "rango": report.rango_str, "periodo": mes, "gestor": gestor, "vendedores": keys,
+        "grupo": grupo, "grupos": grupos_disponibles,
         "dias": dias_out, "meta_dia_hl": meta_dia_hl, "meta_hl_total": meta_hl_total,
         "dias_laborales_totales": dias_totales,
         "totales": {"importe": tot_imp, "hectolitros": tot_hl, "operaciones": tot_ops, "dias": ndias},
