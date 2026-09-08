@@ -17,14 +17,17 @@ la base del motor de reportes: aquí es donde acaban los valores precalculados.
 
 La invalidación se basa en una *huella* de la sucursal derivada de la propia
 base de datos (no de un contador en memoria), así que es correcta con varios
-workers y nunca puede servir un dato obsoleto tras una subida.
+workers y nunca puede servir un dato obsoleto tras una subida. Y en esa huella
+entra también el CÓDIGO: ver `_version_del_codigo`.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
+from pathlib import Path
 
 from sqlalchemy import text
 
@@ -36,6 +39,47 @@ log = logging.getLogger(__name__)
 # si alguien vuelve a pedirlo se recalcula solo. Ajustable por entorno sin
 # tocar el código: ANALITICS_RETENCION_DIAS.
 DIAS_RETENCION = int(os.environ.get("ANALITICS_RETENCION_DIAS", "90"))
+
+
+def _version_del_codigo() -> str:
+    """Huella del código que calcula los resultados. Se computa una vez, al importar.
+
+    La huella de la sucursal miraba los datos —ficheros subidos, configuración, ajustes
+    globales— pero NO el código. Así que un despliegue que cambia CÓMO se calcula seguía
+    sirviendo lo calculado por la versión anterior, y el arreglo no se veía por ningún
+    lado. Pasó el 08/09/2026: se arregló que el Excel rellenara los días que Ventra
+    todavía no había traído, se desplegó, y Camagüey seguía enseñando el día 8 en cero
+    porque el payload guardado era de veinte minutos antes.
+
+    Es lo peor que puede hacer una caché: no que esté vieja, sino que el arreglo parezca
+    no funcionar. Se pierde la tarde buscando en el sitio equivocado — y esta vez se
+    perdió.
+
+    Se hace por CONTENIDO y no por fecha de fichero: dentro de la imagen las fechas
+    pueden venir todas iguales del build, y dos versiones distintas darían la misma
+    huella. Por contenido no hay forma de equivocarse. Y al revés, reiniciar el mismo
+    contenedor no cambia nada, así que la caché sobrevive a un reinicio — que es justo
+    para lo que está.
+    """
+    raiz = Path(__file__).resolve().parent.parent
+    h = hashlib.sha256()
+
+    for f in sorted(raiz.rglob("*.py")):
+        # Los tests no entran: no cambian ningun resultado y se editan a menudo.
+        if "tests" in f.parts or "__pycache__" in f.parts:
+            continue
+        try:
+            h.update(f.relative_to(raiz).as_posix().encode())
+            h.update(f.read_bytes())
+        except OSError:
+            # Un fichero que no se puede leer no puede tumbar el arranque. Que se
+            # quede fuera de la huella es peor que nada, pero no es fatal.
+            log.warning("No se pudo leer %s para la huella del codigo", f)
+
+    return h.hexdigest()[:12]
+
+
+VERSION_CODIGO = _version_del_codigo()
 
 
 def sucursal_version(sid: str) -> str | None:
@@ -65,7 +109,7 @@ def sucursal_version(sid: str) -> str | None:
         from services import ajustes
 
         base = "|".join(str(x) for x in row) if row is not None else "sin-datos"
-        return f"{base}|g:{ajustes.marca_de_tiempo()}"
+        return f"{base}|g:{ajustes.marca_de_tiempo()}|c:{VERSION_CODIGO}"
     except Exception:
         log.exception("No se pudo calcular la version de la sucursal %s", sid)
         return None
