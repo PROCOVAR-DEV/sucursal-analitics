@@ -2,7 +2,7 @@ import { Calculator, Check, Copy, Download, Info, Plus, RotateCcw, Save, Trash2 
 import { useEffect, useMemo, useState } from "react";
 import { getSucursal, getSucursalId, updateSucursal } from "../api.js";
 import { formatNumber } from "./Kpi.jsx";
-import { Button, IconButton, Panel, PanelHeader, Segmented, Select, SelectBuscable, Toast, cn } from "./ui.jsx";
+import { Button, IconButton, Panel, PanelHeader, Segmented, Select, Toast, cn } from "./ui.jsx";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const pkeyOf = (y, m) => `${y}-${String(m).padStart(2, "0")}`;
@@ -54,41 +54,23 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
   const sizeMult = params.size_mult || { 330: 0.02, 500: 0.03, 1500: 0.09 };
   const unitsPP = params.units_per_pallet || { 330: 496, 500: 336, 1500: 110 };
   const sizes = params.sizes || ["330", "500", "1500"];
-  // Los PRODUCTOS de cada grupo, no los nombres de los grupos.
+  // Esta tabla es de HECTOLITROS: formato, pallets, blísters. Solo valen los productos
+  // que se miden así — Parranda y Malta.
   //
-  // Aqui habia `Object.keys(product_groups_keywords)`, que son las FAMILIAS
-  // —PARRANDA, IMPORTACIONES, CONSIGNACION, TECNOLOGIA Y KAPITAL—, asi que
-  // "Agregar SKU" agregaba un grupo entero y no un producto. Colaba porque
-  // PARRANDA y MALTA son a la vez familia y producto, y esos dos si se veian
-  // bien; los otros tres no son productos de nada.
+  // Aquí llegué a poner el catálogo entero, y estaba mal: un saco de arroz o una batería
+  // no tienen formato de 330 ml ni se cuentan en blísters, y planificarlos por pallets
+  // da una cifra que no significa nada. Sus metas van por CANTIDAD, y tienen su sitio en
+  // Configuración › Metas (`metas_productos_ces`).
   //
-  // Los valores del mapa SI son los nombres con los que se casan las metas
-  // (`productos.py` los busca con `contains` sobre la mercancia), asi que son
-  // exactamente la lista que hay que ofrecer. Van por grupo, que es como se
-  // piensan al planificar.
-  const gruposDeProductos = useMemo(() => {
+  // La lista sale de la familia PARRANDA de la configuración, no escrita a mano: si
+  // mañana entra otro formato de malta, aparece solo.
+  const productos = useMemo(() => {
     const kw = params.product_groups_keywords || {};
-    const entradas = Object.entries(kw)
-      .map(([grupo, prods]) => [grupo, [...new Set(prods || [])]])
-      .filter(([, prods]) => prods.length);
+    const deParranda = kw.PARRANDA || kw.Parranda || [];
 
-    return entradas.length ? entradas : [["PARRANDA", ["PARRANDA", "MALTA"]]];
+    return [...new Set(deParranda.length ? deParranda : ["PARRANDA", "MALTA"])];
   }, [params]);
-  const productos = useMemo(
-    () => [...new Set(gruposDeProductos.flatMap(([, prods]) => prods))],
-    [gruposDeProductos],
-  );
-  /**
-   * Los grupos, y si el producto ya guardado no esta en ninguno, uno propio para el.
-   *
-   * Sin esto el selector enseñaria otro valor —o ninguno— y el plan cambiaria solo al
-   * guardar, sin que nadie lo hubiera tocado. Pasa con cualquier producto que se
-   * quitara del catalogo despues de planificarlo.
-   */
-  const gruposConEl = (producto) =>
-    !producto || productos.includes(producto)
-      ? gruposDeProductos
-      : [["YA PLANIFICADO", [producto]], ...gruposDeProductos];
+
   const gestores = useMemo(() => Object.entries(cfg?.gestores || {}).filter(([, g]) => g.activo !== false), [cfg]);
 
   // Construye el estado para el mes seleccionado (metas_mensuales[pkey].gestores).
@@ -295,11 +277,11 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
                   return (
                     <tr key={r.id} className="hover:bg-slate-50">
                       <td>
-                        <SelectBuscable
-                          width="w-56"
-                          buscar="Buscar producto…"
+                        <Select
+                          width="w-44"
                           value={r.producto}
-                          grupos={gruposConEl(r.producto)}
+                          options={(productos.includes(r.producto) ? productos : [r.producto, ...productos])
+                            .map((p) => ({ value: p, label: p }))}
                           onChange={(v) => setField(sel, r.id, "producto", v)}
                         />
                       </td>

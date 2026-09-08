@@ -85,92 +85,6 @@ function sinAcentos(t) {
   return String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-/**
- * Select con buscador y opciones agrupadas.
- *
- * Con sesenta y pico productos repartidos en cuatro familias, un desplegable a secas
- * obliga a recorrer la lista entera con la vista para poner una fila del plan. Se
- * escribe "arroz" y quedan los cinco arroces; se escribe el nombre de la familia y
- * quedan todos los suyos.
- *
- * `grupos` es [[nombre, [opciones]], ...] — la misma forma que tiene la configuración,
- * así no hay que darle la vuelta al dato para pintarlo.
- */
-export function SelectBuscable({ value, grupos, onChange, placeholder = "Seleccionar", buscar = "Buscar…", className, width = "w-full", align = "left" }) {
-  const { open, setOpen, triggerRef, menuRef } = useDropdown();
-  const [q, setQ] = useState("");
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setQ("");
-    // El foco va al buscador al abrir: se abre para escribir, no para mirar.
-    const t = setTimeout(() => inputRef.current?.focus(), 0);
-    return () => clearTimeout(t);
-  }, [open]);
-
-  const filtrados = useMemo(() => {
-    const t = sinAcentos(q).trim();
-    if (!t) return grupos;
-    // Si lo escrito casa con el nombre del grupo, salen TODAS sus opciones: quien
-    // escribe "importaciones" quiere ver la familia entera, no ninguna en concreto.
-    return grupos
-      .map(([g, ops]) => [g, sinAcentos(g).includes(t) ? ops : ops.filter((o) => sinAcentos(o).includes(t))])
-      .filter(([, ops]) => ops.length);
-  }, [grupos, q]);
-
-  const primera = filtrados[0]?.[1]?.[0];
-
-  return (
-    <div className={cn("relative", width, className)}>
-      <button ref={triggerRef} type="button" onClick={() => setOpen((o) => !o)}
-        className="input flex items-center justify-between gap-2 cursor-pointer w-full text-left">
-        <span className={cn("truncate", !value && "text-slate-400")}>{value || placeholder}</span>
-        <ChevronDown size={15} className={cn("text-slate-400 shrink-0 transition-transform", open && "rotate-180")} />
-      </button>
-      <Menu triggerRef={triggerRef} menuRef={menuRef} open={open} onClose={() => setOpen(false)} align={align}>
-        {/* Pegado arriba: el panel scrollea, y un buscador que se va de vista al
-            bajar es un buscador que no está. */}
-        <div className="sticky top-0 z-10 bg-white pb-1">
-          <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-slate-100">
-            <Search size={14} className="text-slate-400 shrink-0" />
-            <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder={buscar}
-              onKeyDown={(e) => {
-                // Enter coge la primera coincidencia: escribir "arroz c" y pulsar
-                // Enter tiene que bastar, sin soltar el teclado para ir al ratón.
-                if (e.key === "Enter" && primera) { onChange(primera); setOpen(false); }
-              }}
-              className="bg-transparent outline-none text-sm w-full min-w-0" />
-            {q && (
-              <button type="button" onClick={() => { setQ(""); inputRef.current?.focus(); }} className="text-slate-400 hover:text-slate-600 shrink-0">
-                <X size={14} />
-              </button>
-            )}
-          </div>
-        </div>
-        {filtrados.length === 0 ? (
-          <p className="px-2.5 py-3 text-xs text-slate-400">Nada con «{q}».</p>
-        ) : (
-          filtrados.map(([grupo, ops]) => (
-            <div key={grupo}>
-              <p className="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{grupo}</p>
-              {ops.map((o) => (
-                <button key={`${grupo}-${o}`} type="button" onClick={() => { onChange(o); setOpen(false); }}
-                  className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-left transition",
-                    o === value ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-700 hover:bg-slate-100")}>
-                  <Check size={14} className={cn("shrink-0", o === value ? "opacity-100" : "opacity-0")} />
-                  <span className="truncate">{o}</span>
-                </button>
-              ))}
-            </div>
-          ))
-        )}
-      </Menu>
-    </div>
-  );
-}
-
 // Select single custom (reemplaza <select> nativo) para fondos claros.
 export function Select({ value, options, onChange, placeholder = "Seleccionar", className, width = "w-full", align = "left" }) {
   const { open, setOpen, triggerRef, menuRef } = useDropdown();
@@ -217,10 +131,16 @@ export function SearchSelect({
     return () => clearTimeout(t);
   }, [open]);
 
-  const needle = q.trim().toLowerCase();
+  // Sin tildes: quien escribe "azucar" no va a poner el acento, y no encontrar
+  // "AZÚCAR" por eso se lee como que el producto no está.
+  const needle = sinAcentos(q).trim();
   const shown = needle
     ? options.filter((o) =>
-        String(o.label).toLowerCase().includes(needle) || String(o.value).toLowerCase().includes(needle))
+        sinAcentos(o.label).includes(needle) ||
+        sinAcentos(o.value).includes(needle) ||
+        // La pista también cuenta: en el catálogo de productos es su familia, y quien
+        // escribe "importaciones" quiere ver las suyas.
+        (o.hint && sinAcentos(o.hint).includes(needle)))
     : options;
 
   return (
@@ -246,7 +166,8 @@ export function SearchSelect({
             className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-left transition whitespace-nowrap",
               o.value === value ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-700 hover:bg-slate-100")}>
             <Check size={14} className={cn("shrink-0", o.value === value ? "opacity-100" : "opacity-0")} />
-            {o.label}
+            <span className="truncate">{o.label}</span>
+            {o.hint && <span className="ml-auto pl-3 text-[10px] uppercase tracking-wide text-slate-400">{o.hint}</span>}
           </button>
         ))}
       </Menu>

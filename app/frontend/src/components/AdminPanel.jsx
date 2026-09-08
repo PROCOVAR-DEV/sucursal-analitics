@@ -336,9 +336,22 @@ function Metas({ cfg, sid, onSaved }) {
   }
 
   const yearOpts = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => ({ value: String(y), label: String(y) }));
-  const addProd = () => {
-    const name = prompt("Nombre del nuevo producto")?.trim().toUpperCase();
-    if (name) setGDraft({ ...g, metas_productos_ces: { ...g.metas_productos_ces, [name]: 0 } });
+  /**
+   * El catálogo de productos, con su familia como pista.
+   *
+   * Aquí el producto se escribía a mano en un `prompt()`, y estas metas se casan con la
+   * mercancía por texto: una letra de más y la meta existe pero no encuentra una sola
+   * venta — sale 0% para siempre y nada avisa de que el nombre está mal escrito.
+   *
+   * Los que ya tienen meta no se ofrecen otra vez: elegirlos no añadiría nada y pisaría
+   * el valor puesto.
+   */
+  const catalogo = Object.entries(cfg?.parametros?.product_groups_keywords || {})
+    .flatMap(([grupo, prods]) => (prods || []).map((nombre) => ({ value: nombre, label: nombre, hint: grupo })))
+    .filter((o) => !(o.value in (g.metas_productos_ces || {})));
+
+  const addProd = (nombre) => {
+    if (nombre) setGDraft({ ...g, metas_productos_ces: { ...g.metas_productos_ces, [nombre]: 0 } });
   };
 
   return (
@@ -407,7 +420,18 @@ function Metas({ cfg, sid, onSaved }) {
                 </div>
               ))}
             </div>
-            <Button variant="subtle" size="sm" icon={Plus} className="mt-3" onClick={addProd}>Agregar producto</Button>
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <SearchSelect
+                width="w-64"
+                value=""
+                options={catalogo}
+                placeholder="Agregar producto…"
+                searchPlaceholder="Buscar producto o familia…"
+                emptyText="Todos los productos ya tienen meta"
+                onChange={addProd}
+              />
+              <span className="text-xs text-slate-400">Las metas por producto van en cantidad, no en hectolitros.</span>
+            </div>
           </div>
         </div>
       </Panel>
