@@ -125,16 +125,45 @@ export default function UploadPanel({ sourceId, onSelect, onRefresh }) {
         {error && <div className="mt-2 p-2 text-xs bg-red-50 text-red-700 rounded border border-red-200">{error}</div>}
       </div>
 
-      <div className="p-3 border-b border-slate-200">
+      {/* Las dos fuentes, siempre las dos y siempre a la vista.
+          Antes solo estaba "Acumulado global", que por dentro decidía sola: si la
+          sucursal tenía algo en Ventra, servía Ventra y el Excel no se miraba — sin
+          decirlo y sin forma de cambiarlo. Quien subía el reporte del día lo veía en
+          cero y no tenía a dónde ir. Ahora se elige, y cada opción dice lo que trae. */}
+      <div className="p-3 border-b border-slate-200 space-y-1">
         <button
           onClick={() => onSelect?.("accumulated")}
           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition ${
             sourceId === "accumulated" ? "bg-brand-600 text-white" : "bg-brand-50 text-brand-700 hover:bg-brand-100"
           }`}
         >
-          <Layers size={16} /> Acumulado global
-          <span className="ml-auto text-xs opacity-80">{uploads.length}</span>
+          <Layers size={16} />
+          <span className="text-left">
+            Todo
+            <span className="block text-[10px] font-normal opacity-80">
+              Ventra y, lo que aún no trajo, de los reportes subidos
+            </span>
+          </span>
         </button>
+        <div className="flex gap-1">
+          <button
+            onClick={() => onSelect?.("ventra")}
+            className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+              sourceId === "ventra" ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+          >
+            Solo Ventra
+          </button>
+          <button
+            onClick={() => onSelect?.("subido")}
+            className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+              sourceId === "subido" ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+          >
+            Solo lo subido
+            <span className="ml-1 opacity-70">{uploads.length}</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
