@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { getProductos } from "../api.js";
 import { BarCard } from "./Charts.jsx";
 import { formatNumber } from "./Kpi.jsx";
-import { Badge, Buscador, ContadorFiltro, Panel, PanelHeader, StatTile, TablaScroll, cn, useFiltroTabla } from "./ui.jsx";
+import { Badge, Buscador, ContadorFiltro, Panel, PanelHeader, Segmented, Select, StatTile, TablaScroll, cn, useFiltroTabla } from "./ui.jsx";
 
 const GROUP_COLORS = {
   PARRANDA: "#2563eb", IMPORTACIONES: "#16a34a", CONSIGNACION: "#f59e0b", "TECNOLOGIA Y KAPITAL": "#7c3aed",
@@ -15,6 +15,11 @@ export default function ProductosView({ sourceId, period }) {
   // El filtro va ANTES de los `return` de carga y error: un hook no se puede llamar a
   // veces sí y a veces no, y aquí abajo hay dos salidas tempranas.
   const { q, setQ, filtradas: cumplimiento } = useFiltroTabla(data?.cumplimiento);
+  // Las metas se ponen producto a producto, pero se pregunta por familia: «¿cómo va
+  // Importaciones?». Sumar a ojo las metas de sus quince productos en la tabla es la
+  // cuenta que nadie hace, y por eso nadie sabía cómo iba un grupo.
+  const [vista, setVista] = useState("grupo");
+  const [grupo, setGrupo] = useState("");
 
   useEffect(() => {
     // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
@@ -28,6 +33,11 @@ export default function ProductosView({ sourceId, period }) {
 
   if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!data) return <div className="p-6 text-slate-400 animate-pulse">Cargando…</div>;
+
+  // No son hooks: van despues de las salidas tempranas sin problema.
+  const gruposConMeta = (data.cumplimiento_por_grupo || []).map((g) => g.grupo);
+  // El grupo elegido acota la tabla de productos; el buscador sigue funcionando dentro.
+  const porGrupo = grupo ? cumplimiento.filter((p) => p.grupo === grupo) : cumplimiento;
 
   const order = (data.groups_order || []).filter((g) => (data.resumen_por_grupo?.[g] || []).length);
   const totalDe = (g) => (data.resumen_por_grupo[g] || []).reduce((s, x) => s + (x.total || 0), 0);
@@ -66,12 +76,66 @@ export default function ProductosView({ sourceId, period }) {
         ))}
       </div>
 
-      {/* Cumplimiento de metas por producto */}
+      {/* Cumplimiento de metas: por grupo o producto a producto */}
       <Panel>
-        <PanelHeader icon={Package} title="Cumplimiento de metas por producto"
+        <PanelHeader icon={Package} title="Cumplimiento de metas"
           sub={data.periodo ? `Metas del periodo ${data.periodo}` : "Metas del mes"}
-          right={<Buscador onChange={setQ} placeholder="Producto o grupo…" value={q} />} />
-        <ContadorFiltro mostradas={cumplimiento.length} q={q} total={data.cumplimiento.length} />
+          right={
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <Segmented
+                value={vista}
+                onChange={setVista}
+                options={[{ value: "grupo", label: "Por grupo" }, { value: "producto", label: "Por producto" }]}
+              />
+              {vista === "producto" && (
+                <Select
+                  width="w-48"
+                  value={grupo}
+                  placeholder="Todos los grupos"
+                  options={[
+                    { value: "", label: "Todos los grupos" },
+                    ...gruposConMeta.map((g) => ({ value: g, label: g })),
+                  ]}
+                  onChange={setGrupo}
+                />
+              )}
+              {vista === "producto" && <Buscador onChange={setQ} placeholder="Producto o grupo…" value={q} />}
+            </div>
+          } />
+        {vista === "grupo" ? (
+          <TablaScroll>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Grupo</th><th className="!text-right">Productos</th>
+                  <th className="!text-right">Meta</th><th className="!text-right">Real</th>
+                  <th className="!text-right">% Cumpl.</th><th className="!text-right">Debería</th>
+                  <th className="!text-right">Delta</th><th className="!text-right">Prom. día</th><th className="!text-right">Nec./día</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.cumplimiento_por_grupo || []).map((g) => (
+                  // Se pincha un grupo y se cae en sus productos, ya filtrados: la
+                  // pregunta que sigue a «va mal» es siempre «¿por cuál?».
+                  <tr key={g.grupo} className="hover:bg-slate-50 cursor-pointer"
+                    onClick={() => { setGrupo(g.grupo); setVista("producto"); }}>
+                    <td className="font-medium">{g.grupo}</td>
+                    <td className="text-right tabular-nums text-slate-500">{g.productos}</td>
+                    <td className="text-right tabular-nums">{formatNumber(g.meta, 0)}</td>
+                    <td className="text-right tabular-nums">{formatNumber(g.real, 2)}</td>
+                    <td className="text-right tabular-nums">{formatNumber(g.cumplimiento_pct, 1)}%</td>
+                    <td className="text-right tabular-nums">{formatNumber(g.deberia, 2)}</td>
+                    <td className={cn("text-right font-semibold tabular-nums", g.delta >= 0 ? "text-emerald-600" : "text-red-600")}>{formatNumber(g.delta, 2)}</td>
+                    <td className="text-right tabular-nums">{formatNumber(g.prom_diario, 2)}</td>
+                    <td className="text-right tabular-nums">{formatNumber(g.necesario_por_dia, 2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TablaScroll>
+        ) : (
+        <>
+        <ContadorFiltro mostradas={porGrupo.length} q={q} total={data.cumplimiento.length} />
         <TablaScroll>
           <table className="tbl">
             <thead>
@@ -83,7 +147,7 @@ export default function ProductosView({ sourceId, period }) {
               </tr>
             </thead>
             <tbody>
-              {cumplimiento.map((p) => (
+              {porGrupo.map((p) => (
                 <tr key={p.producto} className="hover:bg-slate-50">
                   <td className="font-medium">{p.producto}</td>
                   <td>{p.grupo ? <Badge tone="slate">{p.grupo}</Badge> : <span className="text-slate-300">—</span>}</td>
@@ -99,6 +163,8 @@ export default function ProductosView({ sourceId, period }) {
             </tbody>
           </table>
         </TablaScroll>
+        </>
+        )}
       </Panel>
     </div>
   );

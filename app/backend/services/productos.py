@@ -101,6 +101,41 @@ def compute_productos(report, eff: dict) -> dict:
             "estado": "ok" if delta >= 0 else ("alerta" if real >= 0.8 * deberia else "critico"),
         })
 
+    # La meta de un GRUPO es la suma de las metas de sus productos.
+    #
+    # Las metas se ponen producto a producto, pero se pregunta por familia: «¿cómo va
+    # Importaciones?». Sin esto había que sumar a ojo las metas de los quince productos
+    # de esa familia en la tabla, que es justo la cuenta que nadie hace y por eso nadie
+    # sabía cómo iba un grupo.
+    #
+    # `deberia` se suma, NO se recalcula sobre la meta del grupo: es lo mismo mientras
+    # todos los productos compartan los días laborales, y sumando no puede dejar de
+    # cuadrar con las filas de arriba el día que alguno no los comparta. Una cifra que no
+    # cuadra con su propio detalle no la cree nadie, y con razón.
+    por_grupo: dict[str, dict] = {}
+    for c in cumplimiento:
+        g = c["grupo"] or "OTRO"
+        acc = por_grupo.setdefault(g, {"grupo": g, "meta": 0.0, "real": 0.0, "deberia": 0.0, "productos": 0})
+        acc["meta"] += c["meta"]
+        acc["real"] += c["real"]
+        acc["deberia"] += c["deberia"]
+        acc["productos"] += 1
+
+    cumplimiento_por_grupo = []
+    for acc in por_grupo.values():
+        meta = round(acc["meta"], 2)
+        real = round(acc["real"], 2)
+        deberia = round(acc["deberia"], 2)
+        delta = round(real - deberia, 2)
+        cumplimiento_por_grupo.append({
+            **acc, "meta": meta, "real": real, "deberia": deberia, "delta": delta,
+            "cumplimiento_pct": round((real / meta * 100) if meta else 0.0, 2),
+            "prom_diario": round(real / dias_trans, 2) if dias_trans else 0.0,
+            "necesario_por_dia": round(max(0.0, (meta - real) / dias_rest), 2) if dias_rest else 0.0,
+            "estado": "ok" if delta >= 0 else ("alerta" if real >= 0.8 * deberia else "critico"),
+        })
+    cumplimiento_por_grupo.sort(key=lambda x: x["meta"], reverse=True)
+
     # Resumen por grupo (para hoja Resumen y hojas por gestor)
     resumen_por_grupo: dict[str, list[dict]] = {}
     if not df.empty:
@@ -123,6 +158,7 @@ def compute_productos(report, eff: dict) -> dict:
         "dias_laborales_restantes": dias_rest,
         "resumen_ces": _resumen(ces), "resumen_procovar": _resumen(procovar),
         "resumen_por_grupo": resumen_por_grupo,
+        "cumplimiento_por_grupo": cumplimiento_por_grupo,
         "groups_order": groups_order,
         "cumplimiento": cumplimiento, "por_gestor": por_gestor,
     }
