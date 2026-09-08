@@ -20,6 +20,8 @@ import logging
 import os
 import threading
 
+import pandas as pd
+
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -40,7 +42,7 @@ from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.market import compute_market
 from services.productos import compute_productos
 from services.ranking import compute_ranking
-from services.repository import OverlapError, repository
+from services.repository import OverlapError, _df_to_report, repository
 from services.ventra_fuente import hay_datos, report_de_ventra
 from services.sucursal_store import config_for_period, config_for_report, sucursal_store
 from services.vendedores import compute_vendedores
@@ -158,7 +160,10 @@ def _get_source(sid: str, source_id: str) -> ReportData:
         de_ventra = report_de_ventra(sid)
 
         if de_ventra is not None:
-            return de_ventra
+            if source_id == "ventra":
+                return de_ventra
+
+            return _con_la_cola_del_excel(sid, de_ventra)
         if source_id == "ventra":
             raise HTTPException(
                 status_code=404,
@@ -173,6 +178,52 @@ def _get_source(sid: str, source_id: str) -> ReportData:
     if report is None:
         raise HTTPException(status_code=404, detail="Fuente no encontrada. Sube un archivo.")
     return report
+
+
+def _con_la_cola_del_excel(sid: str, de_ventra: ReportData) -> ReportData:
+    """Ventra manda hasta donde llega; el Excel rellena SOLO lo que Ventra aún no trajo.
+
+    Ventra se trae una vez al día, a las 6 de la tarde de Cuba. Hasta esa hora, el día en
+    curso no está en Ventra — y como Ventra tenía preferencia sobre el Excel, el reporte
+    que la sucursal acababa de subir dejaba de verse: el panel salía en cero con los datos
+    delante. Pasó el 08/09/2026 en Camagüey, y no era de esa sucursal: desde que el 07/09
+    se recuperó el histórico de las diez, le pasaba a todas todos los días hasta las 6.
+
+    El corte es la última fecha que tiene Ventra, y del Excel solo entran las filas
+    POSTERIORES. Así no se puede contar nada dos veces: donde Ventra llega, Ventra manda y
+    el Excel ni se mira; donde Ventra todavía no llega, se ve lo que se subió a mano. Y
+    cuando a las 6 entra el día, esas mismas filas pasan a venir de Ventra solas.
+
+    Se le impone el esquema de columnas de Ventra a propósito: los informes de abajo
+    esperan una forma concreta, y una columna de más que solo trae la mitad de las filas
+    es peor que no traerla.
+    """
+    if de_ventra.date_max is None:
+        return de_ventra
+
+    del_excel = repository.accumulated(sid)
+
+    if del_excel is None:
+        return de_ventra
+
+    fecha = STD_COLS["fecha"]
+
+    if fecha not in del_excel.df.columns:
+        return de_ventra
+
+    fechas = pd.to_datetime(del_excel.df[fecha], errors="coerce")
+    cola = del_excel.df[fechas > de_ventra.date_max]
+
+    if cola.empty:
+        return de_ventra
+
+    cola = cola.reindex(columns=de_ventra.df.columns)
+    juntos = pd.concat([de_ventra.df, cola], ignore_index=True)
+
+    return _df_to_report(
+        juntos,
+        filename=f"{de_ventra.filename} + {len(cola)} filas subidas a mano",
+    )
 
 
 def _eff(suc: dict, report: ReportData | None, mes: str | None) -> dict:

@@ -319,6 +319,27 @@ export default function App() {
                     </button>
                   </div>
                 )}
+                {/* El botón para elegir la fuente vivía DENTRO del aviso de arriba, que
+                    solo sale cuando la sucursal no tiene Ventra. El 07/09/2026 se
+                    recuperó el histórico de las diez sucursales, el aviso desapareció de
+                    todas — y con él la única forma de llegar al selector. El panel seguía
+                    en el código y ya nada lo abría: quien subía el reporte del día no
+                    podía elegirlo, y el suyo salía en cero. Ahora está siempre. */}
+                {!isAll && currentSuc?.ventra && canConfig && !verCarga && (
+                  <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
+                    <span>
+                      Se está viendo <b>Ventra</b>, y los reportes subidos a mano cubren
+                      los días que Ventra todavía no ha traído.
+                    </span>
+                    <button
+                      className="font-semibold text-brand-700 underline underline-offset-2"
+                      type="button"
+                      onClick={() => setVerCarga(true)}
+                    >
+                      Elegir fuente o subir un reporte
+                    </button>
+                  </div>
+                )}
                 {/* Ancho completo y arriba del todo cuando se abre: se usa un momento,
                     se cierra, y la pantalla vuelve a ser lo que importa. */}
                 {verCarga && !isAll && (
