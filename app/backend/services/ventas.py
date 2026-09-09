@@ -58,6 +58,24 @@ def compute_ventas(report, eff: dict) -> dict:
 
     df_all = enrich_for_sucursal(report, eff)
     df_all = only_valid(df_all, keys)
+
+    # NINGUN GRUPO PUEDE QUEDARSE SIN COLUMNA.
+    #
+    # `groups_order` son las cuatro familias configuradas, y el clasificador devuelve
+    # "OTRO" cuando ninguna palabra clave casa con la mercancia. Ese "OTRO" contaba en el
+    # Total Venta y no aparecia en ninguna columna, asi que la fila del Excel no cuadraba
+    # consigo misma. En Santiago, septiembre de 2026: total 156.420,87 y las columnas
+    # sumando 152.031,54 — 4.389,33 de diferencia, casi todo VODKA REGIO, que no esta en
+    # ninguna lista de palabras clave.
+    #
+    # Se añaden los grupos que APARECEN EN LOS DATOS y no estaban en la lista, detras de
+    # los configurados. Asi la resta cuadra siempre, y de paso el problema de fondo se ve:
+    # una columna "OTRO" con dinero dentro dice que hay productos sin clasificar, que es
+    # justo lo que hay que arreglar en la configuracion.
+    if not df_all.empty and "GrupoComercial" in df_all.columns:
+        presentes = sorted(x for x in df_all["GrupoComercial"].dropna().astype(str).unique() if x)
+        groups_order = list(groups_order) + [g for g in presentes if g not in groups_order]
+
     df_mp = df_all[df_all["IsMalta"] | df_all["IsParranda"]].copy() if not df_all.empty else df_all
 
     imp = STD_COLS["importe"]

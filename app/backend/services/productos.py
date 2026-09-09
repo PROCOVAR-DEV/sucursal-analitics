@@ -61,6 +61,14 @@ def compute_productos(report, eff: dict) -> dict:
     df = enrich_for_sucursal(report, eff)
     df = only_valid(df, keys)
 
+    # El mismo punto ciego que en Ventas: un grupo que aparece en los datos pero no está
+    # en la lista configurada —"OTRO", que es lo que el clasificador devuelve cuando
+    # ninguna palabra clave casa— se quedaba sin fila en el resumen por grupo. El dinero
+    # contaba en los totales y no se veía en ningún sitio. Se añaden detrás.
+    if not df.empty and "GrupoComercial" in df.columns:
+        presentes = sorted(x for x in df["GrupoComercial"].dropna().astype(str).unique() if x)
+        groups_order = list(groups_order) + [g for g in presentes if g not in groups_order]
+
     # CES = todo lo que NO es PARRANDA (importaciones + otros)
     if not df.empty:
         mask_parr = df["GrupoComercial"].astype(str) == "PARRANDA"
