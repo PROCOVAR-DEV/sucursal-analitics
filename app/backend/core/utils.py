@@ -146,11 +146,29 @@ def detect_product_group(grupo_val, merc_val, groups_keywords: dict) -> str:
         return "CONSIGNACION"
     if "TECNOLOG" in grupo or "KAPITAL" in grupo:
         return "TECNOLOGIA Y KAPITAL"
+    # GANA LA PALABRA MAS ESPECIFICA, no la del primer grupo que casa.
+    #
+    # Antes se devolvia el primer grupo cuya lista tuviera alguna coincidencia, asi que
+    # mandaba el ORDEN de los grupos en el diccionario — un detalle invisible que decide
+    # en que columna cae el dinero. En Santiago alguien añadio "CAJA" a CONSIGNACION y,
+    # como ese grupo iba antes, "REFRESCO SANTA COLA 330 ML CAJA 24U" dejo de ser
+    # importacion: 53.463,54 de refrescos contados como consignacion (medido el
+    # 09/09/2026). Nadie lo pidio y nada lo delataba.
+    #
+    # Comparando por longitud gana la palabra que mas dice del producto: "REFRESCO SANTA"
+    # (14) le gana a "CAJA" (4) sin depender de en que orden esten los grupos. Y cuando
+    # alguien añada un termino generico, solo se llevara lo que ninguna palabra concreta
+    # reclame, que es lo que se espera de un termino generico.
+    mejor_grupo = ""
+    mejor_largo = 0
+
     for group_name, keywords in (groups_keywords or {}).items():
         for kw in keywords:
-            if kw.upper() in merc:
-                return group_name
-    return "OTRO"
+            k = str(kw).upper()
+            if k and k in merc and len(k) > mejor_largo:
+                mejor_grupo, mejor_largo = group_name, len(k)
+
+    return mejor_grupo or "OTRO"
 
 
 def smart_to_numeric(series: pd.Series) -> pd.Series:
