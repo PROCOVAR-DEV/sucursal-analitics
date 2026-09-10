@@ -790,7 +790,10 @@ def src_vendedores(sid: str, source_id: str, mes: str | None = Query(default=Non
                    grupo: list[str] = Query(default=[]),
                    suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
-    return compute_vendedores(report, _eff_scoped(suc, report, mes, user), grupos=grupo)
+    # `es_rango`: sólo el endpoint sabe si vino un mes o vinieron fechas. La cuota es
+    # mensual y con un rango hay que prorratearla; con el mes, no.
+    return compute_vendedores(report, _eff_scoped(suc, report, mes, user), grupos=grupo,
+                              es_rango=bool(desde or hasta))
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/gestor-sku")

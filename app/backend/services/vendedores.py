@@ -51,7 +51,7 @@ def _sku_semanal_vendedor(sub_mp: pd.DataFrame) -> tuple[list[dict], list[str]]:
     return out, [w for w in WEEKS if w in weeks_con_datos]
 
 
-def _proporcion_del_periodo(report, eff: dict) -> tuple[float, int, int]:
+def _proporcion_del_periodo(report, eff: dict, es_rango: bool) -> tuple[float, int, int]:
     """Qué parte del mes cubre lo que se está mirando.
 
     LA CUOTA ES MENSUAL. Cuando se filtra por un día suelto —o por media semana— se
@@ -63,15 +63,19 @@ def _proporcion_del_periodo(report, eff: dict) -> tuple[float, int, int]:
     lunes y un domingo no es lo mismo, y los fines de semana que la sucursal no trabaja no
     cuentan (`trabaja_sabado` / `trabaja_domingo` ya lo dicen por sucursal).
 
-    SOLO se prorratea cuando se ha elegido un RANGO DE FECHAS. Si lo elegido es el mes
-    (`_period` puesto) se deja la cuota entera, que es lo que se venía enseñando: hacerlo
-    también ahí es defendible —comparar 7 días contra la meta de 22 tiene el mismo vicio—
-    pero mueve un número que se lee a diario, y esa decisión es de Jose, no mía.
+    SOLO se prorratea cuando se ha elegido un RANGO DE FECHAS. Si lo elegido es el mes se
+    deja la cuota entera, que es lo que se venía enseñando: hacerlo también ahí es
+    defendible —comparar 7 días contra la meta de 22 tiene el mismo vicio— pero mueve un
+    número que se lee a diario, y esa decisión es de Jose, no mía.
+
+    `es_rango` viene del ENDPOINT, que es el único que sabe si llegó `mes` o llegaron
+    `desde`/`hasta`. Mirarlo en `eff["_period"]` no vale: `config_for_report` lo rellena
+    con el mes de los datos en los dos casos, así que siempre parecía un mes.
 
     Devuelve (proporción, días del rango, días del mes). Con el mes la proporción es 1 y
     no cambia ni un número.
     """
-    if eff.get("_period"):
+    if not es_rango:
         return 1.0, 1, 1
     if report is None or report.date_min is None or report.date_max is None:
         return 1.0, 1, 1
@@ -93,7 +97,7 @@ def _proporcion_del_periodo(report, eff: dict) -> tuple[float, int, int]:
     return min(1.0, del_rango / del_mes), del_rango, del_mes
 
 
-def compute_vendedores(report, eff: dict, grupos: list[str] | None = None) -> dict:
+def compute_vendedores(report, eff: dict, grupos: list[str] | None = None, es_rango: bool = False) -> dict:
     keys = gestor_keys(eff)
     gestores_cfg = eff.get("gestores") or {}
     com_gestor = float(eff.get("comision_gestor_pct", 0.01))
@@ -142,7 +146,7 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None) -> di
     # Lo que vendió la OFICINA de cada producto. Se calcula una vez y sirve para lo único
     # que convierte una cifra suelta en un juicio: «de todo el arroz que se vendió aquí,
     # él puso el 18%». Sin eso, "vendió 619 de arroz" no dice si es mucho o poco.
-    proporcion, dias_rango, dias_mes = _proporcion_del_periodo(report, eff)
+    proporcion, dias_rango, dias_mes = _proporcion_del_periodo(report, eff, es_rango)
 
     oficina_por_producto = (
         df_vista.groupby(merc)[imp].sum().to_dict()
