@@ -87,6 +87,15 @@ export default function VendedoresView({ sourceId, period }) {
           <p className="text-sm text-slate-500">
             {data.rango} · {grupos.length ? grupos.join(", ") : "todos los grupos"}
           </p>
+          {/* La cuota es MENSUAL. Con un rango de fechas se compara contra la parte
+              proporcional, y decirlo evita la lectura de "voy al 3%" que salía antes de
+              comparar un día suelto contra la meta de todo el mes. */}
+          {(data.proporcion_periodo ?? 1) < 1 && (
+            <p className="text-xs text-slate-400">
+              Cuotas ajustadas a {data.dias_del_rango} de los {data.dias_del_mes} días
+              laborales del mes.
+            </p>
+          )}
         </div>
         {disponibles.length > 1 && (
           <FiltroMulti
@@ -167,13 +176,16 @@ export default function VendedoresView({ sourceId, period }) {
           hayHL={hayHL}
           grupos={grupos}
           comisionSobreTodo={!!data.comision_sobre_todo}
+          prorrateado={(data.proporcion_periodo ?? 1) < 1}
+          diasRango={data.dias_del_rango}
+          diasMes={data.dias_del_mes}
         />
       )}
     </div>
   );
 }
 
-function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia, hayHL = true, grupos = [], comisionSobreTodo = false }) {
+function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia, hayHL = true, grupos = [], comisionSobreTodo = false, prorrateado = false, diasRango = 0, diasMes = 0 }) {
   /**
    * Filtrar la lista de productos del gestor.
    *
@@ -214,7 +226,16 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
           <div className="mt-4">
             <div className="flex justify-between text-xs text-slate-500 mb-1">
               <span>Hectolitros: {formatNumber(vendor.total_hectolitros, 2)}</span>
-              <span>Cuota: {formatNumber(vendor.cuota_hl, 2)} HL</span>
+              {/* Con un rango de fechas la cuota va prorrateada, y hay que decirlo: un
+                  «Cuota: 9,3 HL» sin explicar de dónde sale no se puede comprobar. */}
+              <span>
+                Cuota: {formatNumber(vendor.cuota_hl, 2)} HL
+                {prorrateado && (
+                  <span className="text-slate-400">
+                    {" "}({diasRango} de {diasMes} días · mes: {formatNumber(vendor.cuota_hl_mes, 0)} HL)
+                  </span>
+                )}
+              </span>
             </div>
             <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
               <div

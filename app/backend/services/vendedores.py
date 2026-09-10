@@ -1,6 +1,9 @@
 """Servicio de resumen completo por vendedor (todos los productos)."""
 from __future__ import annotations
 
+import calendar
+from datetime import date
+
 import pandas as pd
 
 from services.comisiones import comision_de
@@ -46,6 +49,48 @@ def _sku_semanal_vendedor(sub_mp: pd.DataFrame) -> tuple[list[dict], list[str]]:
                         by_week[w] = round(float(v), 2)
         out.append({"producto": prod, "formato": label, "semanal": by_week, "total": round(sum(by_week.values()), 2)})
     return out, [w for w in WEEKS if w in weeks_con_datos]
+
+
+def _proporcion_del_periodo(report, eff: dict) -> tuple[float, int, int]:
+    """Qué parte del mes cubre lo que se está mirando.
+
+    LA CUOTA ES MENSUAL. Cuando se filtra por un día suelto —o por media semana— se
+    estaba comparando la venta de ESE día contra la meta de TODO el mes, y salían unos
+    cumplimientos de 1%, 3%, 19% que no significan nada y que se leen como un desastre.
+    Pasó el 10/09/2026 mirando La Habana del día 9: ocho vendedores todos en rojo.
+
+    Se prorratea por DÍAS LABORALES, no por días naturales: comparar contra la meta un
+    lunes y un domingo no es lo mismo, y los fines de semana que la sucursal no trabaja no
+    cuentan (`trabaja_sabado` / `trabaja_domingo` ya lo dicen por sucursal).
+
+    SOLO se prorratea cuando se ha elegido un RANGO DE FECHAS. Si lo elegido es el mes
+    (`_period` puesto) se deja la cuota entera, que es lo que se venía enseñando: hacerlo
+    también ahí es defendible —comparar 7 días contra la meta de 22 tiene el mismo vicio—
+    pero mueve un número que se lee a diario, y esa decisión es de Jose, no mía.
+
+    Devuelve (proporción, días del rango, días del mes). Con el mes la proporción es 1 y
+    no cambia ni un número.
+    """
+    if eff.get("_period"):
+        return 1.0, 1, 1
+    if report is None or report.date_min is None or report.date_max is None:
+        return 1.0, 1, 1
+
+    wm = list("1111100")
+    if eff.get("trabaja_sabado"):
+        wm[5] = "1"
+    if eff.get("trabaja_domingo"):
+        wm[6] = "1"
+    weekmask = "".join(wm)
+
+    ini, fin = report.date_min.date(), report.date_max.date()
+    primero = fin.replace(day=1)
+    ultimo = date(fin.year, fin.month, calendar.monthrange(fin.year, fin.month)[1])
+
+    del_rango = max(1, len(pd.bdate_range(start=ini, end=fin, freq="C", weekmask=weekmask)))
+    del_mes = max(1, len(pd.bdate_range(start=primero, end=ultimo, freq="C", weekmask=weekmask)))
+
+    return min(1.0, del_rango / del_mes), del_rango, del_mes
 
 
 def compute_vendedores(report, eff: dict, grupos: list[str] | None = None) -> dict:
@@ -97,6 +142,8 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None) -> di
     # Lo que vendió la OFICINA de cada producto. Se calcula una vez y sirve para lo único
     # que convierte una cifra suelta en un juicio: «de todo el arroz que se vendió aquí,
     # él puso el 18%». Sin eso, "vendió 619 de arroz" no dice si es mucho o poco.
+    proporcion, dias_rango, dias_mes = _proporcion_del_periodo(report, eff)
+
     oficina_por_producto = (
         df_vista.groupby(merc)[imp].sum().to_dict()
         if (not df_vista.empty and merc in df_vista.columns and imp in df_vista.columns) else {}
@@ -124,7 +171,9 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None) -> di
         M330, M500, M1500 = (_sum_hl(sub_mp, sub_mp["IsMalta"], s) for s in ("330", "500", "1500")) if not sub_mp.empty else (0.0, 0.0, 0.0)
         P330, P500, P1500 = (_sum_hl(sub_mp, sub_mp["IsParranda"], s) for s in ("330", "500", "1500")) if not sub_mp.empty else (0.0, 0.0, 0.0)
         total_hl = round(M330 + M500 + M1500 + P330 + P500 + P1500, 2)
-        cuota = float(g_cfg.get("cuota_hl", 0.0))
+        cuota_mes = float(g_cfg.get("cuota_hl", 0.0))
+        # La que se compara es la del periodo que se está mirando, no la del mes entero.
+        cuota = round(cuota_mes * proporcion, 2)
 
         com = comision_de(sub_todo, com_gestor, reglas_com, periodo)
         comision = com["comision"]
@@ -218,6 +267,8 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None) -> di
             "comision_supervisor": comision_supervisor, "es_supervisor": es_supervisor,
             "comision_neta": comision_neta,
             "total_hectolitros": total_hl, "cuota_hl": cuota,
+            # La del mes va aparte para poder decir de dónde sale la del periodo.
+            "cuota_hl_mes": round(cuota_mes, 2),
             "cumplimiento_pct": round((total_hl / cuota * 100) if cuota else 0.0, 2),
             "malta_330": M330, "malta_500": M500, "malta_1500": M1500,
             "parranda_330": P330, "parranda_500": P500, "parranda_1500": P1500,
@@ -245,6 +296,11 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None) -> di
         "total_operaciones": sum(v["num_operaciones"] for v in vendedores_out),
         "grupos_disponibles": grupos_disponibles,
         "grupos": pedidos,
+        # Para que la pantalla pueda decir "cuota de 7 de los 22 días del mes" en vez de
+        # enseñar un porcentaje bajo sin explicar contra qué se mide.
+        "proporcion_periodo": round(proporcion, 4),
+        "dias_del_rango": dias_rango,
+        "dias_del_mes": dias_mes,
         # La pantalla tiene que poder decir que el dinero de la comision no cuadra con
         # las ventas de arriba, y por que. Callarlo seria peor que no filtrar.
         "comision_sobre_todo": bool(pedidos),
