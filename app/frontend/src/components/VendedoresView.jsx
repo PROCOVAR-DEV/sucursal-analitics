@@ -6,6 +6,22 @@ import { VendorFormatoTables } from "./MetasGestorReport.jsx";
 import FiltroMulti from "./FiltroMulti.jsx";
 import { Buscador, filtrarFilas } from "./ui.jsx";
 
+/**
+ * El nombre en corto para la tira: primero y último.
+ *
+ * «FIDEL ALBERTO PALMA HECHAVARRIA» y «RIGOBERTO MANUEL MARTINEZ SABORIT» son nombres
+ * reales de La Habana, y puestos enteros hacen que ocho vendedores no quepan de ninguna
+ * manera. Con el primero y el apellido se distinguen igual —que es para lo que está la
+ * tira— y el entero sale al pasar por encima.
+ *
+ * Dos palabras o menos se dejan tal cual: ahí no hay nada que acortar.
+ */
+function nombreCorto(nombre) {
+  const p = String(nombre || "").trim().split(/\s+/);
+
+  return p.length <= 2 ? String(nombre || "") : `${p[0]} ${p[p.length - 1]}`;
+}
+
 export default function VendedoresView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [metas, setMetas] = useState(null);
@@ -98,26 +114,36 @@ export default function VendedoresView({ sourceId, period }) {
         <Kpi label="Total Operaciones" value={formatInt(data.total_operaciones)} tone="slate" />
       </div>
 
-      {/* Vendor tab selector — fijo (sticky) al hacer scroll para cambiar de vendedor
-          sin perderlo de vista mientras miras las tablas de abajo. */}
-      {/* La tira de vendedores: se arrastra en móvil. Con nueve nombres envueltos,
-          la cabecera pegajosa ocupaba media pantalla y tapaba justo lo que se venía a
-          leer. */}
-      <div className="sticky top-0 z-20 -mx-3 sm:-mx-6 px-3 sm:px-6 py-3 bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-sm flex gap-2 overflow-x-auto scroll-thin sm:flex-wrap sm:overflow-visible">
+      {/* LA TIRA DE VENDEDORES: UNA SOLA FILA, SIEMPRE.
+          Envolvía en pantalla ancha (`sm:flex-wrap`) y con nombres largos se rompía: en
+          La Habana son ocho, con cosas como «RIGOBERTO MANUEL MARTINEZ SABORIT», y la
+          tira ocupaba dos y tres renglones. Al ser PEGAJOSA se comía media pantalla y
+          empujaba hacia abajo justo lo que se venía a leer — que es el problema que ya se
+          había arreglado en móvil y seguía en escritorio.
+          Ahora se arrastra en todas las anchuras: una fila, alta fija, pase lo que pase
+          con la cantidad de vendedores o el largo de los nombres. */}
+      <div className="sticky top-0 z-20 -mx-3 sm:-mx-6 px-3 sm:px-6 py-3 bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-sm flex gap-2 overflow-x-auto scroll-thin">
         {data.vendedores.map((v) => {
           const active = v.gestor === activeGestor;
           const pct = v.cumplimiento_pct;
           const tone = pct >= 100 ? "text-emerald-700" : pct >= 80 ? "text-amber-700" : "text-red-700";
+          // Sin cuota puesta, el cumplimiento no existe: enseñar «0%» en rojo dice que va
+          // fatal cuando lo cierto es que no se le ha puesto meta.
+          const conCuota = Number(v.cuota_hl) > 0;
+
           return (
             <button
               key={v.gestor}
-              className={`tab shrink-0 flex flex-col items-start gap-0.5 py-2 px-4 ${active ? "tab-active" : ""}`}
+              title={v.nombre || v.gestor}
+              className={`tab shrink-0 flex flex-col items-start gap-0.5 py-2 px-4 max-w-[11rem] ${active ? "tab-active" : ""}`}
               onClick={() => setSelGestor(v.gestor)}
             >
-              <span className="font-semibold">{v.nombre || v.gestor}</span>
+              <span className="font-semibold truncate w-full text-left">{nombreCorto(v.nombre || v.gestor)}</span>
               {!active && (
                 hayHL
-                  ? <span className={`text-[10px] font-bold ${tone}`}>{Math.round(pct)}% HL</span>
+                  ? (conCuota
+                      ? <span className={`text-[10px] font-bold ${tone}`}>{Math.round(pct)}% HL</span>
+                      : <span className="text-[10px] font-bold text-slate-400">sin cuota</span>)
                   // Sin hectolitros el porcentaje de cuota no significa nada, y todos
                   // saldrían en rojo al 0%. Lo que sí se puede comparar es lo vendido.
                   : <span className="text-[10px] font-bold text-slate-500">{formatMoney(v.total_importe)}</span>
@@ -159,6 +185,7 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
   const barPct = Math.min(pct, 100);
   const barColor = pct >= 100 ? "bg-emerald-500" : pct >= 80 ? "bg-amber-500" : "bg-red-500";
   const badgeBg  = pct >= 100 ? "bg-emerald-100 text-emerald-800" : pct >= 80 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800";
+  const conCuota = Number(vendor.cuota_hl) > 0;
 
   return (
     <div className="space-y-4">
@@ -169,17 +196,21 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
             <h3 className="text-xl font-bold">{vendor.nombre}</h3>
             <p className="text-sm text-slate-500">{vendor.sector} · {vendor.gestor}</p>
           </div>
-          {hayHL && (
+          {hayHL && (conCuota ? (
             <span className={`px-3 py-1 rounded-full text-sm font-bold ${badgeBg}`}>
               {Math.round(pct)}% cumplimiento HL
             </span>
-          )}
+          ) : (
+            <span className="px-3 py-1 rounded-full text-sm font-semibold bg-slate-100 text-slate-500">
+              Sin cuota puesta
+            </span>
+          ))}
         </div>
 
         {/* La cuota es de hectolitros y solo hay hectolitros en cerveza y malta. Con un
             grupo sin HL, esta barra saldría siempre en rojo al 0% — la lectura sería
             "va fatal" cuando la verdad es "esto no se mide así". */}
-        {hayHL ? (
+        {hayHL && conCuota ? (
           <div className="mt-4">
             <div className="flex justify-between text-xs text-slate-500 mb-1">
               <span>Hectolitros: {formatNumber(vendor.total_hectolitros, 2)}</span>
@@ -192,6 +223,15 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
               />
             </div>
           </div>
+        ) : hayHL ? (
+          /* Cuota 0 no es «va al 0%»: es que a esa persona no se le ha puesto meta este
+             mes. Una barra vacía y un 0% en rojo se leen como un desastre, y lo que hay
+             que hacer no es correr más — es ir a Configuración y ponerle la cuota. */
+          <p className="mt-3 text-xs text-slate-500">
+            Vendió <b>{formatNumber(vendor.total_hectolitros, 2)} HL</b>, pero no tiene
+            cuota puesta para este mes, así que no hay cumplimiento que medir. Se pone en
+            Configuración › Calculadora de metas.
+          </p>
         ) : (
           <p className="mt-3 text-xs text-slate-500">
             Viendo <b>{grupos.join(", ")}</b>. No se mide en hectolitros, así que aquí no
