@@ -318,6 +318,14 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
                 {vendor.top_productos.length} productos
                 {qProd.trim() && `, ${filtrarFilas(vendor.top_productos, qProd).length} a la vista`}
               </p>
+              {/* Las dos preguntas distintas que se le pueden hacer a una línea. El
+                  contraste entre ellas es lo que sirve: 1% de su venta con 100% de la
+                  oficina es un producto que no vende nadie más. */}
+              <p className="mt-1 text-xs text-slate-400 max-w-2xl">
+                <b>% de su venta</b>: de qué vive esta persona. <b>Su parte de la
+                oficina</b>: cuánto puso ella de todo lo que se vendió de ese producto —
+                100% quiere decir que fue la única.
+              </p>
             </div>
             <Buscador onChange={setQProd} placeholder="Producto o familia…" value={qProd} />
           </div>
@@ -330,8 +338,18 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
                   <th className="px-3 py-2 text-left font-semibold">Producto</th>
                   <th className="px-3 py-2 text-left font-semibold">Familia</th>
                   <th className="px-3 py-2 text-right font-semibold">Importe</th>
-                  <th className="px-3 py-2 text-right font-semibold">% suyo</th>
-                  <th className="px-3 py-2 text-right font-semibold">% oficina</th>
+                  {/* Se llamaban «% suyo» y «% oficina» y no se entendían: Jose las leyó
+                      como «lo que vendió él» y «lo que vendió la oficina», que es otra
+                      cosa. Un título de columna que hay que explicar de palabra es un
+                      título malo — la explicación va debajo, en la propia cabecera. */}
+                  <th className="px-3 py-2 text-right font-semibold" title="Qué parte de TODO lo que vendió esta persona es este producto. La columna suma 100%.">
+                    % de su venta
+                    <span className="block font-normal normal-case text-[10px] text-slate-400">cuánto pesa en lo suyo</span>
+                  </th>
+                  <th className="px-3 py-2 text-right font-semibold" title="De todo lo que la oficina vendió DE ESTE PRODUCTO, qué parte puso esta persona. 100% = fue la única que lo vendió.">
+                    su parte de la oficina
+                    <span className="block font-normal normal-case text-[10px] text-slate-400">de todo lo vendido de ese producto</span>
+                  </th>
                   <th className="px-3 py-2 text-right font-semibold">Cantidad</th>
                   {hayHL && <th className="px-3 py-2 text-right font-semibold">HL</th>}
                   <th className="px-3 py-2 text-right font-semibold">Precio medio</th>
