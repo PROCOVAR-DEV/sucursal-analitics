@@ -27,6 +27,7 @@ import hashlib
 import json
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import text
@@ -82,9 +83,55 @@ def _version_del_codigo() -> str:
 VERSION_CODIGO = _version_del_codigo()
 
 
+def _marca_de_ventra(sid: str) -> str:
+    """Cuándo se trajo por última vez lo de Ventra de esta sucursal, y cuánto hay.
+
+    Las dos cosas: la fecha sola no bastaría si alguna vez se borraran filas sin traer
+    otras nuevas, y el recuento solo no distinguiría una corrección que sustituye una
+    línea por otra.
+
+    Se usa `max(traido_at)` y no `count(*)` a secas por lo que cuesta: hay índice por
+    `database`, y el recuento se hace sobre esa misma partición.
+    """
+    try:
+        from services.ventra_fuente import base_de
+
+        base = base_de(sid)
+
+        if not base:
+            return "sin-base"
+
+        with session_scope() as s:
+            row = s.execute(
+                text(
+                    "select coalesce(max(traido_at)::text, ''), count(*)"
+                    "  from analytics_venta_ventra where database = :b"
+                ),
+                {"b": base},
+            ).first()
+
+        return "|".join(str(x) for x in row) if row is not None else "sin-datos"
+    except Exception:
+        # Sin marca de Ventra no se puede garantizar que lo guardado valga: se devuelve
+        # algo distinto cada vez para que NO se use la caché, que es el lado seguro.
+        log.exception("No se pudo calcular la marca de Ventra de %s", sid)
+        return f"desconocida-{datetime.utcnow().isoformat()}"
+
+
 def sucursal_version(sid: str) -> str | None:
-    """Huella del estado de una sucursal: cambia si se sube/borra un archivo o
-    si se edita su configuración (metas, gestores, parámetros).
+    """Huella del estado de una sucursal: cambia si se sube/borra un archivo, si
+    se edita su configuración, si cambia el código o SI VENTRA TRAE DATOS NUEVOS.
+
+    Lo de Ventra faltaba, y se veía así: eligiendo «septiembre» salían 607 filas hasta el
+    día 9, y eligiendo «1–10 de septiembre» salían 874 hasta el día 10 — con la misma
+    fuente y la misma sucursal. El mes servía un resultado calculado el 09/09 a la 01:09,
+    y Ventra había traído el día 10 anoche a las 22:00. Cumplimiento 31% contra 39% por la
+    misma razón.
+
+    Es el mismo fallo que el del código, que ya se arregló el 09/09: una caché que no mira
+    todo lo que puede cambiar el resultado sirve datos viejos sin que nada lo delate — y
+    esta vez los datos viejos eran MENOS ventas, que se lee como que la sucursal vendió
+    menos.
 
     Devuelve None si no se pudo calcular; en ese caso NO se usa la caché
     (mejor recalcular que arriesgarse a servir algo viejo)."""
@@ -109,7 +156,8 @@ def sucursal_version(sid: str) -> str | None:
         from services import ajustes
 
         base = "|".join(str(x) for x in row) if row is not None else "sin-datos"
-        return f"{base}|g:{ajustes.marca_de_tiempo()}|c:{VERSION_CODIGO}"
+
+        return f"{base}|g:{ajustes.marca_de_tiempo()}|c:{VERSION_CODIGO}|v:{_marca_de_ventra(sid)}"
     except Exception:
         log.exception("No se pudo calcular la version de la sucursal %s", sid)
         return None
