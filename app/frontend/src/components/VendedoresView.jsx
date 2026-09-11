@@ -301,6 +301,55 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
       )}
 
 
+      {/* SUS METAS POR CANTIDAD, CONTRA LO VENDIDO.
+          Los productos que no son cerveza no se miden en hectolitros: se cuentan en
+          unidades. Sus metas se ponen por gestor en la calculadora, y hasta ahora se
+          guardaban y no se comparaban con nada — o sea, se podían poner y no servían para
+          saber cómo iba cada uno, que es justo para lo que se ponen.
+          Ordenadas de peor a mejor: lo primero que hay que ver es dónde va flojo. */}
+      {vendor.metas_cantidad?.length > 0 && (
+        <div className="card">
+          <h4 className="font-semibold">Sus metas por cantidad</h4>
+          <p className="text-xs text-slate-500 mb-3">
+            Los productos que no se miden en hectolitros. En unidades.
+          </p>
+          <div className="overflow-x-auto scroll-thin">
+            <table className="min-w-full text-sm">
+              <thead className="text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Producto</th>
+                  <th className="px-3 py-2 text-right font-semibold">Meta</th>
+                  <th className="px-3 py-2 text-right font-semibold">Vendido</th>
+                  <th className="px-3 py-2 text-right font-semibold">Falta</th>
+                  <th className="px-3 py-2 text-right font-semibold">% Cumpl.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendor.metas_cantidad.map((m) => (
+                  <tr key={m.producto} className="border-t border-slate-100">
+                    <td className="px-3 py-1.5 font-medium">{m.producto}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">
+                      {formatNumber(m.meta, 0)}
+                      {m.meta !== m.meta_mes && (
+                        <span className="block text-[10px] text-slate-400">mes: {formatNumber(m.meta_mes, 0)}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{formatNumber(m.real, 0)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">
+                      {m.falta > 0 ? formatNumber(m.falta, 0) : "—"}
+                    </td>
+                    <td className={cn("px-3 py-1.5 text-right tabular-nums font-semibold",
+                      m.cumplimiento_pct >= 100 ? "text-emerald-600" : m.cumplimiento_pct >= 80 ? "text-amber-600" : "text-red-600")}>
+                      {formatNumber(m.cumplimiento_pct, 1)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* QUÉ VENDIÓ, CON LO QUE HACE FALTA PARA JUZGARLO.
           Eran tres columnas —producto, importe y una barra de porcentaje— y con eso se
           ve cuánto facturó y nada más: ni a cuántos clientes, ni si repitió, ni a qué

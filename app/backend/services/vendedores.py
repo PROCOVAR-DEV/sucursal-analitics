@@ -261,6 +261,39 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None, es_ra
                 for _, r in gg.iterrows()
             ]
 
+        # LAS METAS POR CANTIDAD, CONTRA LO VENDIDO.
+        #
+        # Los productos que no son cerveza no se miden en hectolitros: un saco de arroz o
+        # un papel higiénico se cuentan en unidades. Sus metas se ponen por gestor en la
+        # calculadora (`metas_cantidad`) y hasta ahora se guardaban y no se contrastaban
+        # con nada — o sea, se podían poner y no servían para saber cómo iba cada uno, que
+        # es justo para lo que se ponen.
+        #
+        # Se cruza por NOMBRE con `contains`, igual que el cumplimiento por producto de la
+        # sucursal (`productos.py`): si aquí se cruzara distinto, el mismo producto daría
+        # dos cifras según la pantalla.
+        #
+        # Y se prorratea con la misma proporción que la cuota de hectolitros: la meta es
+        # del mes, y mirando un día suelto hay que compararla con la parte que toca.
+        metas_cantidad: list[dict] = []
+        for producto, meta_mes in (g_cfg.get("metas_cantidad") or {}).items():
+            meta = round(float(meta_mes) * proporcion, 2)
+            real = 0.0
+
+            if not sub_all.empty and merc in sub_all.columns and cant in sub_all.columns:
+                casan = sub_all[merc].astype(str).str.contains(str(producto), case=False, na=False)
+                real = round(float(pd.to_numeric(sub_all.loc[casan, cant], errors="coerce").fillna(0).sum()), 2)
+
+            metas_cantidad.append({
+                "producto": producto,
+                "meta": meta,
+                "meta_mes": round(float(meta_mes), 2),
+                "real": real,
+                "cumplimiento_pct": round(real / meta * 100, 2) if meta else 0.0,
+                "falta": round(max(0.0, meta - real), 2),
+            })
+        metas_cantidad.sort(key=lambda m: m["cumplimiento_pct"])
+
         sku_semanal, weeks_disponibles = _sku_semanal_vendedor(sub_mp)
 
         vendedores_out.append({
@@ -277,6 +310,7 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None, es_ra
             "malta_330": M330, "malta_500": M500, "malta_1500": M1500,
             "parranda_330": P330, "parranda_500": P500, "parranda_1500": P1500,
             "top_productos": top_productos, "por_grupo": por_grupo,
+            "metas_cantidad": metas_cantidad,
             # Cómo va vendiendo por SEMANA (HL por formato, semanas de calendario).
             "sku_semanal": sku_semanal, "weeks_disponibles": weeks_disponibles,
         })
