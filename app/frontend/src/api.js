@@ -183,6 +183,17 @@ export async function getDiario(id, mes = null, gestor = null) {
   const qs = p.toString();
   return (await api.get(`${src(id)}/diario${qs ? "?" + qs : ""}`)).data;
 }
+/** Quién lleva sin comprar más de lo que suele tardar, y de quién depende cada vendedor. */
+export async function getClientesDormidos(id, mes = null, grupos = []) {
+  const p = new URLSearchParams();
+
+  for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
+  for (const g of grupos) p.append("grupo", g);
+
+  const qs = p.toString();
+
+  return (await api.get(`${src(id)}/clientes-dormidos${qs ? "?" + qs : ""}`)).data;
+}
 /** Quién entró y quién dejó de comprar, contra el periodo anterior de la misma longitud. */
 export async function getMovimientoClientes(id, mes = null, grupos = []) {
   const p = new URLSearchParams();

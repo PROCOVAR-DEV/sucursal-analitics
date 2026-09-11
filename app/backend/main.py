@@ -33,6 +33,7 @@ from services import comisiones
 from services.clientes_analisis import compute_clientes_analisis
 from services.diario import compute_diario
 from services.metas_cantidad_gestor import compute_metas_cantidad_gestor
+from services.clientes_dormidos import compute_clientes_dormidos
 from services.movimiento_clientes import compute_movimiento_clientes
 from services.metas_gestor import compute_metas_gestor
 from services.excel_export import (
@@ -844,6 +845,23 @@ def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=N
     else:
         eff = _eff_scoped(suc, report, mes, user)
     return compute_metas_gestor(report, eff, dia)
+
+
+@app.get("/api/sucursales/{sid}/sources/{source_id}/clientes-dormidos")
+def src_clientes_dormidos(sid: str, source_id: str, mes: str | None = Query(default=None),
+                          desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
+                          grupo: list[str] = Query(default=[]),
+                          suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    """Quién lleva sin comprar más de lo que suele tardar, y de quién depende cada uno.
+
+    Va sobre el informe SIN filtrar por periodo aunque se pase uno: para saber cuánto tarda
+    un cliente entre compra y compra hace falta su historia, no el recorte del mes. El
+    filtro de grupo sí se aplica, que ése no depende del tiempo.
+    """
+    report = _get_source(sid, source_id)
+    eff = _eff_scoped(suc, report, mes, user)
+
+    return compute_clientes_dormidos(report, eff, grupos=grupo)
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/movimiento-clientes")
