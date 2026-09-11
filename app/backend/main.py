@@ -33,6 +33,7 @@ from services import comisiones
 from services.clientes_analisis import compute_clientes_analisis
 from services.diario import compute_diario
 from services.metas_cantidad_gestor import compute_metas_cantidad_gestor
+from services.movimiento_clientes import compute_movimiento_clientes
 from services.metas_gestor import compute_metas_gestor
 from services.excel_export import (
     export_all, export_clientes_analisis, export_gestor_sku, export_market,
@@ -843,6 +844,28 @@ def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=N
     else:
         eff = _eff_scoped(suc, report, mes, user)
     return compute_metas_gestor(report, eff, dia)
+
+
+@app.get("/api/sucursales/{sid}/sources/{source_id}/movimiento-clientes")
+def src_movimiento_clientes(sid: str, source_id: str, mes: str | None = Query(default=None),
+                            desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
+                            grupo: list[str] = Query(default=[]),
+                            suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    """Quién entró y quién dejó de comprar, contra el periodo anterior de la misma longitud.
+
+    Se le pasa el informe COMPLETO, no el filtrado: para saber qué cliente es nuevo y cuál
+    se perdió hace falta lo de antes, y eso no está en el recorte del periodo. El periodo
+    que se mira se manda aparte, por fechas.
+    """
+    completo = _get_source(sid, source_id)
+    recorte = filter_by_period(completo, mes, desde, hasta)
+
+    if recorte is None or recorte.date_min is None or recorte.date_max is None:
+        return {"por_gestor": [], "oficina": None, "grupos_disponibles": [], "grupos": []}
+
+    eff = _eff_scoped(suc, recorte, mes, user)
+
+    return compute_movimiento_clientes(completo, eff, recorte.date_min, recorte.date_max, grupos=grupo)
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/metas-cantidad")

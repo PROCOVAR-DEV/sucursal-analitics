@@ -1,7 +1,7 @@
 import { Calendar, FileSpreadsheet, LogOut, Package, Settings as SettingsIcon, Target, Trophy, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import AdminPanel from "./components/AdminPanel.jsx";
-import ClientesAnalisisView from "./components/ClientesAnalisisView.jsx";
+import ClientesView from "./components/ClientesView.jsx";
 import ComoVamosView from "./components/ComoVamosView.jsx";
 import QuienVendeView from "./components/QuienVendeView.jsx";
 import Login from "./components/Login.jsx";
@@ -32,7 +32,7 @@ const TABS = [
   { id: "comovamos", label: "Cómo vamos", icon: Target, Comp: ComoVamosView },
   { id: "quienvende", label: "Quién vende", icon: Trophy, Comp: QuienVendeView },
   { id: "productos", label: "Qué se vende", icon: Package, Comp: ProductosView },
-  { id: "clientes", label: "Clientes", icon: Users, Comp: ClientesAnalisisView },
+  { id: "clientes", label: "Clientes", icon: Users, Comp: ClientesView },
   { id: "reportes", label: "Descargas", icon: FileSpreadsheet, Comp: ReportesView },
 ];
 const VIEW_IDS = TABS.map((t) => t.id);
