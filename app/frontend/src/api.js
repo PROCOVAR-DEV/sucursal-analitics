@@ -183,6 +183,17 @@ export async function getDiario(id, mes = null, gestor = null) {
   const qs = p.toString();
   return (await api.get(`${src(id)}/diario${qs ? "?" + qs : ""}`)).data;
 }
+/** El mismo estudio, pero de los productos que no se miden en hectolitros. */
+export async function getMetasCantidad(id, mes = null, dia = null) {
+  const p = new URLSearchParams();
+
+  for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
+  if (dia) p.set("dia", dia);
+
+  const qs = p.toString();
+
+  return (await api.get(`${src(id)}/metas-cantidad${qs ? "?" + qs : ""}`)).data;
+}
 // `dia` = día de corte elegido (para mirar días anteriores). Sin él, el último con datos.
 export async function getMetasGestor(id, mes = null, dia = null) {
   const p = new URLSearchParams();

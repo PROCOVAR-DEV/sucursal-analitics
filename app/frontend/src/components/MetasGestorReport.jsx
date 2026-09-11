@@ -104,7 +104,15 @@ function CumplTable({ title, subtitle, tone, rows, showAyer = false }) {
 }
 
 // Tablas por formato (acumulado del mes + del día) de UN vendedor.
-export function VendorFormatoTables({ block, formatos }) {
+/**
+ * El estudio de un gestor: acumulado del mes y ventas del día, por columna.
+ *
+ * `unidad` y `vacio` lo hacen servir para las DOS cosas con la misma tabla: las columnas
+ * son formatos y la unidad hectolitros para Parranda y Malta, o son productos y la unidad
+ * unidades para todo lo demás. Duplicar la tabla habría dejado dos sitios donde arreglar
+ * la misma cuenta.
+ */
+export function VendorFormatoTables({ block, formatos, unidad = "HL", vacio = null }) {
   if (!block) return null;
   const m = block.mensual, d = block.diario;
 
@@ -113,9 +121,13 @@ export function VendorFormatoTables({ block, formatos }) {
   if (metaFmtTotal < 0.01) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-        <b>{block.gestor}</b> no tiene metas por formato configuradas, por eso el desglose por producto
-        aparece vacío. Ve a <b>Config → Calculadora de metas</b>, carga o ajusta el plan y pulsa
-        <b> “Guardar todas las metas”</b>. (La cuota total sí está: {num(block.totales?.meta_hl || 0)} HL.)
+        {vacio || (
+          <>
+            <b>{block.gestor}</b> no tiene metas por formato configuradas, por eso el desglose por producto
+            aparece vacío. Ve a <b>Config → Calculadora de metas</b>, carga o ajusta el plan y pulsa
+            <b> “Guardar todas las metas”</b>. (La cuota total sí está: {num(block.totales?.meta_hl || 0)} HL.)
+          </>
+        )}
       </div>
     );
   }
@@ -148,8 +160,8 @@ export function VendorFormatoTables({ block, formatos }) {
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <CumplTable title="Acumulado del mes (HL)" subtitle="Acumulado por producto vs. meta acumulada (días laborales)" tone="bg-brand-700" rows={mesRows} />
-      <CumplTable title="Ventas del día (HL)" subtitle="Hoy vs. meta diaria y vs. ayer, por producto" tone="bg-slate-700" rows={diaRows} showAyer />
+      <CumplTable title={`Acumulado del mes (${unidad})`} subtitle="Acumulado por producto vs. meta acumulada (días laborales)" tone="bg-brand-700" rows={mesRows} />
+      <CumplTable title={`Ventas del día (${unidad})`} subtitle="Hoy vs. meta diaria y vs. ayer, por producto" tone="bg-slate-700" rows={diaRows} showAyer />
     </div>
   );
 }

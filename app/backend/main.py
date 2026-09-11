@@ -32,6 +32,7 @@ from services import ajustes
 from services import comisiones
 from services.clientes_analisis import compute_clientes_analisis
 from services.diario import compute_diario
+from services.metas_cantidad_gestor import compute_metas_cantidad_gestor
 from services.metas_gestor import compute_metas_gestor
 from services.excel_export import (
     export_all, export_clientes_analisis, export_gestor_sku, export_market,
@@ -842,6 +843,26 @@ def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=N
     else:
         eff = _eff_scoped(suc, report, mes, user)
     return compute_metas_gestor(report, eff, dia)
+
+
+@app.get("/api/sucursales/{sid}/sources/{source_id}/metas-cantidad")
+def src_metas_cantidad(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), dia: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    """El MISMO estudio que `metas-gestor`, pero de los productos que no son cerveza.
+
+    Se resuelve el mes igual que allí —por el último día con datos y no por la suma de
+    varios meses— a propósito: las dos tablas se enseñan juntas en la ficha del gestor, y
+    si una cogiera la meta de un mes y la otra la de otro, no habría forma de saberlo
+    mirándolas.
+    """
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
+
+    if report is not None and getattr(report, "date_max", None) is not None:
+        d = report.date_max
+        eff = _scope_for_user(config_for_period(suc, d.year, d.month), user)
+    else:
+        eff = _eff_scoped(suc, report, mes, user)
+
+    return compute_metas_cantidad_gestor(report, eff, dia)
 
 
 # Desglose GENERAL (todos los vendedores) por formato de cerveza Parranda y Malta Guajira.

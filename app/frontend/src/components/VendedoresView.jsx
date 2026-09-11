@@ -1,6 +1,6 @@
 import { UserCheck } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getMetasGestor, getVendedores } from "../api.js";
+import { getMetasCantidad, getMetasGestor, getVendedores } from "../api.js";
 import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
 import { VendorFormatoTables } from "./MetasGestorReport.jsx";
 import FiltroMulti from "./FiltroMulti.jsx";
@@ -25,6 +25,8 @@ function nombreCorto(nombre) {
 export default function VendedoresView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [metas, setMetas] = useState(null);
+  /** El mismo estudio, de los productos que no van en hectolitros. */
+  const [metasCant, setMetasCant] = useState(null);
   const [err, setErr] = useState(null);
   const [selGestor, setSelGestor] = useState(null);
   // Día de corte elegido (null = el último con datos). Permite mirar días anteriores.
@@ -56,6 +58,10 @@ export default function VendedoresView({ sourceId, period }) {
     getMetasGestor(sourceId, period, selDia)
       .then((d) => { if (!cancelled) setMetas(d); })
       .catch(() => {});
+    setMetasCant(null);
+    getMetasCantidad(sourceId, period, selDia)
+      .then((d) => { if (!cancelled) setMetasCant(d); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [sourceId, period, selDia]);
 
@@ -73,6 +79,7 @@ export default function VendedoresView({ sourceId, period }) {
   const activeGestor = selGestor ?? data.vendedores[0]?.gestor ?? null;
   const vendor = data.vendedores.find((v) => v.gestor === activeGestor);
   const metasBlock = metas?.por_gestor?.find((g) => g.gestor === activeGestor) || null;
+  const metasCantBlock = metasCant?.por_gestor?.find((g) => g.gestor === activeGestor) || null;
 
   return (
     <div className="space-y-6">
@@ -176,6 +183,8 @@ export default function VendedoresView({ sourceId, period }) {
           hayHL={hayHL}
           grupos={grupos}
           comisionSobreTodo={!!data.comision_sobre_todo}
+          metasCantBlock={metasCantBlock}
+          productosConMeta={metasCant?.formatos || []}
           prorrateado={(data.proporcion_periodo ?? 1) < 1}
           diasRango={data.dias_del_rango}
           diasMes={data.dias_del_mes}
@@ -185,7 +194,7 @@ export default function VendedoresView({ sourceId, period }) {
   );
 }
 
-function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia, hayHL = true, grupos = [], comisionSobreTodo = false, prorrateado = false, diasRango = 0, diasMes = 0 }) {
+function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia, hayHL = true, grupos = [], comisionSobreTodo = false, prorrateado = false, diasRango = 0, diasMes = 0, metasCantBlock = null, productosConMeta = [] }) {
   /**
    * Filtrar la lista de productos del gestor.
    *
@@ -462,6 +471,28 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
           <VendorFormatoTables block={metasBlock} formatos={formatos} />
         </div>
       )}
+      {/* EL MISMO ESTUDIO, PARA LO QUE NO SE MIDE EN HECTOLITROS.
+          Arriba: acumulado del mes contra la meta que tocaría a estas alturas, y las
+          ventas del día contra la meta diaria y contra ayer — pero de cerveza. De los
+          demás productos no se podía preguntar nada de eso: sólo había un total contra un
+          total. Misma tabla, mismas cuentas, otras columnas y otra unidad. */}
+      {metasCantBlock && productosConMeta.length > 0 && (
+        <div className="card space-y-3">
+          <div>
+            <h4 className="font-semibold">Lo que no va en hectolitros · {vendor.gestor}</h4>
+            <p className="text-xs text-slate-500">
+              Arroz, papel, baterías… en unidades. Las metas se ponen en Config › Calculadora de metas.
+            </p>
+          </div>
+          <VendorFormatoTables
+            block={metasCantBlock}
+            formatos={productosConMeta}
+            unidad="u"
+            vacio={<><b>{vendor.nombre}</b> no tiene metas por cantidad puestas este mes.</>}
+          />
+        </div>
+      )}
+
       {/* El desglose es de Malta y Parranda por formato: sin hectolitros a la vista es
           una tabla de ceros con selector de semana incluido. */}
       {hayHL && <HLBreakdown vendor={vendor} />}
