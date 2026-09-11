@@ -1,4 +1,4 @@
-import { UserMinus, UserPlus, Users } from "lucide-react";
+import { TrendingDown, UserMinus, UserPlus, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { getMovimientoClientes } from "../api.js";
@@ -73,7 +73,7 @@ export default function MovimientoClientesView({ sourceId, period }) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <Kpi label="Nuevos" value={formatInt(o.nuevos)} tone="green"
           hint={`${formatMoney(o.importe_nuevos)} que antes no estaban`} />
         <Kpi label="Recuperados" value={formatInt(o.recuperados)} tone="brand"
@@ -82,6 +82,10 @@ export default function MovimientoClientesView({ sourceId, period }) {
         {/* El que importa y el único que no se ve en ninguna otra pantalla. */}
         <Kpi label="Perdidos" value={formatInt(o.perdidos)} tone="amber"
           hint={`${formatMoney(o.importe_perdido)} que compraban y ya no`} />
+        {/* Los de mañana: todavía compran, así que no salen en ninguna alarma, pero
+            ya van de bajada. */}
+        <Kpi label="Se están apagando" value={formatInt(o.apagandose)} tone="amber"
+          hint={`${formatMoney(o.importe_apagado)} menos, comprando todavía`} />
       </div>
 
       <Panel>
@@ -98,6 +102,7 @@ export default function MovimientoClientesView({ sourceId, period }) {
                 <th className="px-3 py-2 text-right font-semibold">Nuevos</th>
                 <th className="px-3 py-2 text-right font-semibold">Recuperados</th>
                 <th className="px-3 py-2 text-right font-semibold">Se mantienen</th>
+                <th className="px-3 py-2 text-right font-semibold">Se apagan</th>
                 <th className="px-3 py-2 text-right font-semibold">Perdidos</th>
                 <th className="px-3 py-2 text-right font-semibold">Dejó de vender</th>
                 <th className="px-3 py-2 text-right font-semibold">Clientes antes → ahora</th>
@@ -115,6 +120,12 @@ export default function MovimientoClientesView({ sourceId, period }) {
                     <td className="px-3 py-1.5 text-right tabular-nums text-emerald-600">{formatInt(g.nuevos)}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-brand-600">{formatInt(g.recuperados)}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{formatInt(g.mantenidos)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-amber-600">
+                      {formatInt(g.apagandose)}
+                      {g.importe_apagado > 0 && (
+                        <span className="ml-1 text-xs text-slate-400">−{formatMoney(g.importe_apagado)}</span>
+                      )}
+                    </td>
                     <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-red-600">{formatInt(g.perdidos)}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{formatMoney(g.importe_perdido)}</td>
                     <td className={cn("px-3 py-1.5 text-right tabular-nums", creció ? "text-emerald-600" : "text-red-600")}>
@@ -127,6 +138,34 @@ export default function MovimientoClientesView({ sourceId, period }) {
           </table>
         </div>
       </Panel>
+
+      {/* Los que bajan. Van antes que los perdidos a propósito: a estos todavía se les
+          puede llamar a tiempo, y a los otros ya hay que ir a recuperarlos. */}
+      {data.por_gestor.filter((g) => g.lista_apagandose?.length).map((g) => (
+        <Panel key={`baja-${g.gestor}`}>
+          <PanelHeader
+            icon={TrendingDown}
+            title={`${g.nombre} — los que van de bajada`}
+            sub={`${g.apagandose} clientes que siguen comprando pero al menos un 30% menos que el periodo anterior`}
+          />
+          <div className="p-4 grid gap-2 sm:grid-cols-2">
+            {g.lista_apagandose.map((c) => (
+              <div key={c.cliente} className="rounded-lg border border-amber-200 bg-amber-50/40 px-3 py-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-sm">{c.cliente}</span>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums text-amber-700">
+                    −{formatMoney(c.baja)}
+                  </span>
+                </div>
+                {/* De cuánto a cuánto, que es lo que se le dice al cliente al llamarlo. */}
+                <div className="mt-0.5 text-xs tabular-nums text-slate-500">
+                  {formatMoney(c.antes)} → {formatMoney(c.ahora)} · {c.baja_pct}% menos
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      ))}
 
       {/* La lista de llamadas. Saber que se perdieron once no sirve; saber cuáles, sí. */}
       {data.por_gestor.filter((g) => g.lista_perdidos?.length).map((g) => (

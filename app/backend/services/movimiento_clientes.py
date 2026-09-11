@@ -11,6 +11,11 @@ Cuatro estados, comparando el periodo elegido con el ANTERIOR de la misma longit
   mantenido   compró en los dos
   perdido     compró en el anterior y ahora no
 
+Y dentro de los mantenidos, los que SE ESTÁN APAGANDO: siguen comprando pero bastante
+menos que antes. Es el paso anterior a irse y no se ve en ningún sitio — un cliente que
+baja de 800 a 300 sigue apareciendo en todas las listas de ventas, con menos importe, y
+nadie lo lee como una señal. Cuando se convierte en «perdido» ya es tarde.
+
 «Perdido» es el que importa y el único que no se ve en ninguna otra pantalla: los otros
 tres aparecen, de una forma u otra, en cualquier lista de ventas. Un cliente que deja de
 comprar no aparece en ningún sitio precisamente porque no aparece.
@@ -32,6 +37,11 @@ from services.loader import STD_COLS
 # Cuántos nombres se devuelven de cada lista. Son para llamar por teléfono, no para
 # exportar: con veinte por gestor ya hay trabajo para una semana.
 TOPE_NOMBRES = 20
+
+# Cuánto tiene que bajar un cliente para llamarlo «apagándose». El 30% porque por debajo
+# es ruido normal —un mes con una semana mala baja un 20% sin que pase nada— y por encima
+# ya no es casualidad.
+CAIDA = 0.30
 
 
 def compute_movimiento_clientes(report_completo, eff: dict, desde, hasta,
@@ -104,6 +114,37 @@ def compute_movimiento_clientes(report_completo, eff: dict, desde, hasta,
                 return 0.0
             return round(float(sub.loc[sub[socio].astype(str).isin(quienes), imp].sum()), 2)
 
+        # LOS QUE SE APAGAN: compran en los dos periodos, pero bastante menos.
+        #
+        # Se compara cada cliente CONSIGO MISMO entre los dos periodos. Sale la lista de
+        # los que más importe han dejado de traer, no los que más porcentaje han bajado:
+        # uno que pasa de 10 a 4 baja un 60% y da igual; uno que pasa de 5.000 a 3.000
+        # baja un 40% y son dos mil pesos.
+        apagandose = []
+
+        if mantenidos:
+            act = sub_ahora[sub_ahora[socio].astype(str).isin(mantenidos)].groupby(
+                sub_ahora[socio].astype(str))[imp].sum()
+            ant = sub_antes[sub_antes[socio].astype(str).isin(mantenidos)].groupby(
+                sub_antes[socio].astype(str))[imp].sum()
+
+            for cliente in mantenidos:
+                a = float(ant.get(cliente, 0.0))
+                b = float(act.get(cliente, 0.0))
+
+                if a <= 0 or b >= a * (1 - CAIDA):
+                    continue
+
+                apagandose.append({
+                    "cliente": cliente,
+                    "antes": round(a, 2),
+                    "ahora": round(b, 2),
+                    "baja": round(a - b, 2),
+                    "baja_pct": round((a - b) / a * 100, 2),
+                })
+
+            apagandose.sort(key=lambda c: c["baja"], reverse=True)
+
         # De los perdidos importa CUÁNTO se dejó de vender, no cuántos son: perder tres
         # clientes pequeños no es lo mismo que perder uno grande.
         por_perdido = (
@@ -129,6 +170,9 @@ def compute_movimiento_clientes(report_completo, eff: dict, desde, hasta,
                 for c, v in por_perdido.head(TOPE_NOMBRES).items()
             ],
             "lista_nuevos": sorted(nuevos)[:TOPE_NOMBRES],
+            "apagandose": len(apagandose),
+            "importe_apagado": round(sum(c["baja"] for c in apagandose), 2),
+            "lista_apagandose": apagandose[:TOPE_NOMBRES],
         }
 
     por_gestor = [
