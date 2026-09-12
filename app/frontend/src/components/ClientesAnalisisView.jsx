@@ -22,6 +22,25 @@ export default function ClientesAnalisisView({ sourceId, period }) {
   const [grupos, setGrupos] = useState([]);
   // "importe" (dolares) o "cantidad" (por empaque, tal como viene del origen).
   const [metrica, setMetrica] = useState("importe");
+
+  /**
+   * Cuántos clientes se pintan de una vez.
+   *
+   * Camagüey tiene 892 en un mes. Pintarlos todos deja una tabla por la que hay que
+   * deslizar un rato largo para llegar al final, y además el navegador tiene que dibujar
+   * 892 filas × 26 SKUs cada vez que se toca un filtro. Con 50 se ve la pantalla de golpe
+   * y quien busque a uno concreto tiene el buscador, que es más rápido que deslizar.
+   *
+   * «Todos» sigue estando, para quien quiera mirarlo entero o copiarlo.
+   */
+  const [porPagina, setPorPagina] = useState(50);
+  const [pagina, setPagina] = useState(1);
+
+  // Cambiar de gestor, buscar o cambiar el tamaño devuelve a la primera: quedarse en la
+  // página 7 de una lista que ahora tiene dos enseña una tabla vacía.
+  useEffect(() => {
+    setPagina(1);
+  }, [sel, qCliente, porPagina]);
   // La lista de grupos se conserva entre consultas: el servidor la calcula ANTES
   // de filtrar, pero si se vaciara al recargar, el desplegable parpadearia.
   const [gruposDisponibles, setGruposDisponibles] = useState([]);
@@ -57,6 +76,10 @@ export default function ClientesAnalisisView({ sourceId, period }) {
 
   const skus = block.skus || [];
   const clientes = filtrarFilas(block.clientes || [], qCliente);
+  const paginas = porPagina === 0 ? 1 : Math.max(Math.ceil(clientes.length / porPagina), 1);
+  const paginaActual = Math.min(pagina, paginas);
+  const desde = porPagina === 0 ? 0 : (paginaActual - 1) * porPagina;
+  const visibles = porPagina === 0 ? clientes : clientes.slice(desde, desde + porPagina);
   // En cantidad NO se pone el simbolo de moneda: un "$" delante de un numero de
   // empaques es sencillamente falso, y quien lo lea sacara la cuenta equivocada.
   const esCantidad = data.metrica === "cantidad";
@@ -162,7 +185,22 @@ export default function ClientesAnalisisView({ sourceId, period }) {
             icon={Users}
             title={isOficina ? "Oficina — todos los clientes" : `Cartera de ${sel}`}
             sub={`${clientes.length}${qCliente.trim() ? ` de ${(block.clientes || []).length}` : ""} clientes · ${skus.length} SKUs · valores por SKU en dólares`}
-            right={<Buscador onChange={setQCliente} placeholder="Cliente…" value={qCliente} />}
+            right={
+              <div className="flex items-center gap-2">
+                <Buscador onChange={setQCliente} placeholder="Cliente…" value={qCliente} />
+                <select
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-600"
+                  onChange={(e) => setPorPagina(Number(e.target.value))}
+                  title="Cuántos clientes por página"
+                  value={porPagina}
+                >
+                  {[25, 50, 100, 200].map((n) => (
+                    <option key={n} value={n}>{n} por página</option>
+                  ))}
+                  <option value={0}>Todos</option>
+                </select>
+              </div>
+            }
           />
           <div className="overflow-auto scroll-thin max-h-[640px]">
             <table className="text-sm border-collapse">
@@ -183,9 +221,11 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                 </tr>
               </thead>
               <tbody>
-                {clientes.map((c, i) => (
-                  <tr key={i} className="group">
-                    <td className="sticky left-0 z-10 bg-white group-hover:bg-brand-50/60 px-3 py-2 text-slate-400 border-b border-r border-slate-100 tabular-nums">{i + 1}</td>
+                {visibles.map((c, i) => (
+                  <tr key={desde + i} className="group">
+                    {/* El número es el de la lista entera, no el de la página: si no, cada
+                        página empezaría en 1 y no se sabría por dónde se va. */}
+                    <td className="sticky left-0 z-10 bg-white group-hover:bg-brand-50/60 px-3 py-2 text-slate-400 border-b border-r border-slate-100 tabular-nums">{desde + i + 1}</td>
                     <td className="sticky left-10 z-10 bg-white group-hover:bg-brand-50/60 px-3 py-2 font-medium text-slate-800 border-b border-r border-slate-100 whitespace-nowrap">{c.cliente}</td>
                     {isOficina && <td className="px-3 py-2 border-b border-slate-100"><span className="badge-slate">{c.gestor}</span></td>}
                     <td className="px-3 py-2 text-right font-semibold text-slate-900 bg-slate-50/60 border-b border-slate-100 tabular-nums">{fmt(c.total)}</td>
@@ -217,6 +257,35 @@ export default function ClientesAnalisisView({ sourceId, period }) {
               </tfoot>
             </table>
           </div>
+
+          {paginas > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm">
+              <span className="text-slate-500 tabular-nums">
+                {desde + 1}–{Math.min(desde + porPagina, clientes.length)} de {clientes.length} clientes
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-slate-600 disabled:opacity-40"
+                  disabled={paginaActual === 1}
+                  onClick={() => setPagina(paginaActual - 1)}
+                  type="button"
+                >
+                  Anterior
+                </button>
+                <span className="px-2 text-slate-500 tabular-nums">
+                  {paginaActual} / {paginas}
+                </span>
+                <button
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-slate-600 disabled:opacity-40"
+                  disabled={paginaActual === paginas}
+                  onClick={() => setPagina(paginaActual + 1)}
+                  type="button"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </Panel>
       )}
     </div>

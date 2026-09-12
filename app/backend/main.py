@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from services.auth_store import auth_store, ALL_SUCURSALES
+from services import refresco_ventra
 from services import cache
 from services import ajustes
 from services import comisiones
@@ -862,6 +863,45 @@ def src_clientes_dormidos(sid: str, source_id: str, mes: str | None = Query(defa
     eff = _eff_scoped(suc, report, mes, user)
 
     return compute_clientes_dormidos(report, eff, grupos=grupo)
+
+
+@app.get("/api/sucursales/{sid}/ventra/refresco")
+def ventra_refresco_estado(sid: str, suc: dict = Depends(require_access)) -> dict:
+    """¿Se puede traer de Ventra ahora mismo? Para pintar el botón y su motivo."""
+    return refresco_ventra.cuanto_queda(sid)
+
+
+@app.post("/api/sucursales/{sid}/ventra/refresco")
+def ventra_refresco(sid: str, suc: dict = Depends(require_access)) -> dict:
+    """Trae de Ventra AHORA los últimos días de ESTA sucursal.
+
+    # Por qué está acotado a la sucursal
+
+    `require_access` ya comprueba que quien pide tiene acceso a `sid`, y dentro se traduce
+    ese `sid` a SU base de Ventra. No hay forma de que esto arranque lo de otra sucursal ni
+    de que traiga datos de otra: si la sucursal no tiene base, se contesta que no y no se
+    sale a Ventra.
+
+    # Y por qué tiene freno
+
+    Ventra no es nuestro. Un botón sin tope es diez personas pulsándolo cuando algo va
+    lento, y eso sí puede tumbarlo para todos. Seis por hora y sucursal, y un minuto entre
+    dos seguidos. La respuesta dice cuántos quedan.
+
+    No hace falta tocar la caché a mano: su huella incluye `max(traido_at)` de esa base
+    (ver `cache._marca_de_ventra`), así que en cuanto entra una línea nueva la huella
+    cambia y lo viejo deja de servirse solo.
+    """
+    r = refresco_ventra.refrescar(sid)
+
+    if not r.get("ok"):
+        # 429 y no 400: es «ahora no, espera», no «lo has pedido mal». Así el navegador y
+        # cualquiera que lo llame lo distinguen sin leer el texto.
+        codigo = 429 if r.get("segundos") else 400
+        raise HTTPException(status_code=codigo, detail=r.get("motivo", "no se pudo refrescar"),
+                            headers={"Retry-After": str(r["segundos"])} if r.get("segundos") else None)
+
+    return r
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/movimiento-clientes")

@@ -289,3 +289,29 @@ export async function uploadFile(file, { force = false } = {}) {
 export async function listUploads() { return (await api.get(`${base()}/uploads`)).data.items; }
 export async function deleteUpload(id) { await api.delete(`${base()}/uploads/${id}`); }
 export async function deleteAllUploads() { await api.delete(`${base()}/uploads`); }
+
+// ---- Traer de Ventra a mano, por sucursal ----
+
+/** ¿Se puede refrescar ahora esta sucursal? Devuelve el motivo y cuántos quedan. */
+export async function estadoRefrescoVentra(sid) {
+  const { data } = await api.get(`/sucursales/${sid}/ventra/refresco`);
+
+  return data;
+}
+
+/**
+ * Trae de Ventra AHORA lo de ESA sucursal.
+ *
+ * El 429 es «ahora no, espera», no un fallo: el servidor lleva el freno (seis por hora y
+ * sucursal) y manda el motivo en `detail`. Se devuelve ese texto tal cual para poder
+ * enseñárselo a quien pulsó.
+ */
+export async function refrescarVentra(sid) {
+  try {
+    const { data } = await api.post(`/sucursales/${sid}/ventra/refresco`);
+
+    return data;
+  } catch (e) {
+    throw new Error(e?.response?.data?.detail || e?.message || "no se pudo refrescar");
+  }
+}

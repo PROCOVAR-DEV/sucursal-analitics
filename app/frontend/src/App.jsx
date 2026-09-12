@@ -12,6 +12,7 @@ import { ALL_SID, getPeriods, getToken, listSucursales, logout, me, setSucursal 
 import { Picker } from "./components/ui.jsx";
 import { SelectorPeriodo, rotuloPeriodo } from "./components/SelectorPeriodo.jsx";
 import { FrescuraDatos } from "./components/FrescuraDatos.jsx";
+import RefrescarVentra from "./components/RefrescarVentra.jsx";
 
 /**
  * CUATRO PREGUNTAS, NO NUEVE PESTAÑAS.
@@ -78,6 +79,15 @@ export default function App() {
   const [verCarga, setVerCarga] = useState(false);
   const [period, setPeriod] = useState(null);
   const [periods, setPeriods] = useState([]);
+
+  /**
+   * Un contador que sube cuando los datos cambian por debajo (traer de Ventra a mano).
+   *
+   * Va de `key` en la vista: React la desmonta y la vuelve a montar, y cada vista pide lo
+   * suyo otra vez. Es lo mismo que hace `key={sid}` con el panel de carga, y evita tener
+   * que enseñarle a cada una de las seis vistas a recargarse.
+   */
+  const [recarga, setRecarga] = useState(0);
   /**
    * Si YA se sabe qué periodo hay que enseñar.
    *
@@ -246,6 +256,11 @@ export default function App() {
           {/* Cuándo entraron los datos por última vez. Va aquí, al lado del periodo,
               porque es la misma pregunta: qué estoy mirando exactamente. */}
           <span className="ml-auto shrink-0"><FrescuraDatos /></span>
+          {/* Traer de Ventra ahora, sólo de esta sucursal. Va pegado a la frescura de los
+              datos porque contesta a lo mismo: «esto está viejo» → «pues tráelo». No sale
+              en la vista de todas las sucursales: el botón es de una, y disparar las diez
+              de golpe es justo lo que no se quiere. */}
+          {!isAll && <RefrescarVentra onListo={() => setRecarga((n) => n + 1)} sid={sid} />}
           {/* La puerta a la carga manual: un botón pequeño y pegado al selector, no
               empujado al borde. Existe para el día que Ventra no esté, no para usarlo
               todos los días, así que no tiene por qué llamar la atención. */}
@@ -370,7 +385,7 @@ export default function App() {
                   // Hasta que no se sabe el periodo no se pide nada: pintar con
                   // `period=null` traeria el historico entero para tirarlo un segundo
                   // despues, que es el parpadeo con cifras distintas que se veia.
-                  <Current isAll={isAll} period={period} sourceId={sourceId} user={user} />
+                  <Current isAll={isAll} key={`${sid}-${recarga}`} period={period} sourceId={sourceId} user={user} />
                 ) : (
                   <div className="py-16 text-center text-sm text-slate-400">Cargando…</div>
                 ))}
