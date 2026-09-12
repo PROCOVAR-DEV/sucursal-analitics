@@ -195,9 +195,9 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                   value={porPagina}
                 >
                   {[25, 50, 100, 200].map((n) => (
-                    <option key={n} value={n}>{n} por página</option>
+                    <option key={n} value={n}>Ver {n} clientes</option>
                   ))}
-                  <option value={0}>Todos</option>
+                  <option value={0}>Ver todos</option>
                 </select>
               </div>
             }
