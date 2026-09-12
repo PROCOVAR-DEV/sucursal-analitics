@@ -57,7 +57,7 @@ export default function RefrescarVentra({ sid, onListo }) {
       setAviso({
         ok: true,
         texto: r.lineas > 0
-          ? `${r.lineas.toLocaleString("es")} líneas traídas`
+          ? `${r.lineas.toLocaleString("es")} líneas nuevas`
           : "ya estaba al día",
       });
       // Los datos han cambiado, así que quien nos pintó tiene que volver a pedirlos.
@@ -83,16 +83,16 @@ export default function RefrescarVentra({ sid, onListo }) {
         disabled={!puede || yendo}
         title={
           yendo
-            ? "Trayendo de Ventra…"
+            ? "Actualizando…"
             : puede
-              ? `Trae ahora lo de esta sucursal. Quedan ${estado?.restantes ?? "?"} esta hora.`
+              ? `Trae ahora los datos de esta sucursal. Quedan ${estado?.restantes ?? "?"} actualizaciones esta hora.`
               : `${estado?.motivo ?? "ahora no"}${estado?.segundos ? ` · vuelve a intentarlo en ${estado.segundos} s` : ""}`
         }
         type="button"
         onClick={traer}
       >
         <RefreshCw className={yendo ? "animate-spin" : ""} size={13} />
-        {yendo ? "Trayendo…" : "Traer de Ventra"}
+        {yendo ? "Actualizando…" : "Actualizar datos"}
       </button>
 
       {aviso && (
