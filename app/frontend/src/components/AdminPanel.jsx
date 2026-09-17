@@ -334,6 +334,25 @@ function Metas({ cfg, sid, onSaved }) {
   const setMonthly = (k, v) => setMDraft({ ...mDraft, [k]: v });
   const setMonthlyProd = (p, v) => setMDraft({ ...mDraft, metas_productos_ces: { ...(mDraft.metas_productos_ces || {}), [p]: v } });
 
+  const FORMATOS = [
+    ["P1500", "Parranda 1.5 L"], ["P500", "Parranda 500 ml"], ["P330", "Parranda 330 ml"],
+    ["M1500", "Malta 1.5 L"], ["M500", "Malta 500 ml"], ["M330", "Malta 330 ml"],
+  ];
+  // Vacio = los seis. Es lo que habia antes de que esto existiera, asi que nada cambia
+  // hasta que alguien decida.
+  const todos = () => FORMATOS.map(([k]) => k);
+  const [fmtDraft, setFmtDraft] = useState(cfg.metas?.formatos?.length ? cfg.metas.formatos : todos());
+  useEffect(() => {
+    setFmtDraft(cfg.metas?.formatos?.length ? cfg.metas.formatos : todos());
+  }, [cfg]);
+
+  async function saveFormatos() {
+    // Va dentro de `metas` porque es lo unico que un supervisor puede guardar, y quien
+    // sabe que se vende en su sucursal es el. El guardado mezcla clave a clave, asi que
+    // mandar solo `formatos` no toca las demas metas.
+    onSaved(await updateSucursal(sid, { metas: { formatos: fmtDraft } }));
+  }
+
   async function saveGlobal() {
     onSaved(await updateSucursal(sid, { metas: {
       meta_hectolitros_total: Number(g.meta_hectolitros_total), meta_dinero_total: Number(g.meta_dinero_total),
@@ -374,6 +393,37 @@ function Metas({ cfg, sid, onSaved }) {
 
   return (
     <div className="space-y-5">
+      {/* QUE SE VENDE AQUI. No todas las sucursales manejan los seis formatos: en
+          Santiago no existe Malta 500 y salia como una columna de ceros en cada tabla y
+          cada Excel — y un cero ahi se lee «no vendiste nada», que no es lo mismo que
+          «aqui no se vende».
+
+          Lo marca quien conoce la sucursal. NO se adivina con los datos: intentarlo
+          escondiendo lo que no se vendio el mes pasado le quito Parranda 330 a Camaguey
+          por no haberla vendido en septiembre. */}
+      <Panel>
+        <PanelHeader icon={Layers} title="Formatos que se venden en esta sucursal"
+          sub="Los que desmarques dejan de salir en las tablas, los informes y la calculadora."
+          right={<Button icon={Save} onClick={saveFormatos}>Guardar</Button>} />
+        <div className="p-3 space-y-2">
+          <div className="flex flex-wrap gap-4">
+            {FORMATOS.map(([k, label]) => (
+              <label key={k} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="checkbox" className="accent-brand-600 w-4 h-4"
+                  checked={fmtDraft.includes(k)}
+                  onChange={(e) => setFmtDraft((d) => (e.target.checked ? [...d, k] : d.filter((x) => x !== k)))} />
+                {label}
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">
+            Si desmarcas todos se vuelven a enseñar los seis — quedarse sin ninguno no es
+            una respuesta útil. Y un formato que tenga meta puesta sigue saliendo aunque
+            lo desmarques: ahí el cero sí significa algo.
+          </p>
+        </div>
+      </Panel>
+
       {/* Metas del mes */}
       <Panel>
         <PanelHeader icon={Target} title="Metas del mes"

@@ -354,19 +354,20 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
   }, [sid, sourceId, pkey, mesBase]);
 
   /**
-   * TODOS los formatos. No se esconde ninguno solo.
+   * Los formatos que esta sucursal marcó en Metas. Vacío = los seis.
    *
-   * Lo intenté escondiendo los que no se habían vendido el mes de referencia, y estaba
-   * mal por dos motivos. El de fondo: que algo no se venda UN mes no significa que ese
-   * producto no exista — a Camagüey le desapareció Parranda 330 de los informes por no
-   * haberla vendido en septiembre. Y el otro, peor: decidí yo una regla que nadie me
-   * pidió y se la apliqué a las diez sucursales.
+   * NO se adivina con los datos. Lo intenté escondiendo los que no se habían vendido el
+   * mes de referencia y estaba mal dos veces: que algo no se venda UN mes no significa
+   * que el producto no exista —a Camagüey le desapareció Parranda 330 por no haberla
+   * vendido en septiembre— y, peor, la regla me la inventé yo y se la apliqué a las
+   * diez sucursales sin que nadie la pidiera.
    *
-   * Qué formatos maneja cada sucursal es una decisión de negocio y tiene que poder
-   * tomarla quien la conoce, desde la pantalla. Mientras eso no exista, se enseñan
-   * todos: sobra una columna, que es mucho menos malo que faltar una.
+   * Ahora lo decide quien conoce la sucursal, desde la pantalla.
    */
-  const formatosVisibles = FORMATOS_PLAN;
+  const elegidos = cfg?.metas?.formatos || [];
+  const formatosVisibles = elegidos.length
+    ? FORMATOS_PLAN.filter((f) => elegidos.includes(f))
+    : FORMATOS_PLAN;
 
   function calc(row) {
     if (!esHL(row.producto)) {

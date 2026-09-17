@@ -73,6 +73,13 @@ def default_metas() -> dict:
         "meta_dinero_total": float(META_DINERO_TOTAL),
         "meta_ccc_total": float(META_CCC_TOTAL),
         "metas_productos_ces": {k: float(v) for k, v in METAS_PRODUCTOS_CES.items()},
+        # Los formatos que ESTA sucursal vende. Vacío = los seis de la casa, que es lo
+        # que había antes de que esto existiera: nada cambia hasta que alguien decida.
+        #
+        # Va en `metas` y no en `parametros` a propósito: un supervisor sólo puede
+        # guardar `metas` (ver `update_sucursal`), y quien conoce qué se vende en su
+        # sucursal es él, no un administrador de otra provincia.
+        "formatos": [],
     }
 
 
@@ -137,6 +144,8 @@ def config_for_period(suc: dict, year: int | None, month: int | None) -> dict:
         "meta_dinero_total": float(metas.get("meta_dinero_total", META_DINERO_TOTAL)),
         "meta_ccc_total": float(metas.get("meta_ccc_total", META_CCC_TOTAL)),
         "metas_productos_ces": dict(metas.get("metas_productos_ces") or METAS_PRODUCTOS_CES),
+        # Qué formatos maneja esta sucursal. Ver `default_metas` y metas_gestor.
+        "formatos": list(metas.get("formatos") or []),
         **params,
         "_period": None,
     }
@@ -335,6 +344,10 @@ class SucursalStore:
                 for mk, mv in patch["metas"].items():
                     if mk == "metas_productos_ces" and isinstance(mv, dict):
                         suc["metas"]["metas_productos_ces"] = {k: float(v) for k, v in mv.items()}
+                    elif mk == "formatos":
+                        # Lista de códigos, no un número: sin esto el `float(mv)` de
+                        # abajo revienta al guardar.
+                        suc["metas"]["formatos"] = [str(x).strip().upper() for x in (mv or []) if str(x).strip()]
                     elif mv is not None:
                         suc["metas"][mk] = float(mv)
             if isinstance(patch.get("parametros"), dict):

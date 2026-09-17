@@ -57,8 +57,24 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
     reglas_com = eff.get("reglas_comision") or []
     periodo = eff.get("_period") or ""
 
-    # Siempre las 6 columnas estándar + cualquier formato extra en metas.
-    formatos = list(DEFAULT_FORMATOS)
+    """
+    Los formatos que maneja ESTA sucursal, más cualquier extra que tenga meta.
+
+    `DEFAULT_FORMATOS` son los seis de la casa, pero no todas las venden los seis: en
+    Santiago no existe Malta 500 y salía igual, una columna de ceros en cada tabla y en
+    cada Excel. Un cero ahí se lee «no vendiste nada de esto», que no es lo mismo que
+    «esto aquí no se vende».
+
+    La lista la decide quien conoce la sucursal, desde la pantalla de Metas. NO se
+    adivina con los datos: lo intenté escondiendo los que no se vendieron el mes de
+    referencia y a Camagüey le desapareció Parranda 330 por no haberla vendido en
+    septiembre. Que algo no se venda un mes no significa que el producto no exista.
+
+    Un formato con meta puesta se queda aunque esté desmarcado: ahí el cero sí
+    significa algo, y esconder un número que alguien tecleó es peor que una columna de
+    más.
+    """
+    formatos = [f for f in DEFAULT_FORMATOS if f in set(eff.get("formatos") or DEFAULT_FORMATOS)] or list(DEFAULT_FORMATOS)
     for g in keys:
         for ck in (gestores_cfg.get(g) or {}).get("metas_formato", {}):
             mc = _meta_code(ck)
