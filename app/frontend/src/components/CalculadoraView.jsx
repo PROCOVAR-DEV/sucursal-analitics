@@ -226,9 +226,13 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       setQuick((prev) => ({ ...prev, ...q }));
 
       const sinBase = r.sin_base || [];
-      const aviso = sinBase.length
-        ? ` Ojo: ${sinBase.map((f) => ETIQUETA_FMT[f] || f).join(", ")} no se vendió en ${r.mes_anterior}, así que va en cero y hay que ponerlo a mano.`
-        : "";
+      const fuera = r.fuera_por_baja || [];
+      // Lo que se dejo fuera se DICE. Si el total baja y no se explica, quien lo mira
+      // da por hecho que la cuenta esta mal — y aqui la cuenta esta bien: es que esos
+      // no trabajan ese mes y su parte ya se repartio entre los demas.
+      const aviso =
+        (fuera.length ? ` ${fuera.join(", ")} no entra: está de baja en ${pkey}, y su parte ya se repartió entre los demás.` : "") +
+        (sinBase.length ? ` Ojo: ${sinBase.map((f) => ETIQUETA_FMT[f] || f).join(", ")} no se vendió en ${r.mes_anterior}, así que va en cero y hay que ponerlo a mano.` : "");
       flash(sinBase.length ? "warn" : "ok",
         `Repartido con las ventas de ${r.mes_anterior}. Revisa y pulsa “Guardar”.${aviso}`);
     } catch (e) {

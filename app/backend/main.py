@@ -885,6 +885,26 @@ def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(..
         for g in (mg.get("por_gestor") or [])
     }
 
+    """
+    QUIÉN RECIBE PLAN es el roster del mes QUE SE PLANIFICA, no el del de referencia.
+
+    Son dos meses distintos y confundirlos rompe las dos puntas. Un vendedor que se
+    dio de baja en septiembre SÍ vendió en agosto —sus ventas son reales y cuentan—
+    pero no puede llevarse meta de un mes que no va a trabajar.
+
+    Y la parte que le habría tocado NO se puede tirar: si se le quita del reparto pero
+    se le deja en el denominador, su trozo se evapora y la suma de los planes ya no da
+    la meta global. Pasó el 17/09/2026 — Jose puso 4.559 HL y le salieron 3.970, y los
+    589 que faltaban eran justo lo de los dos dados de baja.
+
+    Por eso se filtran las VENTAS, no el resultado: al salir del denominador, su parte
+    se reparte sola entre los que quedan y el total vuelve a cuadrar.
+    """
+    y_plan, m_plan = (int(x) for x in mes.split("-")[:2])
+    activos = set((_scope_for_user(config_for_period(suc, y_plan, m_plan), user).get("gestores") or {}).keys())
+    if activos:
+        ventas = {g: v for g, v in ventas.items() if g in activos}
+
     # Las metas globales salen de los parámetros de la consulta, con el NOMBRE del
     # formato: `?P1500=3168&M1500=792`. Así una llamada se entiende sola en un log, y
     # el día que aparezca un formato nuevo no hay que tocar esta firma.
@@ -900,6 +920,9 @@ def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(..
         "mes": mes,
         "mes_anterior": mes_anterior,
         "rango_anterior": mg.get("rango", ""),
+        # Quién quedó fuera por estar de baja en el mes que se planifica, para poder
+        # decirlo en la pantalla en vez de que el total baje sin explicación.
+        "fuera_por_baja": sorted(set((mg_g.get("gestor") for mg_g in (mg.get("por_gestor") or []))) - set(ventas)),
         **repartir_plan_sku(ventas, globales, formatos),
     }
 

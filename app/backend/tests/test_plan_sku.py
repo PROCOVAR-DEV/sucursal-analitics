@@ -80,3 +80,32 @@ def test_los_datos_sucios_no_tumban_el_reparto():
     r = repartir_plan_sku({"a": {"P1500": None}, "b": {"P1500": "12"}}, {"P1500": 60.0})
     assert r["por_gestor"]["a"]["P1500"] == 0.0
     assert r["por_gestor"]["b"]["P1500"] == 60.0
+
+
+def test_la_suma_de_los_planes_ES_la_meta_global():
+    # La propiedad que hace que esto sea un reparto y no una estimacion: lo que se
+    # reparte es exactamente lo que se pidio repartir, ni mas ni menos.
+    r = repartir_plan_sku(VENTAS, GLOBAL)
+    for f, meta in GLOBAL.items():
+        if meta <= 0:
+            continue
+        suma = round(sum(g[f] for g in r["por_gestor"].values()), 2)
+        assert abs(suma - meta) < 0.05, f"{f}: se repartio {suma} de {meta}"
+
+
+def test_quitar_a_uno_REPARTE_su_parte_en_vez_de_perderla():
+    """El fallo del 17/09/2026: Jose puso 4.559 HL y le salieron 3.970.
+
+    Los 589 que faltaban eran de dos vendedores dados de baja: se les quitaba del
+    reparto pero se les dejaba en el denominador, asi que su trozo se evaporaba.
+    La forma correcta es sacarlos de las VENTAS — al salir del denominador, su parte
+    se reparte sola entre los que quedan y el total vuelve a cuadrar.
+    """
+    completo = repartir_plan_sku(VENTAS, GLOBAL)
+    sin_resto = repartir_plan_sku({k: v for k, v in VENTAS.items() if k != "RESTO"}, GLOBAL)
+
+    # El total sigue siendo la meta global entera, no una parte.
+    assert abs(sum(sin_resto["total_por_gestor"].values()) - sum(completo["total_por_gestor"].values())) < 0.1
+    # Y a cada uno de los que quedan le toca MAS que antes.
+    for g in sin_resto["por_gestor"]:
+        assert sin_resto["por_gestor"][g]["P1500"] > completo["por_gestor"][g]["P1500"]
