@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 
 from services.db import session_scope, User
+from services.permisos import sucursales_para
 
 _PBKDF2_ROUNDS = 120_000
 _TOKEN_TTL = 60 * 60 * 12  # 12 horas
@@ -148,7 +149,7 @@ class AuthStore:
         if not username:
             raise ValueError("Usuario vacío")
         role = normalize_role(role)
-        sucs = [ALL_SUCURSALES] if role in _ALL_ROLES else list(sucursales or [])
+        sucs = sucursales_para(role, sucursales)
         g = str(gestor).strip().upper() if role == "gestor" and gestor else None
         with session_scope() as s:
             if s.query(User).filter_by(username=username).first():
@@ -174,12 +175,13 @@ class AuthStore:
                 data["nombre"] = patch["nombre"]
             if "role" in patch:
                 u.role = normalize_role(patch["role"])
-                if u.role in _ALL_ROLES:
-                    data["sucursales"] = [ALL_SUCURSALES]
+                # Al BAJAR de rol hay que limpiar: un admin que pasa a supervisor se
+                # quedaba con el comodín puesto y seguía llegando a las diez sucursales.
+                data["sucursales"] = sucursales_para(u.role, data.get("sucursales"))
                 if u.role != "gestor":
                     data["gestor"] = None
             if "sucursales" in patch and u.role not in _ALL_ROLES:
-                data["sucursales"] = list(patch["sucursales"] or [])
+                data["sucursales"] = sucursales_para(u.role, patch["sucursales"])
             if "gestor" in patch and u.role == "gestor":
                 data["gestor"] = str(patch["gestor"]).strip().upper() if patch["gestor"] else None
             if patch.get("password"):
