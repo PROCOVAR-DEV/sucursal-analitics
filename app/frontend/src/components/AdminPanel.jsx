@@ -184,7 +184,7 @@ function DatosSucursal({ cfg, sid, onSaved }) {
 }
 
 // ---------------- Gestores CRUD
-const emptyGestor = { clave: "", nombre: "", sector: "", agencia: "", cuota_hl: 0, cuota_ccc: 0, aliases: "", activo: true, es_supervisor: false, baja_desde: "" };
+const emptyGestor = { clave: "", nombre: "", sector: "", agencia: "", cuota_hl: 0, cuota_ccc: 0, aliases: "", activo: true, es_supervisor: false, baja_desde: "", sin_meta: false };
 
 function Gestores({ cfg, sid, reload, flash }) {
   const [nuevo, setNuevo] = useState(emptyGestor);
@@ -204,7 +204,7 @@ function Gestores({ cfg, sid, reload, flash }) {
     await updateGestor(sid, clave, {
       nueva_clave: g._clave, nombre: g.nombre, sector: g.sector, agencia: g.agencia,
       aliases: (g.aliases || "").split(",").map((s) => s.trim()).filter(Boolean), activo: g.activo,
-      es_supervisor: !!g.es_supervisor, baja_desde: g.baja_desde || "",
+      es_supervisor: !!g.es_supervisor, baja_desde: g.baja_desde || "", sin_meta: !!g.sin_meta,
     });
     await reload(); flash("ok", `Gestor ${clave} actualizado`);
   }
@@ -237,7 +237,7 @@ function Gestores({ cfg, sid, reload, flash }) {
       <div className="overflow-x-auto scroll-thin">
         <table className="tbl">
           <thead>
-            <tr>{["Clave", "Nombre", "Sector", "Agencia", "Alias", "Activo", "Baja desde", "Supervisor", `Meta HL · ${MESES[ym.m - 1]}`, "Meta CCC", ""].map((h) => <th key={h}>{h}</th>)}</tr>
+            <tr>{["Clave", "Nombre", "Sector", "Agencia", "Alias", "Activo", "Baja desde", "Sin meta", "Supervisor", `Meta HL · ${MESES[ym.m - 1]}`, "Meta CCC", ""].map((h) => <th key={h}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {gestores.map(([clave, g]) => (
@@ -287,6 +287,14 @@ function GestorRow({ clave, g, onSave, onDelete, monthConf, mg, inMonth }) {
       {/* Quién supervisa. Al supervisor NO se le descuenta el 10%: es el suyo, lo
           cobra de los demás. Marcarlo mal le quita dinero a alguien, así que se marca
           a mano y no se adivina. */}
+      {/* SIN META: vende y cuenta, pero no se le reparte cuota.
+          Es el canal de los clientes que caen de imprevisto, o quien ya no es de la
+          casa y cuyas ventas siguen puntuando. NO es lo mismo que darle de baja: la
+          baja le quitaría también las ventas de los informes. Su parte de la meta se
+          reparte entre los que sí llevan cuota. */}
+      <td className={cn(td, "text-center")}><input type="checkbox" className="accent-slate-500 w-4 h-4" checked={!!row.sin_meta}
+        title="Vende y cuenta para el total, pero no se le reparte meta"
+        onChange={(e) => set("sin_meta", e.target.checked)} /></td>
       <td className={cn(td, "text-center")}><input type="checkbox" className="accent-amber-500 w-4 h-4" checked={!!row.es_supervisor} onChange={(e) => set("es_supervisor", e.target.checked)} title="Es el supervisor de la sucursal" /></td>
       <td className={cn(td, "text-right tabular-nums font-semibold")}>{mg?.cuota_hl != null ? formatNumber2(mg.cuota_hl) : <span className="text-slate-300 italic font-normal text-xs">sin configurar</span>}</td>
       <td className={cn(td, "text-right tabular-nums")}>{mg?.cuota_ccc != null ? formatNumber2(mg.cuota_ccc) : <span className="text-slate-300 italic text-xs">—</span>}</td>

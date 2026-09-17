@@ -226,12 +226,12 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       setQuick((prev) => ({ ...prev, ...q }));
 
       const sinBase = r.sin_base || [];
-      const fuera = r.fuera_por_baja || [];
-      // Lo que se dejo fuera se DICE. Si el total baja y no se explica, quien lo mira
-      // da por hecho que la cuenta esta mal — y aqui la cuenta esta bien: es que esos
-      // no trabajan ese mes y su parte ya se repartio entre los demas.
+      const fuera = r.fuera_del_reparto || [];
+      // Quien queda fuera se DICE. Vendio el mes de referencia pero no lleva meta —de
+      // baja, o sin cuota a proposito— y su parte ya se repartio entre los demas. Sin
+      // decirlo, una tabla con menos filas de las esperadas se lee como un error.
       const aviso =
-        (fuera.length ? ` ${fuera.join(", ")} no entra: está de baja en ${pkey}, y su parte ya se repartió entre los demás.` : "") +
+        (fuera.length ? ` Sin meta este mes: ${fuera.join(", ")} — sus ventas cuentan igual, y su parte ya se repartió entre los demás.` : "") +
         (sinBase.length ? ` Ojo: ${sinBase.map((f) => ETIQUETA_FMT[f] || f).join(", ")} no se vendió en ${r.mes_anterior}, así que va en cero y hay que ponerlo a mano.` : "");
       flash(sinBase.length ? "warn" : "ok",
         `Repartido con las ventas de ${r.mes_anterior}. Revisa y pulsa “Guardar”.${aviso}`);

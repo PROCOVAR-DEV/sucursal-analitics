@@ -394,6 +394,19 @@ class SucursalStore:
                 # Desde qué mes deja de contar (AAAA-MM), sin borrarle el pasado.
                 # Vacío = sigue. Ver `services/roster.py`.
                 "baja_desde": str(cfg.get("baja_desde", existing.get("baja_desde", "")) or "").strip(),
+                # NO LLEVA META, pero sus ventas cuentan. Que no es lo mismo que la baja.
+                #
+                # Dos casos reales de Santiago, y los dos se rompían con `baja_desde`:
+                #   · Sidney (alias `pedro`) es el propio Jose: atiende a los clientes que
+                #     caen de imprevisto y les monta el pedido. Vende de verdad, todos los
+                #     meses, y a propósito no tiene cuota.
+                #   · Amsale ya no es de Procovar, pero lo que vende sigue puntuando aquí.
+                #
+                # Darles de baja les quitaría las ventas de los informes, que es justo lo
+                # que NO se quiere: aparecen en todo, cuentan para el total de la oficina,
+                # y sólo quedan fuera del REPARTO de la meta. Su parte se redistribuye
+                # entre los que sí llevan cuota.
+                "sin_meta": bool(cfg.get("sin_meta", existing.get("sin_meta", False))),
                 "metas_formato": {
                     str(k): float(v)
                     for k, v in (cfg.get("metas_formato", existing.get("metas_formato", {})) or {}).items()

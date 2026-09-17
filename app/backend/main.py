@@ -901,9 +901,13 @@ def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(..
     se reparte sola entre los que quedan y el total vuelve a cuadrar.
     """
     y_plan, m_plan = (int(x) for x in mes.split("-")[:2])
-    activos = set((_scope_for_user(config_for_period(suc, y_plan, m_plan), user).get("gestores") or {}).keys())
-    if activos:
-        ventas = {g: v for g, v in ventas.items() if g in activos}
+    roster = (_scope_for_user(config_for_period(suc, y_plan, m_plan), user).get("gestores") or {})
+    # Y los que a propósito NO llevan cuota: el canal de los clientes que caen de
+    # imprevisto, o quien ya no es de la casa pero cuyas ventas siguen puntuando.
+    # Cuentan en todos los informes; lo único que no reciben es meta.
+    reciben = {g for g, cfg_g in roster.items() if not (cfg_g or {}).get("sin_meta")}
+    if reciben:
+        ventas = {g: v for g, v in ventas.items() if g in reciben}
 
     # Las metas globales salen de los parámetros de la consulta, con el NOMBRE del
     # formato: `?P1500=3168&M1500=792`. Así una llamada se entiende sola en un log, y
@@ -920,9 +924,10 @@ def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(..
         "mes": mes,
         "mes_anterior": mes_anterior,
         "rango_anterior": mg.get("rango", ""),
-        # Quién quedó fuera por estar de baja en el mes que se planifica, para poder
-        # decirlo en la pantalla en vez de que el total baje sin explicación.
-        "fuera_por_baja": sorted(set((mg_g.get("gestor") for mg_g in (mg.get("por_gestor") or []))) - set(ventas)),
+        # Quién vendió el mes de referencia pero NO recibe meta: los de baja y los que
+        # a propósito no llevan cuota. Se dice en la pantalla, porque un total que
+        # cuadra pero con menos filas de las esperadas se lee como un error.
+        "fuera_del_reparto": sorted(set((mg_g.get("gestor") for mg_g in (mg.get("por_gestor") or []))) - set(ventas)),
         **repartir_plan_sku(ventas, globales, formatos),
     }
 
