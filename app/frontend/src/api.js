@@ -231,10 +231,16 @@ export async function getMetasGestor(id, mes = null, dia = null) {
 // `metas` son los HL globales de cada formato que pone Procovar cada mes
 // ({ P1500: 3168, M1500: 792, ... }). Van como parametros sueltos con el nombre del
 // formato para que una llamada se entienda sola en un log.
-export async function getPlanSku(id, mes, metas = {}, mesBase = null) {
+export async function getPlanSku(id, mes, metas = {}, mesBase = null, gestores = null) {
   const p = new URLSearchParams({ mes });
   // El mes de referencia lo eligen ellos: la hoja de septiembre reparte con JUNIO.
   if (mesBase) p.set("mes_base", mesBase);
+  // Quien va EN EL MES. Sin esto, a los desmarcados se les cuenta en el denominador
+  // y su parte de la meta se pierde en vez de repartirse entre los demas.
+  // `gestores && gestores.length`: un array VACIO es truthy en JS, asi que con
+  // `if (gestores)` no se mandaba ningun `?gestor=`, el backend lo leia como "reparte
+  // entre todos" y la pantalla no pintaba a nadie. Se perdia la meta entera.
+  if (gestores && gestores.length) gestores.forEach((g) => p.append("gestor", g));
   for (const [f, v] of Object.entries(metas)) p.set(f, String(Number(v) || 0));
   return (await api.get(`${src(id)}/plan-sku?${p.toString()}`)).data;
 }

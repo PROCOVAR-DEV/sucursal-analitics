@@ -54,38 +54,73 @@ def repartir_plan_sku(
     hace auditable el reparto) y `sin_base`: los formatos que NO se pudieron
     repartir.
     """
-    fmts = list(formatos) if formatos else sorted(
-        {f for g in ventas_anterior.values() for f in g} | set(metas_globales)
+    # Los formatos que se piden, MÁS cualquiera que traiga meta y no esté en la lista.
+    #
+    # Antes `formatos` mandaba y punto, así que una meta de un formato que no estuviera
+    # en esa lista se evaporaba sin aparecer siquiera en `sin_base` — la misma forma del
+    # fallo que ya salió cuatro veces: dinero que no se reparte y nadie lo ve.
+    base = list(formatos) if formatos else sorted(
+        {f for g in ventas_anterior.values() for f in g}
     )
+    fmts = base + [f for f in sorted(metas_globales) if f not in base]
 
-    totales = {
-        f: round(sum(_num((ventas_anterior.get(g) or {}).get(f)) for g in ventas_anterior), 4)
-        for f in fmts
-    }
+    # Las devoluciones (ventas negativas) NO restan del reparto.
+    #
+    # Sin esto, a quien devolvió más de lo que vendió le salía un plan NEGATIVO —«vende
+    # menos 25 HL»— y el resto se repartía de más para compensar. Una devolución es un
+    # hecho contable, no una parte negativa de un objetivo: cuenta como cero.
+    def venta(g: str, f: str) -> float:
+        return max(0.0, _num((ventas_anterior.get(g) or {}).get(f)))
 
-    por_gestor: dict[str, dict[str, float]] = {}
+    totales = {f: round(sum(venta(g, f) for g in ventas_anterior), 4) for f in fmts}
+
+    por_gestor: dict[str, dict[str, float]] = {g: {} for g in ventas_anterior}
     sin_base: list[str] = []
 
     for f in fmts:
         meta = _num(metas_globales.get(f))
         total = totales.get(f, 0.0)
 
-        # NADIE vendió ese formato el mes pasado y aun así hay meta.
-        #
-        # No hay proporción que repartir —cualquier reparto sería inventado— así que se
-        # deja en cero y se DICE, para que quien planifica lo meta a mano. Repartirlo por
-        # partes iguales parecería un dato calculado y nadie volvería a mirarlo.
+        # Una meta NEGATIVA no es cero: es imposible. Antes `meta > 0` la dejaba caer
+        # sin dejar rastro — 200 HL tragados por un signo de menos al teclear.
+        if meta < 0:
+            sin_base.append(f)
+            for g in por_gestor:
+                por_gestor[g][f] = 0.0
+            continue
+
+        # NADIE vendió ese formato y aun así hay meta. No hay proporción que repartir
+        # —cualquier reparto sería inventado— así que se deja en cero y se DICE, para
+        # que quien planifica lo meta a mano. Repartirlo por partes iguales parecería
+        # un dato calculado y nadie volvería a mirarlo.
         if meta > 0 and total <= 0:
             sin_base.append(f)
 
-    for g, ventas in ventas_anterior.items():
-        fila: dict[str, float] = {}
-        for f in fmts:
-            meta = _num(metas_globales.get(f))
-            total = totales.get(f, 0.0)
-            v = _num((ventas or {}).get(f))
-            fila[f] = round(v / total * meta, 2) if (meta > 0 and total > 0) else 0.0
-        por_gestor[g] = fila
+        if not (meta > 0 and total > 0):
+            for g in por_gestor:
+                por_gestor[g][f] = 0.0
+            continue
+
+        crudo = {g: venta(g, f) / total * meta for g in ventas_anterior}
+        fila = {g: round(v, 2) for g, v in crudo.items()}
+
+        """
+        EL REDONDEO NO PUEDE PERDER HECTOLITROS.
+
+        Redondeando celda a celda, tres vendedores iguales con una meta de 100 se
+        llevan 33,33 cada uno: 99,99, y falta un céntimo. Sobre una sucursal real el
+        descuadre medido era de hasta 0,06 HL — poco, pero es la misma familia de
+        fallo que ya costó cientos: la suma de los planes deja de ser la meta.
+
+        El sobrante se le da al que más lleva, que es a quien menos le mueve la aguja.
+        """
+        resto = round(meta - sum(fila.values()), 2)
+        if resto and fila:
+            mayor = max(fila, key=lambda g: (fila[g], g))
+            fila[mayor] = round(fila[mayor] + resto, 2)
+
+        for g, v in fila.items():
+            por_gestor[g][f] = v
 
     return {
         "formatos": fmts,

@@ -38,6 +38,7 @@ from services.clientes_dormidos import compute_clientes_dormidos
 from services.movimiento_clientes import compute_movimiento_clientes
 from services.metas_gestor import compute_metas_gestor
 from services.plan_sku import repartir_plan_sku
+from services.roster import quien_recibe
 from services.excel_export import (
     export_all, export_clientes_analisis, export_gestor_sku, export_market,
     export_parranda_facturas, export_productos, export_ranking, export_ventas,
@@ -905,9 +906,45 @@ def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(..
     # Y los que a propósito NO llevan cuota: el canal de los clientes que caen de
     # imprevisto, o quien ya no es de la casa pero cuyas ventas siguen puntuando.
     # Cuentan en todos los informes; lo único que no reciben es meta.
-    reciben = {g for g, cfg_g in roster.items() if not (cfg_g or {}).get("sin_meta")}
-    if reciben:
-        ventas = {g: v for g, v in ventas.items() if g in reciben}
+    """
+    QUIÉN RECIBE lo decide `quien_recibe`, en `services/roster.py`.
+
+    Está allí y no aquí porque este endpoint no se puede probar sin FastAPI, y una
+    copia del criterio en las pruebas deja de auditar lo que dice auditar en cuanto
+    alguien toca el original.
+
+    Manda la casilla "EN EL MES" DE LA PANTALLA por encima de todo lo demás.
+
+    Quien planifica desmarca ahí a quien no va a llevar meta ese mes, y es la decisión
+    más fresca que existe: se toma delante de la tabla, mirando los nombres. El reparto
+    no la miraba y contaba a los desmarcados en el denominador, así que su parte se
+    evaporaba — otra vez el mismo agujero: 4.559 puestos, 4.141 repartidos, y los 418
+    que faltaban eran Amsale y Sidney, desmarcados en la pantalla.
+
+    Se manda repetida (`?gestor=GARI&gestor=DAYLA`). Si no viene ninguna, se reparte
+    entre todos los del roster, que es como estaba.
+    """
+    reciben = quien_recibe(roster, request.query_params.getlist("gestor"))
+
+    """
+    EL FILTRO SE APLICA SIEMPRE. Antes era `if reciben:` y ahí estaba el agujero.
+
+    Con la lista vacía —todos sin cuota, todos de baja, o todos desmarcados— no se
+    filtraba nada y el denominador volvía a ser TODO el mundo: el backend repartía
+    entre gente que acababa de declararse fuera y la pantalla no pintaba a nadie. El
+    auditor lo reprodujo con dos clics y medía **3.275 HL perdidos de 4.156**.
+
+    Es la cuarta forma del mismo fallo, y todas venían de tratar «no hay criterio»
+    igual que «el criterio no dejó a nadie». Son cosas distintas: lo primero es
+    repartir entre todos; lo segundo no tiene respuesta posible y hay que decirlo.
+    """
+    if not reciben:
+        raise HTTPException(
+            status_code=400,
+            detail="No queda nadie a quien repartir: todos están de baja, sin meta o desmarcados del mes.",
+        )
+
+    ventas = {g: v for g, v in ventas.items() if g in reciben}
 
     # Las metas globales salen de los parámetros de la consulta, con el NOMBRE del
     # formato: `?P1500=3168&M1500=792`. Así una llamada se entiende sola en un log, y
@@ -919,6 +956,12 @@ def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(..
             return 0.0
 
     globales = {f: _meta(f) for f in formatos}
+
+    # Una meta en negativo no es un dato dudoso: es imposible. Se rechaza en vez de
+    # tragársela en silencio, que es lo que hacía (`meta > 0` la ignoraba sin más).
+    negativas = sorted(f for f, v in globales.items() if v < 0)
+    if negativas:
+        raise HTTPException(status_code=400, detail=f"Meta negativa en: {', '.join(negativas)}")
 
     return {
         "mes": mes,

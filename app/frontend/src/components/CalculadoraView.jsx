@@ -37,7 +37,9 @@ const seedRows = (params) => rowsFromFormato(STD_FMT, params || {});
  * cálculo nuestro: los pone Procovar cada mes y se teclean aquí. Por eso arrancan
  * en blanco — un valor por defecto se quedaría puesto y nadie volvería a mirarlo.
  */
-const FORMATOS_PLAN = ["P1500", "P500", "P330", "M1500", "M330"];
+// Los seis del backend (`DEFAULT_FORMATOS`). Faltaba M500, asi que su meta
+// no habia forma de ponerla y salia siempre cero sin que nadie lo dijera.
+const FORMATOS_PLAN = ["P1500", "P500", "P330", "M1500", "M500", "M330"];
 const ETIQUETA_FMT = {
   P1500: "Parranda 1.5 L", P500: "Parranda 500 ml", P330: "Parranda 330 ml",
   M1500: "Malta 1.5 L", M500: "Malta 500 ml", M330: "Malta 330 ml",
@@ -204,21 +206,53 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
     if (!sid) return;
     setRepartiendo(true);
     try {
-      const r = await getPlanSku(sourceId, pkey, metasGlobales, mesBase || null);
+      // Solo entre los marcados EN EL MES. Es la decision mas fresca que hay —se toma
+      // delante de la tabla, mirando los nombres— y manda sobre todo lo demas.
+      // Y NUNCA a quien está marcado `sin_meta` en Configuración, aunque en la tabla
+      // salga marcado EN EL MES. Si se manda sólo a uno de ésos, no queda nadie que
+      // pueda recibir y el reparto no tiene respuesta posible: el servidor lo rechaza.
+      const conCuota = ([k, g]) => enMes(k) && !g?.sin_meta;
+      const soloEstos = gestores.filter(conCuota).map(([k]) => k);
+
+      if (!soloEstos.length) {
+        flash("err", "No queda nadie a quien repartir: todos están desmarcados o sin meta.");
+        setRepartiendo(false);
+        return;
+      }
+      const r = await getPlanSku(sourceId, pkey, metasGlobales, mesBase || null, soloEstos);
       const prm = cfg?.parametros || {};
       const porGestor = r.por_gestor || {};
       const p = {}, q = {};
 
       gestores.forEach(([k]) => {
-        const plan = porGestor[k];
-        // A quien no le toque nada se le deja lo que tenía: el reparto no puede
-        // borrar un plan puesto a mano por un gestor que no vendió el mes pasado.
-        if (!plan) return;
+        // A los que no van en el mes no se les toca nada: no reciben meta.
+        if (!enMes(k)) return;
+        // A los que no llevan cuota tampoco se les toca: no reciben y no se les borra
+        // lo que tuvieran.
+        if (cfg?.gestores?.[k]?.sin_meta) return;
+
+        const plan = porGestor[k] || {};
         const porFormato = {};
         Object.entries(plan).forEach(([cod, hl]) => {
           if (Number(hl) > 0) porFormato[formatoDeCodigo(cod)] = Number(hl);
         });
-        p[k] = rowsFromFormato(porFormato, prm);
+
+        /**
+         * Lo que NO es cerveza se conserva; lo que sí es cerveza se REEMPLAZA.
+         *
+         * Dos cosas que estaban mal:
+         *
+         * 1. `rowsFromFormato` devuelve sólo filas de formato, así que al asignarlo
+         *    tal cual se borraban las metas por CANTIDAD —arroz, papel, baterías—
+         *    que estaban puestas a mano. El reparto de cerveza no tiene por qué
+         *    tocarlas.
+         * 2. A quien el backend no devolvía plan se le dejaba el ANTERIOR, y ese plan
+         *    viejo seguía contando en el total de la pantalla: el auditor midió 4.388
+         *    donde las metas globales sumaban 4.156. Si va en el mes y no le toca
+         *    nada, le toca CERO, y así se ve.
+         */
+        const otros = (plans[k] || []).filter((row) => !esHL(row.producto));
+        p[k] = [...rowsFromFormato(porFormato, prm), ...otros];
         q[k] = round2(r.total_por_gestor?.[k] || 0);
       });
 
@@ -233,6 +267,25 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       const aviso =
         (fuera.length ? ` Sin meta este mes: ${fuera.join(", ")} — sus ventas cuentan igual, y su parte ya se repartió entre los demás.` : "") +
         (sinBase.length ? ` Ojo: ${sinBase.map((f) => ETIQUETA_FMT[f] || f).join(", ")} no se vendió en ${r.mes_anterior}, así que va en cero y hay que ponerlo a mano.` : "");
+      /**
+       * Y SE COMPRUEBA QUE CUADRE, aquí mismo, delante de quien lo pulsó.
+       *
+       * La invariante es que la suma de los planes ES la suma de las metas globales.
+       * Se ha roto cuatro veces por caminos distintos, cada una perdiendo cientos de
+       * HL en silencio. Un aviso en rojo en el momento vale más que otra ronda de
+       * «me está dando 3.970 y tenían que ser 4.559».
+       */
+      const pedido = Object.values(metasGlobales).reduce((s, v) => s + (Number(v) || 0), 0);
+      const repartido = Object.values(r.total_por_gestor || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+      const descuadre = Math.round((pedido - repartido) * 100) / 100;
+
+      if (Math.abs(descuadre) > 0.5) {
+        flash("err",
+          `Repartido ${formatNumber(repartido, 2)} HL de ${formatNumber(pedido, 2)}: faltan ${formatNumber(descuadre, 2)}. ` +
+          `NO lo guardes y avísame.${aviso}`);
+        return;
+      }
+
       flash(sinBase.length ? "warn" : "ok",
         `Repartido con las ventas de ${r.mes_anterior}. Revisa y pulsa “Guardar”.${aviso}`);
     } catch (e) {
