@@ -81,6 +81,43 @@ def _pivot(sub: pd.DataFrame, imp: str, socio: str, merc: str, with_gestor: bool
     }
 
 
+def _fundir_ambas(piv_imp: dict, piv_cant: dict) -> dict:
+    """Pone la cantidad AL LADO del importe, en la misma fila y la misma celda.
+
+    Claudia los pedía juntos: con una pestaña para cada uno hay que mirar dos
+    tablas y cruzarlas a ojo, y lo que se quiere saber —«de éste vendí mucho
+    dinero pero pocas cajas»— sólo se ve con los dos números pegados.
+
+    El ORDEN y la lista de clientes los manda el importe. Son dos rankings
+    distintos y mezclarlos daría una tabla que no está ordenada por nada: el
+    informe dice «clientes rankeados por ventas», así que ése es el que manda y
+    la cantidad viaja de acompañante.
+
+    Un cliente que compró pero no aparece en el pivote de cantidad —o al revés—
+    sale con cero en la columna que le falte, no desaparece.
+    """
+    cant_por_cliente = {c["cliente"]: c for c in (piv_cant.get("clientes") or [])}
+    cant_por_sku = {s["sku"]: s["total"] for s in (piv_cant.get("skus") or [])}
+
+    skus = [{**s, "total_cantidad": round(float(cant_por_sku.get(s["sku"], 0.0)), 2)} for s in (piv_imp.get("skus") or [])]
+
+    clientes = []
+    for c in piv_imp.get("clientes") or []:
+        otro = cant_por_cliente.get(c["cliente"]) or {}
+        clientes.append({
+            **c,
+            "total_cantidad": round(float(otro.get("total", 0.0)), 2),
+            "sku_cantidades": otro.get("sku_montos") or {},
+        })
+
+    return {
+        **piv_imp,
+        "skus": skus,
+        "clientes": clientes,
+        "total_cantidad": round(float(piv_cant.get("total", 0.0)), 2),
+    }
+
+
 def compute_clientes_analisis(
     report,
     eff: dict,
@@ -98,6 +135,8 @@ def compute_clientes_analisis(
       - "cantidad": unidades POR EMPAQUE, que es como viene la columna del
         origen — no se convierte a unidades sueltas, porque el negocio cuenta
         por empaque y convertirlo daría un número que nadie usa.
+      - "ambas": las dos en la misma tabla, ordenadas por importe. Lo pidió
+        Claudia: con una pestaña para cada una hay que cruzarlas a ojo.
     """
     keys = gestor_keys(eff)
     df = only_valid(enrich_for_sucursal(report, eff), keys)
@@ -118,23 +157,37 @@ def compute_clientes_analisis(
     # La columna que se suma. Si se pide cantidad y no viene esa columna, se cae
     # al importe: mejor enseñar el número de siempre que una tabla vacía sin
     # explicación.
-    if metrica == "cantidad" and STD_COLS["cant"] in df.columns:
-        imp = STD_COLS["cant"]
+    cant = STD_COLS["cant"]
+    hay_cantidad = cant in df.columns
+
+    if metrica == "cantidad" and hay_cantidad:
+        imp = cant
         metrica_real = "cantidad"
+    elif metrica == "ambas" and hay_cantidad:
+        # `imp` se queda en el importe: es el que ordena y el que manda. La
+        # cantidad se saca aparte y se pega al lado en `_fundir_ambas`.
+        metrica_real = "ambas"
     else:
         metrica_real = "importe"
 
     # Cantidad de pedidos por cliente desde PEDIDO (best-effort; {} si no responde).
     pedidos_map = fetch_order_counts()
 
+    ambas = metrica_real == "ambas"
+
+    def pivotar(sub, with_gestor: bool) -> dict:
+        piv = _pivot(sub, imp, socio, merc, with_gestor=with_gestor, pedidos_map=pedidos_map)
+        if not ambas:
+            return piv
+        return _fundir_ambas(piv, _pivot(sub, cant, socio, merc, with_gestor=with_gestor, pedidos_map=pedidos_map))
+
     gestores_cfg = eff.get("gestores") or {}
     por_gestor = []
     for g in keys:
-        piv = _pivot(df[df["GestorDetectado"] == g], imp, socio, merc, with_gestor=False, pedidos_map=pedidos_map)
         por_gestor.append({
             "gestor": g,
             "nombre": (gestores_cfg.get(g) or {}).get("nombre", g),
-            **piv,
+            **pivotar(df[df["GestorDetectado"] == g], False),
         })
 
     return {
@@ -143,6 +196,6 @@ def compute_clientes_analisis(
         "grupos_disponibles": disponibles,
         "grupos": list(grupos or []),
         "metrica": metrica_real,
-        "oficina": _pivot(df, imp, socio, merc, with_gestor=True, pedidos_map=pedidos_map),
+        "oficina": pivotar(df, True),
         "por_gestor": por_gestor,
     }

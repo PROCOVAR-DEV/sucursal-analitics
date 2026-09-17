@@ -321,6 +321,10 @@ def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict, metrica: str
     tener forma de notarlo.
     """
     es_cantidad = metrica == "cantidad"
+    # "ambas" = las dos, una al lado de la otra. Lo pidió Claudia: con un informe
+    # para cada una hay que cruzarlas a ojo, y el Excel tiene que salir con LO
+    # MISMO que se está viendo en pantalla.
+    es_ambas = metrica == "ambas"
     # En cantidad se usan los formatos enteros, que ya existen para los conteos.
     fmt_tot = f["int_b"] if (es_cantidad and "int_b" in f) else (f["int"] if es_cantidad else f["money_b"])
     fmt_celda = f["int"] if es_cantidad else f["money"]
@@ -330,22 +334,30 @@ def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict, metrica: str
     has_gestor = bool(clientes and "gestor" in clientes[0])
 
     # columnas fijas + una por SKU
-    fixed = ["#", "Cliente"] + (["Gestor"] if has_gestor else []) + [
-        "Total cantidad" if es_cantidad else "Total $",
-        "# Productos",
-    ]
-    ncols = len(fixed) + len(skus)
+    fixed = ["#", "Cliente"] + (["Gestor"] if has_gestor else []) + (
+        ["Total $", "Total cantidad"] if es_ambas else ["Total cantidad" if es_cantidad else "Total $"]
+    ) + ["# Productos"]
+    # Con las dos métricas, cada SKU ocupa DOS columnas: el importe y, pegada, la
+    # cantidad. La hoja sale ancha, pero es justo lo que se pidió — separarlas es
+    # volver a tener dos informes que hay que cruzar a mano.
+    por_sku = 2 if es_ambas else 1
+    ncols = len(fixed) + len(skus) * por_sku
     ws.merge_range(0, 0, 0, max(1, ncols - 1), titulo, f["title"])
     ws.merge_range(1, 0, 1, max(1, ncols - 1),
                    f"{len(clientes)} clientes · {len(skus)} productos · total "
-                   + (f"{blk.get('total', 0):,.0f}" if es_cantidad else f"${blk.get('total', 0):,.2f}"),
+                   + (f"${blk.get('total', 0):,.2f} y {blk.get('total_cantidad', 0):,.0f}" if es_ambas
+                      else f"{blk.get('total', 0):,.0f}" if es_cantidad
+                      else f"${blk.get('total', 0):,.2f}"),
                    f["subtitle"])
 
     hdr_row = 3
     for j, h in enumerate(fixed):
         ws.write(hdr_row, j, h, f["header"])
     for k, s in enumerate(skus):
-        ws.write(hdr_row, len(fixed) + k, s["sku"], f["header"])
+        base = len(fixed) + k * por_sku
+        ws.write(hdr_row, base, s["sku"], f["header"])
+        if es_ambas:
+            ws.write(hdr_row, base + 1, f"{s['sku']} (cant)", f["header"])
 
     r = hdr_row + 1
     for i, c in enumerate(clientes, start=1):
@@ -354,15 +366,25 @@ def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict, metrica: str
         ws.write(r, col, c["cliente"], f["label"]); col += 1
         if has_gestor:
             ws.write(r, col, c.get("gestor", ""), f["band"]); col += 1
-        ws.write_number(r, col, c["total"], fmt_tot); col += 1
+        ws.write_number(r, col, c["total"], f["money_b"] if es_ambas else fmt_tot); col += 1
+        if es_ambas:
+            ws.write_number(r, col, c.get("total_cantidad", 0.0), f["int"]); col += 1
         ws.write_number(r, col, c["num_skus"], f["int"]); col += 1
         montos = c.get("sku_montos", {})
+        cantidades = c.get("sku_cantidades", {})
         for k, s in enumerate(skus):
+            base = len(fixed) + k * por_sku
             v = montos.get(s["sku"])
             if v:
-                ws.write_number(r, len(fixed) + k, v, fmt_celda)
+                ws.write_number(r, base, v, f["money"] if es_ambas else fmt_celda)
             else:
-                ws.write(r, len(fixed) + k, "", f["num"])
+                ws.write(r, base, "", f["num"])
+            if es_ambas:
+                q = cantidades.get(s["sku"])
+                if q:
+                    ws.write_number(r, base + 1, q, f["int"])
+                else:
+                    ws.write(r, base + 1, "", f["num"])
         r += 1
 
     # fila de totales por SKU
@@ -372,9 +394,14 @@ def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict, metrica: str
     if has_gestor:
         ws.write(r, tcol, "", f["block_txt"]); tcol += 1
     ws.write_number(r, tcol, blk.get("total", 0.0), f["money_b"]); tcol += 1
+    if es_ambas:
+        ws.write_number(r, tcol, blk.get("total_cantidad", 0.0), f["block"]); tcol += 1
     ws.write(r, tcol, "", f["block_txt"]); tcol += 1
     for k, s in enumerate(skus):
-        ws.write_number(r, len(fixed) + k, s["total"], f["block"])
+        base = len(fixed) + k * por_sku
+        ws.write_number(r, base, s["total"], f["block"])
+        if es_ambas:
+            ws.write_number(r, base + 1, s.get("total_cantidad", 0.0), f["block"])
 
     ws.set_column(0, 0, 5)
     ws.set_column(1, 1, 34)

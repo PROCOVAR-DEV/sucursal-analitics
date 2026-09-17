@@ -1508,8 +1508,11 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
     if modulo in ("clientes-analisis", "gestor-sku"):
         if grupo:
             partes.append("-".join(g.replace(" ", "") for g in grupo))
-        if metrica == "cantidad":
-            partes.append("cantidad")
+        # El nombre del fichero dice en qué está medido. Sin eso, dos Excel del mismo
+        # mes se llaman igual y miden cosas distintas: se reenvían por correo y nadie
+        # sabe cuál tiene delante.
+        if metrica in ("cantidad", "ambas"):
+            partes.append(metrica)
 
     data = exporter(report, _eff_scoped(suc, report, mes, user), **extra)
     return _xlsx(data, f"{'_'.join(partes)}.xlsx")

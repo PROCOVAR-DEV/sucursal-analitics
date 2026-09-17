@@ -83,7 +83,12 @@ export default function ClientesAnalisisView({ sourceId, period }) {
   // En cantidad NO se pone el simbolo de moneda: un "$" delante de un numero de
   // empaques es sencillamente falso, y quien lo lea sacara la cuenta equivocada.
   const esCantidad = data.metrica === "cantidad";
+  // Las dos juntas. Lo pidio Claudia: con una pestaña para cada una hay que mirar
+  // dos tablas y cruzarlas a ojo, y lo que se quiere saber —«de este vendi mucho
+  // dinero pero pocas cajas»— solo se ve con los dos numeros pegados.
+  const esAmbas = data.metrica === "ambas";
   const fmt = (v) => (esCantidad ? formatInt(Math.round(v || 0)) : formatMoney(v));
+  const fmtCant = (v) => formatInt(Math.round(v || 0));
   const isOficina = sel === "__oficina__";
 
   async function handleExport() {
@@ -124,6 +129,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
           {[
             { id: "importe", label: "Importe" },
             { id: "cantidad", label: "Cantidad" },
+            { id: "ambas", label: "Las dos" },
           ].map((m) => (
             <button
               key={m.id}
@@ -161,7 +167,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="Clientes" value={formatInt(block.num_clientes)} accent="brand" />
         <StatTile label="SKUs distintos" value={formatInt(block.num_skus)} accent="slate" />
-        <StatTile label={esCantidad ? "Total cantidad" : "Total ventas"} value={fmt(block.total)} accent="green" />
+        <StatTile label={esCantidad ? "Total cantidad" : "Total ventas"} value={esAmbas ? `${fmt(block.total)} · ${fmtCant(block.total_cantidad)}` : fmt(block.total)} accent="green" />
         <StatTile label={esCantidad ? "Media por cliente" : "Ticket promedio"} value={fmt(block.num_clientes ? block.total / block.num_clientes : 0)} accent="amber" />
       </div>
 
@@ -209,7 +215,8 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                   <th className="sticky left-0 z-30 bg-slate-100 text-slate-500 text-[11px] font-semibold uppercase px-3 py-2 text-left border-b border-r border-slate-200 w-10">#</th>
                   <th className="sticky left-10 z-30 bg-slate-100 text-slate-500 text-[11px] font-semibold uppercase px-3 py-2 text-left border-b border-r border-slate-200 min-w-[210px]">Cliente</th>
                   {isOficina && <th className="bg-slate-100 text-slate-500 text-[11px] font-semibold uppercase px-3 py-2 text-left border-b border-slate-200 min-w-[100px]">Gestor</th>}
-                  <th className="bg-slate-200/70 text-slate-600 text-[11px] font-semibold uppercase px-3 py-2 text-right border-b border-slate-200 min-w-[110px]">Total $</th>
+                  <th className="bg-slate-200/70 text-slate-600 text-[11px] font-semibold uppercase px-3 py-2 text-right border-b border-slate-200 min-w-[110px]">{esCantidad ? "Total cant." : "Total $"}</th>
+                  {esAmbas && <th className="bg-slate-200/70 text-slate-600 text-[11px] font-semibold uppercase px-3 py-2 text-right border-b border-slate-200 min-w-[100px]">Total cant.</th>}
                   <th className="bg-slate-100 text-slate-500 text-[11px] font-semibold uppercase px-2 py-2 text-center border-b border-slate-200 w-14">#SKUs</th>
                   <th className="bg-slate-100 text-slate-500 text-[11px] font-semibold uppercase px-2 py-2 text-center border-b border-slate-200 w-16" title="Cantidad de pedidos en la app PEDIDO">Pedidos</th>
                   {skus.map((s) => (
@@ -229,13 +236,19 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                     <td className="sticky left-10 z-10 bg-white group-hover:bg-brand-50/60 px-3 py-2 font-medium text-slate-800 border-b border-r border-slate-100 whitespace-nowrap">{c.cliente}</td>
                     {isOficina && <td className="px-3 py-2 border-b border-slate-100"><span className="badge-slate">{c.gestor}</span></td>}
                     <td className="px-3 py-2 text-right font-semibold text-slate-900 bg-slate-50/60 border-b border-slate-100 tabular-nums">{fmt(c.total)}</td>
+                    {esAmbas && <td className="px-3 py-2 text-right font-semibold text-slate-600 bg-slate-50/60 border-b border-slate-100 tabular-nums">{fmtCant(c.total_cantidad)}</td>}
                     <td className="px-2 py-2 text-center text-slate-500 border-b border-slate-100 tabular-nums">{c.num_skus}</td>
                     <td className="px-2 py-2 text-center text-slate-600 font-medium border-b border-slate-100 tabular-nums">{c.pedidos ? formatInt(c.pedidos) : "·"}</td>
                     {skus.map((s) => {
                       const v = c.sku_montos[s.sku];
+                      // Con las dos, la cantidad va DEBAJO y en gris: el importe manda
+                      // —es el que ordena la tabla— y la cantidad acompaña. Una al lado
+                      // de la otra en la misma linea se leen como un solo numero raro.
+                      const q = esAmbas ? (c.sku_cantidades || {})[s.sku] : null;
                       return (
                         <td key={s.sku} className={cn("px-2 py-2 text-right border-b border-l border-slate-100 tabular-nums", v ? "text-slate-700" : "text-slate-200")}>
-                          {v ? formatInt(Math.round(v)) : "·"}
+                          <div>{v ? formatInt(Math.round(v)) : "·"}</div>
+                          {esAmbas && <div className="text-[11px] text-slate-400">{q ? fmtCant(q) : ""}</div>}
                         </td>
                       );
                     })}
@@ -248,10 +261,14 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                   <td className="sticky left-10 z-30 bg-slate-800 text-white font-semibold px-3 py-2.5 border-r border-slate-700 whitespace-nowrap">TOTAL POR SKU</td>
                   {isOficina && <td className="bg-slate-800" />}
                   <td className="bg-slate-900 text-white font-bold px-3 py-2.5 text-right tabular-nums">{fmt(block.total)}</td>
+                  {esAmbas && <td className="bg-slate-900 text-slate-300 font-semibold px-3 py-2.5 text-right tabular-nums">{fmtCant(block.total_cantidad)}</td>}
                   <td className="bg-slate-800" />
                   <td className="bg-slate-800" />
                   {skus.map((s) => (
-                    <td key={s.sku} className="bg-slate-800 text-white font-semibold px-2 py-2.5 text-right border-l border-slate-700 tabular-nums">{formatInt(Math.round(s.total))}</td>
+                    <td key={s.sku} className="bg-slate-800 text-white font-semibold px-2 py-2.5 text-right border-l border-slate-700 tabular-nums">
+                      <div>{formatInt(Math.round(s.total))}</div>
+                      {esAmbas && <div className="text-[11px] text-slate-400 font-normal">{fmtCant(s.total_cantidad)}</div>}
+                    </td>
                   ))}
                 </tr>
               </tfoot>
