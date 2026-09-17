@@ -850,19 +850,29 @@ def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=N
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/plan-sku")
-def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(...), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(...), mes_base: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     """El plan por SKU de cada vendedor, repartido según lo que vendió el MES ANTERIOR.
 
-    `mes` es el mes que se está planificando (AAAA-MM); las ventas se leen del
-    anterior. Las metas globales de cada formato llegan como parámetros sueltos
+    `mes` es el mes que se está planificando (AAAA-MM). Las ventas de referencia
+    salen de `mes_base`, y si no viene, del mes anterior.
+
+    **`mes_base` no es un adorno.** La hoja de Procovar de septiembre de 2026 reparte
+    con las ventas de JUNIO, no de agosto: el mes de referencia lo eligen ellos —se
+    salta los meses raros, los de poca venta o los que aún no han cerrado— y darlo por
+    supuesto haría un reparto que parece bueno y no es el suyo.
+
+    Las metas globales de cada formato llegan como parámetros sueltos
     —`?P1500=3168&M1500=792`— porque son cinco números que teclea quien planifica,
     no un dato que esté guardado en ninguna parte: los pone Procovar cada mes.
 
     Un formato que no venga se toma como cero, que es lo mismo que decir «este mes
     no hay plan de eso»: reparte cero y no estorba.
     """
-    y, m = (int(x) for x in mes.split("-")[:2])
-    ya, ma = (y - 1, 12) if m == 1 else (y, m - 1)
+    if mes_base:
+        ya, ma = (int(x) for x in mes_base.split("-")[:2])
+    else:
+        y, m = (int(x) for x in mes.split("-")[:2])
+        ya, ma = (y - 1, 12) if m == 1 else (y, m - 1)
     mes_anterior = f"{ya:04d}-{ma:02d}"
 
     report = filter_by_period(_get_source(sid, source_id), mes_anterior, None, None)

@@ -231,8 +231,10 @@ export async function getMetasGestor(id, mes = null, dia = null) {
 // `metas` son los HL globales de cada formato que pone Procovar cada mes
 // ({ P1500: 3168, M1500: 792, ... }). Van como parametros sueltos con el nombre del
 // formato para que una llamada se entienda sola en un log.
-export async function getPlanSku(id, mes, metas = {}) {
+export async function getPlanSku(id, mes, metas = {}, mesBase = null) {
   const p = new URLSearchParams({ mes });
+  // El mes de referencia lo eligen ellos: la hoja de septiembre reparte con JUNIO.
+  if (mesBase) p.set("mes_base", mesBase);
   for (const [f, v] of Object.entries(metas)) p.set(f, String(Number(v) || 0));
   return (await api.get(`${src(id)}/plan-sku?${p.toString()}`)).data;
 }

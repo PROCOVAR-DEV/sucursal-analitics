@@ -45,7 +45,13 @@ const ETIQUETA_FMT = {
 /** `P1500` -> `PARRANDA-1500`, que es como se nombran las filas de la tabla. */
 const formatoDeCodigo = (c) => `${String(c)[0] === "P" ? "PARRANDA" : "MALTA"}-${String(c).slice(1)}`;
 
-export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved }) {
+/**
+ * `sourceId` es la FUENTE de los datos, no la sucursal — la sucursal ya va en la base
+ * de la URL. Por defecto `accumulated`, que es el histórico entero y es justo lo que
+ * hace falta aquí: para repartir el plan se miran las ventas del mes pasado, no las de
+ * un fichero suelto que alguien acabe de subir.
+ */
+export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId = "accumulated", onSaved }) {
   const [cfgLocal, setCfgLocal] = useState(cfgProp || null);
   const cfg = cfgProp || cfgLocal;
   const setCfg = (c) => { setCfgLocal(c); onSaved?.(c); };  // propaga a AdminPanel
@@ -55,6 +61,15 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
   // Las metas globales por formato y el reparto en curso. Ver `FORMATOS_PLAN`.
   const [metasGlobales, setMetasGlobales] = useState({});
   const [repartiendo, setRepartiendo] = useState(false);
+  /**
+   * De qué mes se leen las ventas para repartir. Vacío = el anterior.
+   *
+   * NO es siempre el mes de antes: la hoja de Procovar de septiembre reparte con las
+   * ventas de JUNIO. El mes de referencia lo eligen ellos —se saltan los meses raros,
+   * los de poca venta o los que aún no han cerrado— y darlo por supuesto haría un
+   * reparto que parece bueno y no es el suyo.
+   */
+  const [mesBase, setMesBase] = useState("");
   const [plans, setPlans] = useState({});
   const [quick, setQuick] = useState({});
   const [quickCcc, setQuickCcc] = useState({});
@@ -189,7 +204,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
     if (!sid) return;
     setRepartiendo(true);
     try {
-      const r = await getPlanSku(sid, pkey, metasGlobales);
+      const r = await getPlanSku(sourceId, pkey, metasGlobales, mesBase || null);
       const prm = cfg?.parametros || {};
       const porGestor = r.por_gestor || {};
       const p = {}, q = {};
@@ -403,7 +418,16 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
             mes pasado: <code>venta suya ÷ venta de todos × meta global</code>. Su meta en HL sale
             de la suma, no se pone aparte.
           </p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-slate-500">Repartir con las ventas de</span>
+              <input
+                type="month"
+                className="input input-sm w-36"
+                value={mesBase}
+                onChange={(e) => setMesBase(e.target.value)}
+              />
+            </label>
             {FORMATOS_PLAN.map((f) => (
               <label key={f} className="flex flex-col gap-1">
                 <span className="text-xs text-slate-500">{ETIQUETA_FMT[f]}</span>
@@ -420,7 +444,9 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
             ))}
           </div>
           <p className="text-xs text-slate-400">
-            En blanco es lo mismo que cero: ese formato no se planifica este mes y reparte cero.
+            El mes en blanco usa el anterior — pero ojo, no siempre es ése: la hoja de
+            septiembre reparte con las ventas de <b>junio</b>. Un formato en blanco es lo
+            mismo que cero: no se planifica este mes y reparte cero.
             Repartir <b>no guarda nada</b> — revisa las filas y pulsa «Guardar».
           </p>
         </div>
