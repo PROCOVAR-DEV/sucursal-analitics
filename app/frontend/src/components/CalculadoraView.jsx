@@ -266,7 +266,29 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       // decirlo, una tabla con menos filas de las esperadas se lee como un error.
       const aviso =
         (fuera.length ? ` Sin meta este mes: ${fuera.join(", ")} — sus ventas cuentan igual, y su parte ya se repartió entre los demás.` : "") +
-        (sinBase.length ? ` Ojo: ${sinBase.map((f) => ETIQUETA_FMT[f] || f).join(", ")} no se vendió en ${r.mes_anterior}, así que va en cero y hay que ponerlo a mano.` : "");
+        (sinBase.length
+          ? ` ${sinBase.map((f) => ETIQUETA_FMT[f] || f).join(", ")} no se vendió en ${r.mes_anterior}:` +
+            ` esa meta se repartió POR IGUAL entre los que llevan cuota, no por ventas.`
+          : "") +
+        /**
+         * Y el caso de Javier, que no es un fallo pero lo parece.
+         *
+         * Si un formato lo vendió casi nadie, quien lo vendió se lleva el objetivo
+         * entero: 1,02 HL de p500 se convirtieron en 403 de meta — multiplicar por
+         * 395. La cuenta está bien y el número no sirve, así que NO se bloquea (eso
+         * sería inventarse una regla de negocio) pero se dice, que es lo que lo
+         * convierte de absurdo invisible en absurdo visible.
+         *
+         * El ×10 es sólo el punto a partir del cual merece la pena avisar; no cambia
+         * ningún número, así que equivocarse en él no cuesta nada.
+         */
+        (() => {
+          const fuertes = Object.entries(r.multiplicadores || {})
+            .filter(([, veces]) => veces >= 10)
+            .sort((a, b) => b[1] - a[1]);
+          if (!fuertes.length) return "";
+          return ` REVISA: ${fuertes.map(([f, v]) => `${ETIQUETA_FMT[f] || f} pide ×${formatNumber(v, 1)} lo vendido`).join(", ")}.`;
+        })();
       /**
        * Y SE COMPRUEBA QUE CUADRE, aquí mismo, delante de quien lo pulsó.
        *
@@ -286,7 +308,8 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
         return;
       }
 
-      flash(sinBase.length ? "warn" : "ok",
+      const hayFuertes = Object.values(r.multiplicadores || {}).some((v) => v >= 10);
+      flash(sinBase.length || hayFuertes ? "warn" : "ok",
         `Repartido con las ventas de ${r.mes_anterior}. Revisa y pulsa “Guardar”.${aviso}`);
     } catch (e) {
       flash("err", e?.response?.data?.detail || e.message);

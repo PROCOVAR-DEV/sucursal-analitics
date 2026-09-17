@@ -64,14 +64,41 @@ def test_el_unico_que_vendio_un_sku_se_lo_lleva_entero():
     assert r["gari"]["P500"] == 0.0
 
 
-def test_si_nadie_vendio_ese_sku_NO_se_inventa_el_reparto():
-    # Hay meta y no hay con que repartirla. Cualquier reparto seria inventado, asi
-    # que va a cero y se DICE, para que quien planifica lo meta a mano. Repartirlo
-    # por partes iguales pareceria un dato calculado y nadie volveria a mirarlo.
+def test_si_nadie_vendio_ese_sku_se_reparte_POR_CABEZA():
+    """Decision de Sidney, 17/09/2026.
+
+    No es 0 x algo, es 0 / 0 — en Excel sale #!DIV/0!. Antes iba a cero y se avisaba,
+    pero eso dejaba los HL SIN DUEÑO: la suma de los planes ya no daba la meta global
+    y la sucursal arrancaba el mes debiendo un objetivo que no estaba en la meta de
+    nadie. Ahora se reparte a partes iguales entre los que si llevan cuota.
+
+    Se sigue avisando (`sin_base`): un reparto por cabeza no es lo mismo que uno por
+    ventas, y quien planifica tiene que saber cual esta mirando.
+    """
     r = repartir_plan_sku({"a": {"M500": 0.0}, "b": {"M500": 0.0}}, {"M500": 100.0})
     assert r["sin_base"] == ["M500"]
-    assert r["por_gestor"]["a"]["M500"] == 0.0
-    assert r["total_por_gestor"]["a"] == 0.0
+    assert r["por_gestor"]["a"]["M500"] == 50.0
+    assert r["por_gestor"]["b"]["M500"] == 50.0
+    # Y la invariante se mantiene: se reparte la meta entera.
+    assert round(sum(r["total_por_gestor"].values()), 2) == 100.0
+
+
+def test_sin_base_con_reparto_impar_no_pierde_ni_un_centimo():
+    # 100 entre 3 son 33,33 y sobra un centimo. Se lo lleva uno, no se pierde.
+    r = repartir_plan_sku({"a": {}, "b": {}, "c": {}}, {"M500": 100.0}, ["M500"])
+    assert round(sum(r["total_por_gestor"].values()), 2) == 100.0
+
+
+def test_el_multiplicador_se_informa_para_que_se_vea_el_caso_de_javier():
+    """Javier vendio 1,02 HL de p500 —todo lo que se vendio— y le tocaron 403.
+
+    La cuenta esta bien; el numero no sirve. No se bloquea (eso seria inventarse una
+    regla de negocio), pero se DICE cuantas veces hay que multiplicar, que es lo que
+    convierte un numero absurdo en uno visible.
+    """
+    r = repartir_plan_sku({"javier": {"P500": 1.02}}, {"P500": 403.0}, ["P500"])
+    assert r["por_gestor"]["javier"]["P500"] == 403.0
+    assert r["multiplicadores"]["P500"] == 395.1
 
 
 def test_los_datos_sucios_no_tumban_el_reparto():

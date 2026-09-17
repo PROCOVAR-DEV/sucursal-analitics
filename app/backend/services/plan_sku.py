@@ -89,12 +89,37 @@ def repartir_plan_sku(
                 por_gestor[g][f] = 0.0
             continue
 
-        # NADIE vendió ese formato y aun así hay meta. No hay proporción que repartir
-        # —cualquier reparto sería inventado— así que se deja en cero y se DICE, para
-        # que quien planifica lo meta a mano. Repartirlo por partes iguales parecería
-        # un dato calculado y nadie volvería a mirarlo.
+        """
+        NADIE vendió ese formato el mes pasado, y aun así hay meta: se reparte POR CABEZA.
+
+        No es 0 × algo, es 0 ÷ 0 — en Excel sale `#¡DIV/0!`. No hay proporción que
+        aplicar, así que antes se dejaba en cero y se avisaba. Pero eso deja los HL
+        **sin dueño**: la suma de los planes ya no da la meta global y la sucursal
+        arranca el mes debiendo un objetivo que no está en la meta de nadie.
+
+        Decisión de Sidney (17/09/2026): repartirlos a partes iguales entre los
+        comerciales, excepto los que no llevan cuota. Lo segundo ya está resuelto —
+        quien llega aquí en `ventas_anterior` es exactamente quien recibe, porque los
+        `sin_meta`, los de baja y los desmarcados salieron antes (`roster.quien_recibe`).
+        Por eso aquí NO hay ningún nombre propio, y no puede haberlo: un nombre escrito
+        en la fórmula se pudre el día que esa persona cambie de puesto.
+
+        Se sigue avisando, porque un reparto por cabeza no es lo mismo que un reparto
+        por ventas y quien planifica tiene que saber cuál está mirando.
+        """
         if meta > 0 and total <= 0:
             sin_base.append(f)
+            cuantos = len(por_gestor)
+            if cuantos:
+                parte = round(meta / cuantos, 2)
+                fila = {g: parte for g in por_gestor}
+                resto = round(meta - parte * cuantos, 2)
+                if resto:
+                    mayor = sorted(fila)[0]
+                    fila[mayor] = round(fila[mayor] + resto, 2)
+                for g, v in fila.items():
+                    por_gestor[g][f] = v
+                continue
 
         if not (meta > 0 and total > 0):
             for g in por_gestor:
@@ -122,8 +147,26 @@ def repartir_plan_sku(
         for g, v in fila.items():
             por_gestor[g][f] = v
 
+    """
+    CUÁNTAS VECES hay que multiplicar lo del mes pasado para llegar a la meta.
+
+    No cambia ningún número: es el dato que hace visible el caso de Javier. Vendió
+    1,02 HL de p500 —todo lo que se vendió de ese formato— así que se llevó los 403
+    de meta: multiplicar por 395. La cuenta está bien; lo que no sirve es el número.
+
+    Se devuelve en crudo y sin umbral a propósito. Decidir a partir de cuántas veces
+    algo «no vale» es una regla de negocio, y esa no me toca inventarla: la pantalla
+    avisa, y si algún día hay que bloquear, el umbral lo pone quien planifica.
+    """
+    multiplicadores = {
+        f: round(_num(metas_globales.get(f)) / totales[f], 1)
+        for f in fmts
+        if totales.get(f, 0.0) > 0 and _num(metas_globales.get(f)) > 0
+    }
+
     return {
         "formatos": fmts,
+        "multiplicadores": multiplicadores,
         "por_gestor": por_gestor,
         "totales_anterior": totales,
         "metas_globales": {f: round(_num(metas_globales.get(f)), 2) for f in fmts},
