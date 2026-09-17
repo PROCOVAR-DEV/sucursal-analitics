@@ -458,7 +458,22 @@ _INV_COLS = [
 ]
 
 
-def export_parranda_facturas(report, eff: dict) -> bytes:
+def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
+                             solo_cerveza: bool = True) -> bytes:
+    """Una hoja por vendedor con CADA factura.
+
+    `solo_cerveza` era lo único que había: el informe nació copiando
+    `automatizar_parranda.py` y filtraba a Malta/Parranda, así que de todo lo demás que
+    se vende —arroz, aceite, papel, baterías— no había ningún fichero por factura.
+
+    Con `solo_cerveza=False` salen TODAS las líneas, y `grupos` acota a los grupos
+    comerciales que se quieran. Así el mismo informe sirve para las tres preguntas: el
+    general (sin grupo), el de un tipo concreto (un grupo), y el de cerveza de siempre.
+
+    El bloque de hectolitros de abajo se queda como está y sigue mirando sólo Malta y
+    Parranda: los hectolitros son de la cerveza. Un saco de arroz no tiene HL, y
+    sumarlo ahí daría un total que no significa nada.
+    """
     bio, wb = _new_wb()
     f = _formats(wb)
     date_fmt = wb.add_format({"num_format": "dd/mm/yyyy", "border": 1})
@@ -469,8 +484,10 @@ def export_parranda_facturas(report, eff: dict) -> bytes:
     upp_cfg = {str(k): float(v) for k, v in (eff.get("units_per_pallet") or {}).items()}
 
     df = only_valid(enrich_for_sucursal(report, eff), keys)
-    if not df.empty:
+    if not df.empty and solo_cerveza:
         df = df[df["IsMalta"] | df["IsParranda"]].copy()
+    if not df.empty and grupos and "GrupoComercial" in df.columns:
+        df = df[df["GrupoComercial"].astype(str).isin([str(g) for g in grupos])].copy()
 
     fec, merc, cant = STD_COLS["fecha"], STD_COLS["merc"], STD_COLS["cant"]
     imp, socio, op, suma, size_col = (

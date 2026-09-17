@@ -1562,6 +1562,11 @@ _EXPORTERS = {
     "ranking": export_ranking, "clientes-analisis": export_clientes_analisis, "all": export_all,
     # Parranda/Malta por FACTURA (reproduce el script automatizar_parranda.py).
     "parranda-facturas": export_parranda_facturas,
+    # El MISMO por factura pero de TODO lo que se vende, no solo cerveza. Acepta el
+    # filtro de grupo: sin grupo es el general, con uno es el de ese tipo.
+    "facturas": lambda report, eff, grupos=None: export_parranda_facturas(
+        report, eff, grupos=grupos, solo_cerveza=False,
+    ),
     "gestor-sku": export_gestor_sku,
 }
 
@@ -1584,6 +1589,9 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
         if modulo == "clientes-analisis"
         else {"grupos": grupo, "metrica": metrica}
         if modulo == "gestor-sku"
+        # El de facturas de TODO acepta el filtro de grupo: sin grupo es el general.
+        else {"grupos": grupo}
+        if modulo == "facturas"
         else {}
     )
 
@@ -1593,7 +1601,7 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
     partes = [modulo]
     if mes:
         partes.append(mes)
-    if modulo in ("clientes-analisis", "gestor-sku"):
+    if modulo in ("clientes-analisis", "gestor-sku", "facturas"):
         if grupo:
             partes.append("-".join(g.replace(" ", "") for g in grupo))
         # El nombre del fichero dice en qué está medido. Sin eso, dos Excel del mismo

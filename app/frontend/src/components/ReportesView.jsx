@@ -30,6 +30,24 @@ const REPORTS = [
     ],
   },
   {
+    // El MISMO por factura pero de TODO lo que se vende. El de arriba nacio copiando
+    // `automatizar_parranda.py` y filtra a cerveza, asi que de arroz, aceite, papel o
+    // baterias no habia ningun fichero por factura.
+    id: "facturas",
+    title: "Ventas por Factura (todos los productos)",
+    icon: FileText,
+    color: "text-slate-600",
+    bg: "bg-slate-50",
+    border: "border-slate-200",
+    desc: [
+      "Lo mismo que el de arriba pero con TODO lo que se vende, no solo cerveza",
+      "Una hoja por vendedor con cada factura: operación, fecha, cliente y mercancía",
+      "Todos los grupos comerciales juntos: cerveza, importaciones, alimentos…",
+      "Los hectolitros de abajo siguen siendo solo de Malta y Parranda: un saco de arroz no tiene HL",
+      "Hoja Supervisor con el resumen de todos los vendedores",
+    ],
+  },
+  {
     id: "ventas",
     title: "Parranda y Malta (HL)",
     icon: TrendingUp,
