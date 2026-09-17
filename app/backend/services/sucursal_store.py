@@ -17,6 +17,7 @@ from pathlib import Path
 import pandas as pd
 
 from services.db import session_scope, Sucursal
+from services.roster import filtrar_por_baja
 from core.constants import (
     COMISION_GESTOR_PCT,
     COMISION_SUPERVISOR_PCT,
@@ -184,6 +185,11 @@ def config_for_period(suc: dict, year: int | None, month: int | None) -> dict:
                     base["activo"] = True
                     roster[clave] = base
             eff["gestores"] = roster
+
+        # Los que ya estaban de baja ese mes no cuentan. Ver `services/roster.py`:
+        # la regla vive aparte para poder probarla sin levantar la base.
+        eff["gestores"] = filtrar_por_baja(eff.get("gestores"), key)
+
         eff["_period"] = key
     return eff
 
@@ -385,6 +391,9 @@ class SucursalStore:
                 # Quién de ellos supervisa. El supervisor no paga el 10%: lo cobra,
                 # así que marcarlo mal le quita dinero a alguien.
                 "es_supervisor": bool(cfg.get("es_supervisor", existing.get("es_supervisor", False))),
+                # Desde qué mes deja de contar (AAAA-MM), sin borrarle el pasado.
+                # Vacío = sigue. Ver `services/roster.py`.
+                "baja_desde": str(cfg.get("baja_desde", existing.get("baja_desde", "")) or "").strip(),
                 "metas_formato": {
                     str(k): float(v)
                     for k, v in (cfg.get("metas_formato", existing.get("metas_formato", {})) or {}).items()

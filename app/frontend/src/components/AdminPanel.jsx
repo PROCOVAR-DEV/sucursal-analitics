@@ -184,7 +184,7 @@ function DatosSucursal({ cfg, sid, onSaved }) {
 }
 
 // ---------------- Gestores CRUD
-const emptyGestor = { clave: "", nombre: "", sector: "", agencia: "", cuota_hl: 0, cuota_ccc: 0, aliases: "", activo: true, es_supervisor: false };
+const emptyGestor = { clave: "", nombre: "", sector: "", agencia: "", cuota_hl: 0, cuota_ccc: 0, aliases: "", activo: true, es_supervisor: false, baja_desde: "" };
 
 function Gestores({ cfg, sid, reload, flash }) {
   const [nuevo, setNuevo] = useState(emptyGestor);
@@ -204,7 +204,7 @@ function Gestores({ cfg, sid, reload, flash }) {
     await updateGestor(sid, clave, {
       nueva_clave: g._clave, nombre: g.nombre, sector: g.sector, agencia: g.agencia,
       aliases: (g.aliases || "").split(",").map((s) => s.trim()).filter(Boolean), activo: g.activo,
-      es_supervisor: !!g.es_supervisor,
+      es_supervisor: !!g.es_supervisor, baja_desde: g.baja_desde || "",
     });
     await reload(); flash("ok", `Gestor ${clave} actualizado`);
   }
@@ -237,7 +237,7 @@ function Gestores({ cfg, sid, reload, flash }) {
       <div className="overflow-x-auto scroll-thin">
         <table className="tbl">
           <thead>
-            <tr>{["Clave", "Nombre", "Sector", "Agencia", "Alias", "Activo", "Supervisor", `Meta HL · ${MESES[ym.m - 1]}`, "Meta CCC", ""].map((h) => <th key={h}>{h}</th>)}</tr>
+            <tr>{["Clave", "Nombre", "Sector", "Agencia", "Alias", "Activo", "Baja desde", "Supervisor", `Meta HL · ${MESES[ym.m - 1]}`, "Meta CCC", ""].map((h) => <th key={h}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {gestores.map(([clave, g]) => (
@@ -274,6 +274,16 @@ function GestorRow({ clave, g, onSave, onDelete, monthConf, mg, inMonth }) {
       <td className={td}><input className="input input-sm w-24" value={row.agencia} onChange={(e) => set("agencia", e.target.value)} /></td>
       <td className={td}><input className="input input-sm w-36" value={row.aliases} onChange={(e) => set("aliases", e.target.value)} /></td>
       <td className={cn(td, "text-center")}><input type="checkbox" className="accent-brand-600 w-4 h-4" checked={!!row.activo} onChange={(e) => set("activo", e.target.checked)} /></td>
+      {/* La BAJA, que no es lo mismo que desmarcar "activo".
+          "Activo" es global: lo apaga en TODOS los meses, así que un vendedor que se
+          va desaparece también de los informes de cuando sí vendía — y esos ya se
+          miraron y se pagaron. La baja dice desde QUÉ MES deja de contar: antes sigue
+          entero, y desde ahí no se le reparte plan de un mes que no va a trabajar. */}
+      <td className={td}>
+        <input type="month" className="input input-sm w-32" value={row.baja_desde || ""}
+          title="Desde qué mes deja de contar. Antes de esa fecha sigue apareciendo entero."
+          onChange={(e) => set("baja_desde", e.target.value)} />
+      </td>
       {/* Quién supervisa. Al supervisor NO se le descuenta el 10%: es el suyo, lo
           cobra de los demás. Marcarlo mal le quita dinero a alguien, así que se marca
           a mano y no se adivina. */}
