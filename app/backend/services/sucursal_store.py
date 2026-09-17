@@ -397,9 +397,9 @@ class SucursalStore:
                 # NO LLEVA META, pero sus ventas cuentan. Que no es lo mismo que la baja.
                 #
                 # Dos casos reales de Santiago, y los dos se rompían con `baja_desde`:
-                #   · Sidney (alias `pedro`) es el propio Jose: atiende a los clientes que
-                #     caen de imprevisto y les monta el pedido. Vende de verdad, todos los
-                #     meses, y a propósito no tiene cuota.
+                #   · Sidney es uno de los supervisores de Santiago: atiende a los
+                #     clientes que caen de imprevisto y les monta el pedido. Vende de
+                #     verdad, todos los meses, y a propósito no lleva cuota.
                 #   · Amsale ya no es de Procovar, pero lo que vende sigue puntuando aquí.
                 #
                 # Darles de baja les quitaría las ventas de los informes, que es justo lo
