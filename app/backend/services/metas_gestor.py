@@ -109,6 +109,30 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
     day_prev_mask = (df[fec].dt.normalize() == prev_date) if prev_date is not None else pd.Series(False, index=df.index)
     hl = "Hectolitros"
 
+    """
+    FUERA LOS FORMATOS QUE ESA SUCURSAL NO TIENE.
+
+    `DEFAULT_FORMATOS` son los seis de la casa, pero no todas las sucursales venden los
+    seis: en Santiago no existe Malta 500 y salía igual, una columna entera de ceros en
+    cada tabla y en cada Excel. Eso no es un dato, es ruido — y ruido que se lee como
+    «no vendiste nada de esto», que no es lo mismo que «esto aquí no se vende».
+
+    Se quita el formato sólo si NO tiene meta Y NO tiene ventas. Un formato con meta y
+    sin ventas se queda: ahí el cero sí significa algo, y es justo lo que hay que ver.
+    """
+    def meta_de_todos(f: str) -> float:
+        return sum(
+            float(v)
+            for g in keys
+            for ck, v in ((gestores_cfg.get(g) or {}).get("metas_formato", {}) or {}).items()
+            if _meta_code(ck) == f
+        )
+
+    formatos = [
+        f for f in formatos
+        if meta_de_todos(f) > 0 or float(df.loc[df["__code__"] == f, hl].sum() or 0.0) > 0
+    ]
+
     def meta_de(g):
         mf = (gestores_cfg.get(g) or {}).get("metas_formato", {}) or {}
         out = {f: 0.0 for f in formatos}
