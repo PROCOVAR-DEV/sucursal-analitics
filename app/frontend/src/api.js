@@ -226,6 +226,17 @@ export async function getMetasGestor(id, mes = null, dia = null) {
   const qs = p.toString();
   return (await api.get(`${src(id)}/metas-gestor${qs ? "?" + qs : ""}`)).data;
 }
+// El plan por SKU de cada vendedor, repartido segun lo que vendio el MES ANTERIOR.
+//
+// `metas` son los HL globales de cada formato que pone Procovar cada mes
+// ({ P1500: 3168, M1500: 792, ... }). Van como parametros sueltos con el nombre del
+// formato para que una llamada se entienda sola en un log.
+export async function getPlanSku(id, mes, metas = {}) {
+  const p = new URLSearchParams({ mes });
+  for (const [f, v] of Object.entries(metas)) p.set(f, String(Number(v) || 0));
+  return (await api.get(`${src(id)}/plan-sku?${p.toString()}`)).data;
+}
+
 // La tabla de posiciones de la sucursal: como va cada gestor contra SU cuota.
 // Solo hectolitros y porcentaje — el importe y la comision de los demas no salen.
 export async function getCompetencia(id, mes = null) {

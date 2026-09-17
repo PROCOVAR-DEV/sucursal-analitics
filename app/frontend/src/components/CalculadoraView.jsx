@@ -1,6 +1,6 @@
 import { Calculator, Check, Copy, Download, Info, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { getSucursal, getSucursalId, updateSucursal } from "../api.js";
+import { getPlanSku, getSucursal, getSucursalId, updateSucursal } from "../api.js";
 import { formatNumber } from "./Kpi.jsx";
 import { Button, IconButton, Panel, PanelHeader, SearchSelect, Segmented, Select, Toast, cn } from "./ui.jsx";
 
@@ -30,6 +30,21 @@ function rowsFromFormato(formato, params) {
 }
 const seedRows = (params) => rowsFromFormato(STD_FMT, params || {});
 
+/**
+ * Los cinco formatos que Procovar planifica, y su meta global del mes.
+ *
+ * Son los HL que hay que vender ENTRE TODOS de cada formato. No salen de ningún
+ * cálculo nuestro: los pone Procovar cada mes y se teclean aquí. Por eso arrancan
+ * en blanco — un valor por defecto se quedaría puesto y nadie volvería a mirarlo.
+ */
+const FORMATOS_PLAN = ["P1500", "P500", "P330", "M1500", "M330"];
+const ETIQUETA_FMT = {
+  P1500: "Parranda 1.5 L", P500: "Parranda 500 ml", P330: "Parranda 330 ml",
+  M1500: "Malta 1.5 L", M500: "Malta 500 ml", M330: "Malta 330 ml",
+};
+/** `P1500` -> `PARRANDA-1500`, que es como se nombran las filas de la tabla. */
+const formatoDeCodigo = (c) => `${String(c)[0] === "P" ? "PARRANDA" : "MALTA"}-${String(c).slice(1)}`;
+
 export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved }) {
   const [cfgLocal, setCfgLocal] = useState(cfgProp || null);
   const cfg = cfgProp || cfgLocal;
@@ -37,6 +52,9 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
   const [err, setErr] = useState(null);
   const [msg, setMsg] = useState(null);
   const [mode, setMode] = useState("rapido");
+  // Las metas globales por formato y el reparto en curso. Ver `FORMATOS_PLAN`.
+  const [metasGlobales, setMetasGlobales] = useState({});
+  const [repartiendo, setRepartiendo] = useState(false);
   const [plans, setPlans] = useState({});
   const [quick, setQuick] = useState({});
   const [quickCcc, setQuickCcc] = useState({});
@@ -152,6 +170,57 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
     });
     setPlans(p); setQuick(q);
     flash("ok", `Plan de referencia cargado en ${MESES[ym.m - 1]} ${ym.y}. Revisa y pulsa “Guardar”.`);
+  }
+
+  /**
+   * Reparte las metas globales entre los vendedores, según lo que vendió cada uno
+   * el MES ANTERIOR de ESE formato.
+   *
+   *     plan(vendedor, sku) = venta(vendedor, sku) / venta(TODOS, sku) × meta_global(sku)
+   *
+   * Es la regla que Procovar llevaba a mano en una hoja. Antes de esto la pantalla
+   * sembraba a todos con la misma tabla escrita en el código, así que dos vendedores
+   * con metas distintas salían con el mismo desglose y el mismo total de 232 HL.
+   *
+   * El reparto lo hace el servidor, que es donde está probado contra la hoja real.
+   * Aquí sólo se pintan las filas.
+   */
+  async function repartirDesdeVentas() {
+    if (!sid) return;
+    setRepartiendo(true);
+    try {
+      const r = await getPlanSku(sid, pkey, metasGlobales);
+      const prm = cfg?.parametros || {};
+      const porGestor = r.por_gestor || {};
+      const p = {}, q = {};
+
+      gestores.forEach(([k]) => {
+        const plan = porGestor[k];
+        // A quien no le toque nada se le deja lo que tenía: el reparto no puede
+        // borrar un plan puesto a mano por un gestor que no vendió el mes pasado.
+        if (!plan) return;
+        const porFormato = {};
+        Object.entries(plan).forEach(([cod, hl]) => {
+          if (Number(hl) > 0) porFormato[formatoDeCodigo(cod)] = Number(hl);
+        });
+        p[k] = rowsFromFormato(porFormato, prm);
+        q[k] = round2(r.total_por_gestor?.[k] || 0);
+      });
+
+      setPlans((prev) => ({ ...prev, ...p }));
+      setQuick((prev) => ({ ...prev, ...q }));
+
+      const sinBase = r.sin_base || [];
+      const aviso = sinBase.length
+        ? ` Ojo: ${sinBase.map((f) => ETIQUETA_FMT[f] || f).join(", ")} no se vendió en ${r.mes_anterior}, así que va en cero y hay que ponerlo a mano.`
+        : "";
+      flash(sinBase.length ? "warn" : "ok",
+        `Repartido con las ventas de ${r.mes_anterior}. Revisa y pulsa “Guardar”.${aviso}`);
+    } catch (e) {
+      flash("err", e?.response?.data?.detail || e.message);
+    } finally {
+      setRepartiendo(false);
+    }
   }
 
   function calc(row) {
@@ -315,6 +384,48 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, onSaved })
           </table>
         </div>
       </Panel>
+
+      {/* Las metas globales del mes, y el reparto segun lo vendido. */}
+      <Panel>
+        <PanelHeader
+          icon={Calculator}
+          title={`Metas globales por formato · ${MESES[ym.m - 1]} ${ym.y}`}
+          right={
+            <Button size="sm" icon={Copy} disabled={repartiendo} onClick={repartirDesdeVentas}>
+              {repartiendo ? "Repartiendo…" : "Repartir entre los vendedores"}
+            </Button>
+          }
+        />
+        <div className="p-3 space-y-3">
+          <p className="text-xs text-slate-500">
+            Los hectolitros que hay que vender <b>entre todos</b> de cada formato este mes. Al
+            repartir, a cada vendedor le toca la misma proporción que tuvo de <b>ese</b> formato el
+            mes pasado: <code>venta suya ÷ venta de todos × meta global</code>. Su meta en HL sale
+            de la suma, no se pone aparte.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {FORMATOS_PLAN.map((f) => (
+              <label key={f} className="flex flex-col gap-1">
+                <span className="text-xs text-slate-500">{ETIQUETA_FMT[f]}</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="—"
+                  className="input input-sm w-28 num"
+                  value={metasGlobales[f] ?? ""}
+                  onChange={(e) => setMetasGlobales((m) => ({ ...m, [f]: e.target.value }))}
+                />
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-slate-400">
+            En blanco es lo mismo que cero: ese formato no se planifica este mes y reparte cero.
+            Repartir <b>no guarda nada</b> — revisa las filas y pulsa «Guardar».
+          </p>
+        </div>
+      </Panel>
+
 
       {mode === "detalle" && sel && (
         <Panel>

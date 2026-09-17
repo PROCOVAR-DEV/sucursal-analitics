@@ -22,7 +22,7 @@ import threading
 
 import pandas as pd
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
@@ -37,6 +37,7 @@ from services.metas_cantidad_gestor import compute_metas_cantidad_gestor
 from services.clientes_dormidos import compute_clientes_dormidos
 from services.movimiento_clientes import compute_movimiento_clientes
 from services.metas_gestor import compute_metas_gestor
+from services.plan_sku import repartir_plan_sku
 from services.excel_export import (
     export_all, export_clientes_analisis, export_gestor_sku, export_market,
     export_parranda_facturas, export_productos, export_ranking, export_ventas,
@@ -846,6 +847,51 @@ def src_metas_gestor(sid: str, source_id: str, mes: str | None = Query(default=N
     else:
         eff = _eff_scoped(suc, report, mes, user)
     return compute_metas_gestor(report, eff, dia)
+
+
+@app.get("/api/sucursales/{sid}/sources/{source_id}/plan-sku")
+def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(...), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    """El plan por SKU de cada vendedor, repartido según lo que vendió el MES ANTERIOR.
+
+    `mes` es el mes que se está planificando (AAAA-MM); las ventas se leen del
+    anterior. Las metas globales de cada formato llegan como parámetros sueltos
+    —`?P1500=3168&M1500=792`— porque son cinco números que teclea quien planifica,
+    no un dato que esté guardado en ninguna parte: los pone Procovar cada mes.
+
+    Un formato que no venga se toma como cero, que es lo mismo que decir «este mes
+    no hay plan de eso»: reparte cero y no estorba.
+    """
+    y, m = (int(x) for x in mes.split("-")[:2])
+    ya, ma = (y - 1, 12) if m == 1 else (y, m - 1)
+    mes_anterior = f"{ya:04d}-{ma:02d}"
+
+    report = filter_by_period(_get_source(sid, source_id), mes_anterior, None, None)
+    eff = _scope_for_user(config_for_period(suc, ya, ma), user)
+    mg = compute_metas_gestor(report, eff, None)
+
+    formatos = list(mg.get("formatos") or [])
+    ventas = {
+        str(g.get("gestor")): {f: float((g.get("mensual") or {}).get("venta_acum", {}).get(f) or 0.0) for f in formatos}
+        for g in (mg.get("por_gestor") or [])
+    }
+
+    # Las metas globales salen de los parámetros de la consulta, con el NOMBRE del
+    # formato: `?P1500=3168&M1500=792`. Así una llamada se entiende sola en un log, y
+    # el día que aparezca un formato nuevo no hay que tocar esta firma.
+    def _meta(f: str) -> float:
+        try:
+            return float(request.query_params.get(f, 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    globales = {f: _meta(f) for f in formatos}
+
+    return {
+        "mes": mes,
+        "mes_anterior": mes_anterior,
+        "rango_anterior": mg.get("rango", ""),
+        **repartir_plan_sku(ventas, globales, formatos),
+    }
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/clientes-dormidos")
