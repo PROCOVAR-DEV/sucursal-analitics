@@ -72,6 +72,18 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
    * reparto que parece bueno y no es el suyo.
    */
   const [mesBase, setMesBase] = useState("");
+  /**
+   * Formatos que se reparten POR CABEZA aunque se hayan vendido.
+   *
+   * Cuando no se vendió nada es automático. Esto es para el otro caso: se vendió tan
+   * poco que la proporción no dice nada — 1,02 HL de p500 entre toda la sucursal le
+   * daban el 100 % de un objetivo de 403 al único que vendió.
+   *
+   * Va marcado a mano y no con un múltiplo automático a propósito: no existe un número
+   * a partir del cual una base «deja de valer», y ponerlo yo sería meter una regla de
+   * negocio con mi criterio. Quien planifica lo decide cada mes, mirando los datos.
+   */
+  const [porCabeza, setPorCabeza] = useState({});
   const [plans, setPlans] = useState({});
   const [quick, setQuick] = useState({});
   const [quickCcc, setQuickCcc] = useState({});
@@ -219,7 +231,8 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
         setRepartiendo(false);
         return;
       }
-      const r = await getPlanSku(sourceId, pkey, metasGlobales, mesBase || null, soloEstos);
+      const marcadosIgual = FORMATOS_PLAN.filter((f) => porCabeza[f]);
+      const r = await getPlanSku(sourceId, pkey, metasGlobales, mesBase || null, soloEstos, marcadosIgual);
       const prm = cfg?.parametros || {};
       const porGestor = r.por_gestor || {};
       const p = {}, q = {};
@@ -260,15 +273,16 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       setQuick((prev) => ({ ...prev, ...q }));
 
       const sinBase = r.sin_base || [];
+      const porIgual = r.por_cabeza || sinBase;
       const fuera = r.fuera_del_reparto || [];
       // Quien queda fuera se DICE. Vendio el mes de referencia pero no lleva meta —de
       // baja, o sin cuota a proposito— y su parte ya se repartio entre los demas. Sin
       // decirlo, una tabla con menos filas de las esperadas se lee como un error.
       const aviso =
         (fuera.length ? ` Sin meta este mes: ${fuera.join(", ")} — sus ventas cuentan igual, y su parte ya se repartió entre los demás.` : "") +
-        (sinBase.length
-          ? ` ${sinBase.map((f) => ETIQUETA_FMT[f] || f).join(", ")} no se vendió en ${r.mes_anterior}:` +
-            ` esa meta se repartió POR IGUAL entre los que llevan cuota, no por ventas.`
+        (porIgual.length
+          ? ` ${porIgual.map((f) => ETIQUETA_FMT[f] || f).join(", ")}: repartido POR IGUAL` +
+            ` entre los que llevan cuota, no por ventas.`
           : "") +
         /**
          * Y el caso de Javier, que no es un fallo pero lo parece.
@@ -309,7 +323,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       }
 
       const hayFuertes = Object.values(r.multiplicadores || {}).some((v) => v >= 10);
-      flash(sinBase.length || hayFuertes ? "warn" : "ok",
+      flash(porIgual.length || hayFuertes ? "warn" : "ok",
         `Repartido con las ventas de ${r.mes_anterior}. Revisa y pulsa “Guardar”.${aviso}`);
     } catch (e) {
       flash("err", e?.response?.data?.detail || e.message);
@@ -520,6 +534,13 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
                   value={metasGlobales[f] ?? ""}
                   onChange={(e) => setMetasGlobales((m) => ({ ...m, [f]: e.target.value }))}
                 />
+                <label className="flex items-center gap-1 text-[11px] text-slate-500 cursor-pointer"
+                  title="Reparte esta meta a partes iguales en vez de por lo vendido. Úsalo cuando el mes pasado se vendió tan poco que la proporción no dice nada.">
+                  <input type="checkbox" className="accent-slate-500"
+                    checked={!!porCabeza[f]}
+                    onChange={(e) => setPorCabeza((c) => ({ ...c, [f]: e.target.checked }))} />
+                  por cabeza
+                </label>
               </label>
             ))}
           </div>

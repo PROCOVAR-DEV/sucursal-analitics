@@ -44,6 +44,7 @@ def repartir_plan_sku(
     ventas_anterior: dict[str, dict[str, float]],
     metas_globales: dict[str, float],
     formatos: list[str] | None = None,
+    por_cabeza: set[str] | None = None,
 ) -> dict:
     """Reparte la meta global de cada SKU entre los vendedores.
 
@@ -107,8 +108,25 @@ def repartir_plan_sku(
         Se sigue avisando, porque un reparto por cabeza no es lo mismo que un reparto
         por ventas y quien planifica tiene que saber cuál está mirando.
         """
-        if meta > 0 and total <= 0:
-            sin_base.append(f)
+        """
+        POR CABEZA: automático cuando no hay base, y A MANO cuando la base no vale.
+
+        Lo segundo lo pidió Sidney con un caso concreto: p500 se vendió, pero 1,02 HL
+        entre toda la sucursal. Repartir un objetivo de 403 «según la parte que tuviste»
+        con esa base le daba el 100 % al único que vendió — 1,02 HL convertidos en 403.
+        Técnicamente hay base; en la práctica no dice nada.
+
+        No hay un múltiplo mágico a partir del cual una base «deja de valer», y
+        inventármelo sería poner una regla de negocio en el código con mi criterio. Así
+        que la decisión va donde vive: quien planifica marca ese formato y se reparte
+        por cabeza ese mes. El mes siguiente puede ser otro formato, u otro criterio, y
+        no hay que tocar nada.
+        """
+        forzado = f in (por_cabeza or set())
+
+        if meta > 0 and (total <= 0 or forzado):
+            if total <= 0:
+                sin_base.append(f)
             cuantos = len(por_gestor)
             if cuantos:
                 parte = round(meta / cuantos, 2)
@@ -167,6 +185,10 @@ def repartir_plan_sku(
     return {
         "formatos": fmts,
         "multiplicadores": multiplicadores,
+        # Los que se repartieron a partes iguales, por lo que sea: porque no había base
+        # o porque quien planifica lo marcó. La pantalla lo dice, para que nadie
+        # confunda un reparto por cabeza con uno por ventas.
+        "por_cabeza": sorted(set(sin_base) | {f for f in fmts if f in (por_cabeza or set()) and _num(metas_globales.get(f)) > 0}),
         "por_gestor": por_gestor,
         "totales_anterior": totales,
         "metas_globales": {f: round(_num(metas_globales.get(f)), 2) for f in fmts},

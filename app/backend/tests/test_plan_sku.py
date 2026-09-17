@@ -136,3 +136,30 @@ def test_quitar_a_uno_REPARTE_su_parte_en_vez_de_perderla():
     # Y a cada uno de los que quedan le toca MAS que antes.
     for g in sin_resto["por_gestor"]:
         assert sin_resto["por_gestor"][g]["P1500"] > completo["por_gestor"][g]["P1500"]
+
+
+def test_marcar_un_formato_POR_CABEZA_aunque_se_haya_vendido():
+    """El caso de p500 que pidio Sidney el 17/09/2026.
+
+    Se vendio: 1,02 HL en toda la sucursal, todo de Javier. Tecnicamente hay base, asi
+    que el reparto por ventas le daba el 100 % de los 403 — 1,02 convertidos en 403.
+    Marcando el formato, se reparte a partes iguales.
+    """
+    ventas = {"javier": {"P500": 1.02}, "gari": {"P500": 0.0}, "dayla": {"P500": 0.0}}
+    r = repartir_plan_sku(ventas, {"P500": 403.0}, ["P500"], por_cabeza={"P500"})
+
+    assert r["por_gestor"]["gari"]["P500"] > 0, "gari no vendio p500 y aun asi le toca"
+    assert round(sum(r["total_por_gestor"].values()), 2) == 403.0
+    assert r["por_cabeza"] == ["P500"]
+    # Y NO es `sin_base`: si habia base, lo que pasa es que no valia.
+    assert r["sin_base"] == []
+
+
+def test_lo_que_NO_se_marca_sigue_repartiendose_por_ventas():
+    ventas = {"a": {"P500": 1.0, "P1500": 30.0}, "b": {"P500": 0.0, "P1500": 10.0}}
+    r = repartir_plan_sku(ventas, {"P500": 100.0, "P1500": 400.0}, ["P500", "P1500"],
+                          por_cabeza={"P500"})
+    assert r["por_gestor"]["a"]["P500"] == r["por_gestor"]["b"]["P500"] == 50.0
+    # P1500 sigue proporcional: 30 de 40 y 10 de 40.
+    assert r["por_gestor"]["a"]["P1500"] == 300.0
+    assert r["por_gestor"]["b"]["P1500"] == 100.0

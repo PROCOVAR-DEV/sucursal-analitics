@@ -971,7 +971,7 @@ def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(..
         # a propósito no llevan cuota. Se dice en la pantalla, porque un total que
         # cuadra pero con menos filas de las esperadas se lee como un error.
         "fuera_del_reparto": sorted(set((mg_g.get("gestor") for mg_g in (mg.get("por_gestor") or []))) - set(ventas)),
-        **repartir_plan_sku(ventas, globales, formatos),
+        **repartir_plan_sku(ventas, globales, formatos, por_cabeza={g for g in request.query_params.getlist("igual") if g}),
     }
 
 
