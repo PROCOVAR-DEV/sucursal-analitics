@@ -354,12 +354,19 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
   }, [sid, sourceId, pkey, mesBase]);
 
   /**
-   * Los formatos que se enseñan: los que esa sucursal vendió, más los que ya tengan
-   * algo escrito —para no hacer desaparecer un número que alguien acaba de teclear—.
+   * TODOS los formatos. No se esconde ninguno solo.
+   *
+   * Lo intenté escondiendo los que no se habían vendido el mes de referencia, y estaba
+   * mal por dos motivos. El de fondo: que algo no se venda UN mes no significa que ese
+   * producto no exista — a Camagüey le desapareció Parranda 330 de los informes por no
+   * haberla vendido en septiembre. Y el otro, peor: decidí yo una regla que nadie me
+   * pidió y se la apliqué a las diez sucursales.
+   *
+   * Qué formatos maneja cada sucursal es una decisión de negocio y tiene que poder
+   * tomarla quien la conoce, desde la pantalla. Mientras eso no exista, se enseñan
+   * todos: sobra una columna, que es mucho menos malo que faltar una.
    */
-  const formatosVisibles = FORMATOS_PLAN.filter(
-    (f) => !ventasBase || Number(ventasBase[f]) > 0 || metasGlobales[f] || porCabeza[f],
-  );
+  const formatosVisibles = FORMATOS_PLAN;
 
   function calc(row) {
     if (!esHL(row.producto)) {
