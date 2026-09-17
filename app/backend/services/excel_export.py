@@ -458,6 +458,92 @@ _INV_COLS = [
 ]
 
 
+def _suma_col(d, col: str) -> float:
+    """Suma una columna que puede no existir o venir con texto. 0.0 si no hay nada."""
+    if col not in d.columns:
+        return 0.0
+    return float(pd.to_numeric(d[col], errors="coerce").fillna(0).sum())
+
+
+def _agrupar_por_producto(sub, *, merc: str, cant: str, imp: str, con_grupo: bool) -> list[dict]:
+    """Una fila por Mercancía, de mayor a menor importe."""
+    if sub is None or sub.empty or merc not in sub.columns:
+        return []
+    d = sub.copy()
+    nombres = d[merc].astype(str).str.strip()
+    d["__prod__"] = nombres.mask(nombres.isin(["", "nan", "None", "NaN"]), "(sin nombre)")
+    out = []
+    for prod, sg in d.groupby("__prod__", dropna=False):
+        out.append({
+            "producto": str(prod),
+            "grupo": (str(sg["GrupoComercial"].iloc[0])
+                      if con_grupo and "GrupoComercial" in sg.columns else ""),
+            "cantidad": round(_suma_col(sg, cant), 2),
+            "importe": round(_suma_col(sg, imp), 2),
+            "pallets": round(_suma_col(sg, "Pallets"), 2),
+            "hl": round(_suma_col(sg, "Hectolitros"), 2),
+        })
+    out.sort(key=lambda x: x["importe"], reverse=True)
+    return out
+
+
+def _resumen_por_producto(ws, f, sub, fila: int, *, merc: str, cant: str, imp: str,
+                          con_grupo: bool, con_hl: bool, con_pallets: bool = True,
+                          titulo: str = "Desglose por Producto") -> int:
+    """Tabla de pie con una fila por producto. Devuelve la fila libre siguiente.
+
+    La tabla de arriba —«Conversión Cantidad → Blisters y Pallets»— solo sabe de Malta
+    y Parranda en sus tres tamaños: en el fichero general, donde hay arroz, aceite o
+    papel, saldría entera en cero. Ésta agrupa por la Mercancía tal como viene en la
+    factura, así que vale para cualquier producto y además trae el importe, que la de
+    arriba no tiene.
+
+    El nombre del producto ocupa dos celdas unidas: las columnas de la tabla de
+    facturas son estrechas y un nombre real no cabe en una sola.
+    """
+    # Una columna entera de ceros no informa de nada y hace dudar de si el informe
+    # está roto: los pallets y los hectolitros solo salen si hay algo que contar.
+    hdr = (["Producto"] + (["Grupo"] if con_grupo else [])
+           + ["Cantidad (empaques)", "Importe"]
+           + (["Pallets"] if con_pallets else []) + (["Hectolitros"] if con_hl else []))
+    ancho = len(hdr) + 1  # +1 por la celda unida del nombre
+    ws.merge_range(fila, 0, fila, ancho - 1, titulo, f["kpi_txt"])
+    ws.merge_range(fila + 1, 0, fila + 1, 1, hdr[0], f["header"])
+    for j, h in enumerate(hdr[1:], start=2):
+        ws.write(fila + 1, j, h, f["header"])
+
+    filas = _agrupar_por_producto(sub, merc=merc, cant=cant, imp=imp, con_grupo=con_grupo)
+    r = fila + 2
+    if not filas:
+        ws.merge_range(r, 0, r, ancho - 1, "Sin ventas en el rango", f["band"])
+        return r + 1
+
+    for it in filas:
+        ws.merge_range(r, 0, r, 1, it["producto"], f["band"])
+        j = 2
+        if con_grupo:
+            ws.write(r, j, it["grupo"], f["band"]); j += 1
+        ws.write_number(r, j, it["cantidad"], f["int"]); j += 1
+        ws.write_number(r, j, it["importe"], f["money"]); j += 1
+        if con_pallets:
+            ws.write_number(r, j, it["pallets"], f["num"]); j += 1
+        if con_hl:
+            ws.write_number(r, j, it["hl"], f["num"])
+        r += 1
+
+    ws.merge_range(r, 0, r, 1, "TOTAL", f["block_txt"])
+    j = 2
+    if con_grupo:
+        ws.write(r, j, "", f["block_txt"]); j += 1
+    ws.write_number(r, j, round(sum(i["cantidad"] for i in filas), 2), f["int_b"]); j += 1
+    ws.write_number(r, j, round(sum(i["importe"] for i in filas), 2), f["money_b"]); j += 1
+    if con_pallets:
+        ws.write_number(r, j, round(sum(i["pallets"] for i in filas), 2), f["block"]); j += 1
+    if con_hl:
+        ws.write_number(r, j, round(sum(i["hl"] for i in filas), 2), f["block"])
+    return r + 1
+
+
 def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
                              solo_cerveza: bool = True) -> bytes:
     """Una hoja por vendedor con CADA factura.
@@ -505,6 +591,15 @@ def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
 
     meta_total = float(eff.get("meta_hectolitros_total", 0.0) or 0.0)
     supervisor = []
+
+    # Se deciden UNA vez para todo el libro, no por hoja: si cada vendedor tuviera sus
+    # columnas, dos hojas del mismo fichero no se podrían comparar de un vistazo.
+    con_grupo = (not df.empty and "GrupoComercial" in df.columns
+                 and df["GrupoComercial"].astype(str).nunique() > 1)
+    con_hl = (not df.empty and "Hectolitros" in df.columns
+              and float(pd.to_numeric(df["Hectolitros"], errors="coerce").fillna(0).abs().sum()) > 0)
+    con_pallets = (not df.empty and "Pallets" in df.columns
+                   and float(pd.to_numeric(df["Pallets"], errors="coerce").fillna(0).abs().sum()) > 0)
 
     for g in keys:
         nombre = str(gestores_cfg.get(g, {}).get("nombre", g))
@@ -570,12 +665,22 @@ def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
             ws.write_number(rr, 2, bl, f["num"]); ws.write_number(rr, 3, pal, f["num"])
             ws.write_number(rr, 4, hlv, f["num"])
 
+        # Desglose por producto, al pie. Lo pidió Santiago el 17/09/2026: la tabla de
+        # conversión de arriba solo habla de cerveza y en el fichero general no dice nada.
+        _resumen_por_producto(ws, f, sub, cr + 2 + len(conv_rows) + 1,
+                              merc=merc, cant=cant, imp=imp,
+                              con_grupo=con_grupo, con_hl=con_hl, con_pallets=con_pallets)
+
         supervisor.append({"gestor": nombre, "venta": total_importe,
                            "M330": M330, "P330": P330, "P500": P500, "P1500": P1500, "hl": total_hl})
 
     # ---- Hoja Supervisor ----
     ws = wb.add_worksheet("Supervisor")
-    ws.merge_range(0, 0, 1, 6, "Resumen de Ventas — Supervisor (Parranda / Malta)", f["title"])
+    # El título dice lo que lleva dentro: el mismo libro sirve ahora para la cerveza
+    # sola, para un grupo comercial o para todo lo que se vende.
+    que = ("Parranda / Malta" if solo_cerveza
+           else (" · ".join(str(g) for g in grupos) if grupos else "Todos los productos"))
+    ws.merge_range(0, 0, 1, 6, f"Resumen de Ventas — Supervisor ({que})", f["title"])
     ws.merge_range(0, 7, 1, 8, f"Rango: {report.rango_str}", f["subtitle"])
     hdr = ["Gestor", "Total Venta", "M330", "P330", "P500", "P1500", "Total HL"]
     for j, h in enumerate(hdr):
@@ -598,6 +703,12 @@ def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
     ws.write(r + 2, 0, "META HECTOLITROS", f["block_txt"]); ws.write_number(r + 2, 1, meta_total, f["block"])
     ws.write(r + 3, 0, "% CUMPLIMIENTO", f["block_txt"])
     ws.write(r + 3, 1, (total_hl_all / meta_total) if meta_total else 0.0, pct_ctr)
+
+    # El mismo desglose pero de toda la sucursal: es el que se mira para no tener que
+    # ir sumando hoja por hoja.
+    _resumen_por_producto(ws, f, df, r + 5, merc=merc, cant=cant, imp=imp,
+                          con_grupo=con_grupo, con_hl=con_hl, con_pallets=con_pallets,
+                          titulo="Desglose por Producto — Todos los gestores")
 
     wb.close()
     return bio.getvalue()
