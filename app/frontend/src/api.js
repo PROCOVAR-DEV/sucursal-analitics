@@ -141,12 +141,14 @@ export async function getMarket(id, mes = null)     { return (await api.get(`${s
 export async function getRanking(id, mes = null)    { return (await api.get(`${src(id)}/ranking${q(mes)}`)).data; }
 // `grupos` acota a unos grupos comerciales; vacio = todos. `metrica` es
 // "importe" (dolares) o "cantidad" (por empaque, tal como viene del origen).
-export async function getClientesAnalisis(id, mes = null, grupos = [], metrica = "importe") {
+export async function getClientesAnalisis(id, mes = null, grupos = [], metrica = "importe", exclusivo = false) {
   const p = new URLSearchParams();
 
   for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
   for (const g of grupos) p.append("grupo", g);
   if (metrica && metrica !== "importe") p.set("metrica", metrica);
+  // Solo los clientes que no compran nada fuera del grupo. Sin grupo no aplica.
+  if (exclusivo && grupos.length) p.set("exclusivo", "1");
 
   const qs = p.toString();
 

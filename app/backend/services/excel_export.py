@@ -411,7 +411,7 @@ def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict, metrica: str
 
 
 def export_clientes_analisis(report, eff: dict, grupos: list[str] | None = None,
-                             metrica: str = "importe") -> bytes:
+                             metrica: str = "importe", exclusivo: bool = False) -> bytes:
     """El Excel sale con LO MISMO que se está viendo en pantalla.
 
     Antes salía siempre el informe completo en importe, sin los filtros. Un
@@ -419,11 +419,15 @@ def export_clientes_analisis(report, eff: dict, grupos: list[str] | None = None,
     tenerlo: se reenvía por correo, se discute con él delante, y nadie sabe que
     está mirando otra cosa.
     """
-    data = compute_clientes_analisis(report, eff, grupos=grupos, metrica=metrica)
+    data = compute_clientes_analisis(report, eff, grupos=grupos, metrica=metrica, exclusivo=exclusivo)
     real = data.get("metrica", "importe")
     # Los grupos elegidos van en el título: es lo único que dice, dentro del
     # archivo, que esto no es el total de todo.
     sufijo = f" — {', '.join(grupos)}" if grupos else ""
+    # Que el titulo diga que es la cartera EXCLUSIVA: un Excel sin eso se confunde con
+    # el normal del mismo grupo, y son dos poblaciones distintas.
+    if data.get("exclusivo"):
+        sufijo += " (sólo compran esto)"
     bio, wb = _new_wb()
     f = _formats(wb)
     _sheet_clientes(wb, f, "Oficina", f"Análisis de clientes — Oficina (total){sufijo}",

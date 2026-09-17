@@ -782,12 +782,16 @@ def src_clientes_analisis(
     grupo: list[str] = Query(default=[]),
     # "importe" (dolares) o "cantidad" (por empaque, como viene del origen).
     metrica: str = Query(default="importe"),
+    # Sólo los clientes que NO compran nada fuera de los grupos elegidos. Es otra
+    # pregunta que la del filtro: ver `compute_clientes_analisis`.
+    exclusivo: bool = Query(default=False),
     suc: dict = Depends(require_access),
     user: dict = Depends(current_user),
 ) -> dict:
     report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     return compute_clientes_analisis(
-        report, _eff_scoped(suc, report, mes, user), grupos=grupo, metrica=metrica
+        report, _eff_scoped(suc, report, mes, user), grupos=grupo, metrica=metrica,
+        exclusivo=exclusivo,
     )
 
 
@@ -1565,6 +1569,7 @@ _EXPORTERS = {
 @app.get("/api/sucursales/{sid}/sources/{source_id}/export/{modulo}.xlsx")
 def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
                   grupo: list[str] = Query(default=[]), metrica: str = Query(default="importe"),
+                  exclusivo: bool = Query(default=False),
                   suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> Response:
     exporter = _EXPORTERS.get(modulo)
     if exporter is None:
@@ -1575,8 +1580,10 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
     # pasarían argumentos que no aceptan. Explícito y no por introspección: se
     # lee de un vistazo cuál los usa.
     extra = (
-        {"grupos": grupo, "metrica": metrica}
-        if modulo in ("clientes-analisis", "gestor-sku")
+        {"grupos": grupo, "metrica": metrica, "exclusivo": exclusivo}
+        if modulo == "clientes-analisis"
+        else {"grupos": grupo, "metrica": metrica}
+        if modulo == "gestor-sku"
         else {}
     )
 
@@ -1594,6 +1601,9 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
         # sabe cuál tiene delante.
         if metrica in ("cantidad", "ambas"):
             partes.append(metrica)
+        # Y si lleva solo a los exclusivos, tambien: es otra cartera distinta.
+        if exclusivo and grupo:
+            partes.append("solo")
 
     data = exporter(report, _eff_scoped(suc, report, mes, user), **extra)
     return _xlsx(data, f"{'_'.join(partes)}.xlsx")

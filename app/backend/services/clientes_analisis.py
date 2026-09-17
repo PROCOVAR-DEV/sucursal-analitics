@@ -123,6 +123,7 @@ def compute_clientes_analisis(
     eff: dict,
     grupos: list[str] | None = None,
     metrica: str = "importe",
+    exclusivo: bool = False,
 ) -> dict:
     """El pivote de clientes × producto, en importe o en cantidad.
 
@@ -152,7 +153,26 @@ def compute_clientes_analisis(
     )
 
     if grupos and "GrupoComercial" in df.columns:
-        df = df[df["GrupoComercial"].astype(str).isin([str(g) for g in grupos])]
+        elegidos = [str(g) for g in grupos]
+        dentro = df["GrupoComercial"].astype(str).isin(elegidos)
+
+        """
+        `exclusivo`: los que SÓLO compran eso, que no es lo mismo que «los que compran eso».
+
+        El filtro de grupo de siempre recorta LÍNEAS: un cliente que compra Parranda y
+        además arroz sigue saliendo, sólo que se le ocultan las líneas del arroz. Sirve
+        para «cuánta Parranda vendo», no para «quién es cliente sólo de Parranda».
+
+        Lo pidió Carlo, y es otra pregunta: la cartera que no compra nada más. Se
+        calcula ANTES de recortar —hay que mirar lo que compró FUERA del grupo para
+        poder descartarlo— y por eso no se puede sacar de la tabla ya filtrada.
+        """
+        if exclusivo:
+            socio_col = STD_COLS["socio"]
+            fuera = set(df.loc[~dentro, socio_col].astype("string").str.strip().dropna())
+            df = df[dentro & ~df[socio_col].astype("string").str.strip().isin(fuera)]
+        else:
+            df = df[dentro]
 
     # La columna que se suma. Si se pide cantidad y no viene esa columna, se cae
     # al importe: mejor enseñar el número de siempre que una tabla vacía sin
@@ -195,6 +215,7 @@ def compute_clientes_analisis(
         "periodo": eff.get("_period"),
         "grupos_disponibles": disponibles,
         "grupos": list(grupos or []),
+        "exclusivo": bool(exclusivo and grupos),
         "metrica": metrica_real,
         "oficina": pivotar(df, True),
         "por_gestor": por_gestor,

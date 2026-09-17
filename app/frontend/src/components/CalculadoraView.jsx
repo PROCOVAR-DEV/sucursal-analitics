@@ -84,6 +84,17 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
    * negocio con mi criterio. Quien planifica lo decide cada mes, mirando los datos.
    */
   const [porCabeza, setPorCabeza] = useState({});
+  /**
+   * Lo que esa sucursal vendió de verdad el mes de referencia, por formato.
+   *
+   * Sirve para no enseñar formatos que ahí no existen: en Santiago no se vende Malta
+   * 500 y salía igual, pidiendo una meta de algo que nadie va a vender. Quitarlo a
+   * mano de la lista no vale — en otra sucursal sí puede existir.
+   *
+   * `null` mientras no se sabe: entonces se enseñan todos, que es mejor que esconder
+   * uno que hacía falta.
+   */
+  const [ventasBase, setVentasBase] = useState(null);
   const [plans, setPlans] = useState({});
   const [quick, setQuick] = useState({});
   const [quickCcc, setQuickCcc] = useState({});
@@ -231,7 +242,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
         setRepartiendo(false);
         return;
       }
-      const marcadosIgual = FORMATOS_PLAN.filter((f) => porCabeza[f]);
+      const marcadosIgual = formatosVisibles.filter((f) => porCabeza[f]);
       const r = await getPlanSku(sourceId, pkey, metasGlobales, mesBase || null, soloEstos, marcadosIgual);
       const prm = cfg?.parametros || {};
       const porGestor = r.por_gestor || {};
@@ -331,6 +342,24 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       setRepartiendo(false);
     }
   }
+
+  useEffect(() => {
+    if (!sid || !pkey) return;
+    let vivo = true;
+    // Sin metas: sólo interesa `totales_anterior`, o sea qué se vendió.
+    getPlanSku(sourceId, pkey, {}, mesBase || null)
+      .then((r) => { if (vivo) setVentasBase(r.totales_anterior || {}); })
+      .catch(() => { if (vivo) setVentasBase(null); });  // ante la duda, enseñarlos todos
+    return () => { vivo = false; };
+  }, [sid, sourceId, pkey, mesBase]);
+
+  /**
+   * Los formatos que se enseñan: los que esa sucursal vendió, más los que ya tengan
+   * algo escrito —para no hacer desaparecer un número que alguien acaba de teclear—.
+   */
+  const formatosVisibles = FORMATOS_PLAN.filter(
+    (f) => !ventasBase || Number(ventasBase[f]) > 0 || metasGlobales[f] || porCabeza[f],
+  );
 
   function calc(row) {
     if (!esHL(row.producto)) {
@@ -522,7 +551,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
                 onChange={(e) => setMesBase(e.target.value)}
               />
             </label>
-            {FORMATOS_PLAN.map((f) => (
+            {formatosVisibles.map((f) => (
               <label key={f} className="flex flex-col gap-1">
                 <span className="text-xs text-slate-500">{ETIQUETA_FMT[f]}</span>
                 <input

@@ -22,6 +22,8 @@ export default function ClientesAnalisisView({ sourceId, period }) {
   const [grupos, setGrupos] = useState([]);
   // "importe" (dolares) o "cantidad" (por empaque, tal como viene del origen).
   const [metrica, setMetrica] = useState("importe");
+  // Sólo los clientes que no compran nada fuera del grupo elegido.
+  const [exclusivo, setExclusivo] = useState(false);
 
   /**
    * Cuántos clientes se pintan de una vez.
@@ -49,7 +51,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
     // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
     let cancelled = false;
     setData(null); setErr(null);
-    getClientesAnalisis(sourceId, period, grupos, metrica)
+    getClientesAnalisis(sourceId, period, grupos, metrica, exclusivo)
       .then((d) => {
         if (cancelled) return;
         setData(d);
@@ -59,7 +61,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
     return () => { cancelled = true; };
     // `grupos` se serializa: es un array nuevo en cada render y como dependencia
     // suelta relanzaria la peticion sin parar.
-  }, [sourceId, period, grupos.join("|"), metrica]);
+  }, [sourceId, period, grupos.join("|"), metrica, exclusivo]);
 
   // Al cambiar de periodo o de fuente se vuelve a la vista general: el gestor
   // elegido puede no existir en el periodo nuevo.
@@ -93,7 +95,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
 
   async function handleExport() {
     setBusy(true);
-    try { await downloadExport(sourceId, "clientes-analisis", period, { grupos, metrica }); }
+    try { await downloadExport(sourceId, "clientes-analisis", period, { grupos, metrica, ...(exclusivo && grupos.length ? { exclusivo: 1 } : {}) }); }
     catch (e) { alert(e?.response?.data?.detail || "No se pudo descargar"); }
     finally { setBusy(false); }
   }
@@ -140,6 +142,18 @@ export default function ClientesAnalisisView({ sourceId, period }) {
             </button>
           ))}
         </div>
+
+        {/* SOLO de este grupo. No es lo mismo que el filtro de al lado: ese recorta
+            LINEAS —el que compra Parranda y arroz sigue saliendo, sin el arroz— y esto
+            recorta CLIENTES: los que no compran nada fuera del grupo. Lo pidio Carlo. */}
+        {grupos.length > 0 && (
+          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer"
+            title="Deja solo a los clientes que NO compran nada fuera de los grupos elegidos">
+            <input type="checkbox" className="accent-brand-600" checked={exclusivo}
+              onChange={(e) => setExclusivo(e.target.checked)} />
+            Sólo compran esto
+          </label>
+        )}
 
         {gruposDisponibles.length > 1 && (
           <FiltroMulti
@@ -256,16 +270,20 @@ export default function ClientesAnalisisView({ sourceId, period }) {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="sticky bottom-0 z-20">
-                  <td className="sticky left-0 z-30 bg-slate-800 border-r border-slate-700 px-3 py-2.5" />
-                  <td className="sticky left-10 z-30 bg-slate-800 text-white font-semibold px-3 py-2.5 border-r border-slate-700 whitespace-nowrap">TOTAL POR SKU</td>
-                  {isOficina && <td className="bg-slate-800" />}
-                  <td className="bg-slate-900 text-white font-bold px-3 py-2.5 text-right tabular-nums">{fmt(block.total)}</td>
-                  {esAmbas && <td className="bg-slate-900 text-slate-300 font-semibold px-3 py-2.5 text-right tabular-nums">{fmtCant(block.total_cantidad)}</td>}
-                  <td className="bg-slate-800" />
-                  <td className="bg-slate-800" />
+                {/* El pie se pega con `sticky` en CADA CELDA, no en la fila.
+                    `position: sticky` sobre un <tr> no lo respetan todos los navegadores
+                    —Safari no— y por eso habia que bajar la tabla entera para ver el
+                    total. En las celdas funciona en todos. */}
+                <tr>
+                  <td className="sticky bottom-0 left-0 z-30 bg-slate-800 border-r border-slate-700 px-3 py-2.5" />
+                  <td className="sticky bottom-0 left-10 z-30 bg-slate-800 text-white font-semibold px-3 py-2.5 border-r border-slate-700 whitespace-nowrap">TOTAL POR SKU</td>
+                  {isOficina && <td className="sticky bottom-0 z-20 bg-slate-800" />}
+                  <td className="sticky bottom-0 z-20 bg-slate-900 text-white font-bold px-3 py-2.5 text-right tabular-nums">{fmt(block.total)}</td>
+                  {esAmbas && <td className="sticky bottom-0 z-20 bg-slate-900 text-slate-300 font-semibold px-3 py-2.5 text-right tabular-nums">{fmtCant(block.total_cantidad)}</td>}
+                  <td className="sticky bottom-0 z-20 bg-slate-800" />
+                  <td className="sticky bottom-0 z-20 bg-slate-800" />
                   {skus.map((s) => (
-                    <td key={s.sku} className="bg-slate-800 text-white font-semibold px-2 py-2.5 text-right border-l border-slate-700 tabular-nums">
+                    <td key={s.sku} className="sticky bottom-0 z-20 bg-slate-800 text-white font-semibold px-2 py-2.5 text-right border-l border-slate-700 tabular-nums">
                       <div>{formatInt(Math.round(s.total))}</div>
                       {esAmbas && <div className="text-[11px] text-slate-400 font-normal">{fmtCant(s.total_cantidad)}</div>}
                     </td>
