@@ -1,6 +1,6 @@
 import { Download, FileSpreadsheet, FileText, Package, TrendingUp, Trophy, Users } from "lucide-react";
-import { useState } from "react";
-import { downloadExport } from "../api.js";
+import { useEffect, useState } from "react";
+import { downloadExport, getGruposComerciales } from "../api.js";
 
 const MONTHS_ES = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -34,6 +34,7 @@ const REPORTS = [
     // `automatizar_parranda.py` y filtra a cerveza, asi que de arroz, aceite, papel o
     // baterias no habia ningun fichero por factura.
     id: "facturas",
+    conGrupo: true,
     title: "Ventas por Factura (todos los productos)",
     icon: FileText,
     color: "text-slate-600",
@@ -42,7 +43,7 @@ const REPORTS = [
     desc: [
       "Lo mismo que el de arriba pero con TODO lo que se vende, no solo cerveza",
       "Una hoja por vendedor con cada factura: operación, fecha, cliente y mercancía",
-      "Todos los grupos comerciales juntos: cerveza, importaciones, alimentos…",
+      "Todos los grupos juntos, o el que elijas en el desplegable de abajo",
       "Los hectolitros de abajo siguen siendo solo de Malta y Parranda: un saco de arroz no tiene HL",
       "Hoja Supervisor con el resumen de todos los vendedores",
     ],
@@ -122,6 +123,20 @@ const REPORTS = [
 ];
 
 export default function ReportesView({ sourceId, period }) {
+  /**
+   * Los grupos que existen en estos datos, para el desplegable de los informes que lo
+   * admiten. Salen de los datos y no de una lista escrita a mano: el dia que se
+   * configure un grupo nuevo aparece solo.
+   */
+  const [gruposDisponibles, setGruposDisponibles] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    getGruposComerciales(sourceId, period)
+      .then((d) => { if (vivo) setGruposDisponibles(d.grupos || []); })
+      .catch(() => { if (vivo) setGruposDisponibles([]); });  // sin lista, solo "todos"
+    return () => { vivo = false; };
+  }, [sourceId, period]);
+
   const label = period ? formatPeriod(period) : "todos los meses (acumulado)";
 
   return (
@@ -140,7 +155,7 @@ export default function ReportesView({ sourceId, period }) {
       {/* Individual report cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {REPORTS.map((r) => (
-          <ReportCard key={r.id} report={r} sourceId={sourceId} period={period} />
+          <ReportCard key={r.id} report={r} sourceId={sourceId} period={period} gruposDisponibles={gruposDisponibles} />
         ))}
       </div>
 
@@ -161,7 +176,7 @@ export default function ReportesView({ sourceId, period }) {
   );
 }
 
-function DownloadBtn({ sourceId, modulo, period, className, label, size = 15 }) {
+function DownloadBtn({ sourceId, modulo, period, className, label, size = 15, filtros }) {
   const [busy, setBusy] = useState(false);
   return (
     <button
@@ -169,7 +184,7 @@ function DownloadBtn({ sourceId, modulo, period, className, label, size = 15 }) 
       disabled={busy}
       onClick={async () => {
         setBusy(true);
-        try { await downloadExport(sourceId, modulo, period); }
+        try { await downloadExport(sourceId, modulo, period, filtros || {}); }
         catch (e) { alert(e?.response?.data?.detail || "No se pudo descargar"); }
         finally { setBusy(false); }
       }}
@@ -179,8 +194,9 @@ function DownloadBtn({ sourceId, modulo, period, className, label, size = 15 }) 
   );
 }
 
-function ReportCard({ report, sourceId, period }) {
+function ReportCard({ report, sourceId, period, gruposDisponibles }) {
   const Icon = report.icon;
+  const [grupo, setGrupo] = useState("");
   return (
     <div className={`card border ${report.border} flex flex-col gap-4`}>
       <div className="flex items-start gap-3">
@@ -199,7 +215,20 @@ function ReportCard({ report, sourceId, period }) {
           </li>
         ))}
       </ul>
-      <DownloadBtn sourceId={sourceId} modulo={report.id} period={period} className="btn-primary self-end mt-auto" label="Descargar .xlsx" />
+      {/* Los informes que aceptan grupo llevan su propio selector: el mismo fichero
+          sirve para todo junto o para un tipo concreto, y quien lo descarga elige. */}
+      {report.conGrupo && (
+        <label className="flex items-center gap-2 text-xs text-slate-600">
+          <span className="shrink-0">Grupo:</span>
+          <select className="input input-sm" value={grupo} onChange={(e) => setGrupo(e.target.value)}>
+            <option value="">Todos los grupos</option>
+            {(gruposDisponibles || []).map((g) => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </label>
+      )}
+      <DownloadBtn sourceId={sourceId} modulo={report.id} period={period}
+        className="btn-primary self-end mt-auto" label="Descargar .xlsx"
+        filtros={report.conGrupo && grupo ? { grupos: [grupo] } : {}} />
     </div>
   );
 }

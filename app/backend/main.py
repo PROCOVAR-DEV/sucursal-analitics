@@ -979,6 +979,26 @@ def src_plan_sku(request: Request, sid: str, source_id: str, mes: str = Query(..
     }
 
 
+@app.get("/api/sucursales/{sid}/sources/{source_id}/grupos-comerciales")
+def src_grupos_comerciales(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    """Los grupos comerciales que EXISTEN en los datos de ese periodo.
+
+    Los devuelven ya `clientes-analisis` y `gestor-sku`, pero dentro de un informe
+    entero: para pintar un desplegable no hace falta calcular el pivote de clientes.
+
+    Salen de los datos y no de una lista escrita a mano, así que el día que se
+    configure un grupo nuevo aparece solo.
+    """
+    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
+    eff = _eff_scoped(suc, report, mes, user)
+    df = only_valid(enrich_for_sucursal(report, eff), gestor_keys(eff))
+
+    if df is None or df.empty or "GrupoComercial" not in df.columns:
+        return {"grupos": []}
+
+    return {"grupos": sorted({str(g) for g in df["GrupoComercial"].dropna().unique() if str(g).strip()})}
+
+
 @app.get("/api/sucursales/{sid}/sources/{source_id}/clientes-dormidos")
 def src_clientes_dormidos(sid: str, source_id: str, mes: str | None = Query(default=None),
                           desde: str | None = Query(default=None), hasta: str | None = Query(default=None),

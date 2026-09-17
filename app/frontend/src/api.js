@@ -228,6 +228,12 @@ export async function getMetasGestor(id, mes = null, dia = null) {
   const qs = p.toString();
   return (await api.get(`${src(id)}/metas-gestor${qs ? "?" + qs : ""}`)).data;
 }
+// Los grupos comerciales que EXISTEN en los datos de ese periodo, para pintar un
+// desplegable sin tener que calcular un informe entero.
+export async function getGruposComerciales(id, mes = null) {
+  return (await api.get(`${src(id)}/grupos-comerciales${q(mes)}`)).data;
+}
+
 // El plan por SKU de cada vendedor, repartido segun lo que vendio el MES ANTERIOR.
 //
 // `metas` son los HL globales de cada formato que pone Procovar cada mes
@@ -277,6 +283,9 @@ export async function downloadExport(id, modulo, mes = null, filtros = {}) {
   for (const [k, v] of paramsDePeriodo(mes)) p.set(k, v);
   for (const g of filtros.grupos || []) p.append("grupo", g);
   if (filtros.metrica && filtros.metrica !== "importe") p.set("metrica", filtros.metrica);
+  // Faltaba: el Excel de «solo compran esto» salia SIN filtrar, con toda la cartera.
+  // Un fichero que no cuadra con la pantalla de la que salio es peor que no tenerlo.
+  if (filtros.exclusivo) p.set("exclusivo", "1");
 
   const qs = p.toString();
   const resp = await api.get(`${src(id)}/export/${modulo}.xlsx${qs ? `?${qs}` : ""}`, { responseType: "blob" });
