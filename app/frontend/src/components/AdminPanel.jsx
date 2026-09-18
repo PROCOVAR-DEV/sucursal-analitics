@@ -312,16 +312,36 @@ const formatNumber2 = (n) => Number(n).toLocaleString("es-CO", { minimumFraction
 // ---------------- Metas (globales + por mes)
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const pkeyOf = (y, m) => `${y}-${String(m).padStart(2, "0")}`;
+const FORMATOS = [
+  ["P1500", "Parranda 1.5 L"], ["P500", "Parranda 500 ml"], ["P330", "Parranda 330 ml"],
+  ["M1500", "Malta 1.5 L"], ["M500", "Malta 500 ml"], ["M330", "Malta 330 ml"],
+];
+// Vacio = los seis. Es lo que habia antes de que esto existiera, asi que nada cambia
+// hasta que alguien decida.
+const TODOS_LOS_FORMATOS = () => FORMATOS.map(([k]) => k);
+const formatosDe = (cfg) => (cfg?.metas?.formatos?.length ? cfg.metas.formatos : TODOS_LOS_FORMATOS());
 
 function Metas({ cfg, sid, onSaved }) {
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() + 1 });
   const [mDraft, setMDraft] = useState({});   // override parcial del mes seleccionado
   const [gDraft, setGDraft] = useState(null); // borrador de metas globales
+  /**
+   * TODOS los hooks van ANTES del `return null` de abajo.
+   *
+   * Estos dos estaban debajo, y eso dejó la pantalla **en blanco** a los supervisores
+   * durante un día entero (17→18/09/2026): entran directos a `config/metas`, en el primer
+   * render `gDraft` es null y se sale antes de llegar aquí, y en el segundo se llamaban
+   * dos hooks más. React tira «Rendered more hooks than during the previous render» y
+   * **desmonta la aplicación entera**, no sólo este panel. El aviso estaba escrito en
+   * esta misma pantalla, treinta líneas más arriba, y aun así lo repetí.
+   */
+  const [fmtDraft, setFmtDraft] = useState(() => formatosDe(cfg));
 
   const pkey = pkeyOf(ym.y, ym.m);
   useEffect(() => { setMDraft(structuredClone(cfg.metas_mensuales?.[pkey] || {})); }, [cfg, pkey]);
   useEffect(() => { setGDraft(structuredClone(cfg.metas || {})); }, [cfg]);
+  useEffect(() => { setFmtDraft(formatosDe(cfg)); }, [cfg]);
   if (!gDraft) return null;
 
   const g = gDraft;
@@ -333,18 +353,6 @@ function Metas({ cfg, sid, onSaved }) {
   const effProd = (p) => (mDraft.metas_productos_ces?.[p] ?? g.metas_productos_ces?.[p] ?? 0);
   const setMonthly = (k, v) => setMDraft({ ...mDraft, [k]: v });
   const setMonthlyProd = (p, v) => setMDraft({ ...mDraft, metas_productos_ces: { ...(mDraft.metas_productos_ces || {}), [p]: v } });
-
-  const FORMATOS = [
-    ["P1500", "Parranda 1.5 L"], ["P500", "Parranda 500 ml"], ["P330", "Parranda 330 ml"],
-    ["M1500", "Malta 1.5 L"], ["M500", "Malta 500 ml"], ["M330", "Malta 330 ml"],
-  ];
-  // Vacio = los seis. Es lo que habia antes de que esto existiera, asi que nada cambia
-  // hasta que alguien decida.
-  const todos = () => FORMATOS.map(([k]) => k);
-  const [fmtDraft, setFmtDraft] = useState(cfg.metas?.formatos?.length ? cfg.metas.formatos : todos());
-  useEffect(() => {
-    setFmtDraft(cfg.metas?.formatos?.length ? cfg.metas.formatos : todos());
-  }, [cfg]);
 
   async function saveFormatos() {
     // Va dentro de `metas` porque es lo unico que un supervisor puede guardar, y quien

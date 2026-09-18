@@ -1,5 +1,6 @@
 import { Calendar, FileSpreadsheet, LogOut, Package, Settings as SettingsIcon, Target, Trophy, Users } from "lucide-react";
 import { useEffect, useState } from "react";
+import Rescate from "./components/Rescate.jsx";
 import AdminPanel from "./components/AdminPanel.jsx";
 import ClientesView from "./components/ClientesView.jsx";
 import ComoVamosView from "./components/ComoVamosView.jsx";
@@ -303,11 +304,15 @@ export default function App() {
           <div className="max-w-7xl mx-auto p-3 sm:p-6">
             {isConfig ? (
               isAll ? (
-                <AdminPanel sid={ALL_SID} user={user} sucursales={sucursales} onSucursalesChanged={loadSucursales}
-                  section={configSection} onSection={(id) => go("config/" + id)} />
+                <Rescate donde={`Configuración · ${CONFIG_LABELS[configSection] || configSection}`}>
+                  <AdminPanel sid={ALL_SID} user={user} sucursales={sucursales} onSucursalesChanged={loadSucursales}
+                    section={configSection} onSection={(id) => go("config/" + id)} />
+                </Rescate>
               ) : sid ? (
-                <AdminPanel sid={sid} user={user} sucursales={sucursales} onSucursalesChanged={loadSucursales}
-                  section={configSection} onSection={(id) => go("config/" + id)} />
+                <Rescate donde={`Configuración · ${CONFIG_LABELS[configSection] || configSection}`}>
+                  <AdminPanel sid={sid} user={user} sucursales={sucursales} onSucursalesChanged={loadSucursales}
+                    section={configSection} onSection={(id) => go("config/" + id)} />
+                </Rescate>
               ) : (
                 <div className="p-6 text-slate-400 animate-pulse">Cargando sucursal…</div>
               )
@@ -385,7 +390,9 @@ export default function App() {
                   // Hasta que no se sabe el periodo no se pide nada: pintar con
                   // `period=null` traeria el historico entero para tirarlo un segundo
                   // despues, que es el parpadeo con cifras distintas que se veia.
-                  <Current isAll={isAll} key={`${sid}-${recarga}`} period={period} sourceId={sourceId} user={user} />
+                  <Rescate donde={viewLabel}>
+                    <Current isAll={isAll} key={`${sid}-${recarga}`} period={period} sourceId={sourceId} user={user} />
+                  </Rescate>
                 ) : (
                   <div className="py-16 text-center text-sm text-slate-400">Cargando…</div>
                 ))}

@@ -25,6 +25,14 @@ body {
   .card-header {
     @apply flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100;
   }
+  /* UNA TABLA DENTRO DE UN PANEL NO SE PEGA A LOS BORDES.
+     El `.panel` no tiene relleno y la cabecera sí (`px-5`), así que el título salía con
+     margen y los números pegados al borde, a izquierda y derecha. Lo dijo Santiago el
+     18/09/2026. Va en las celdas de los extremos —y no en el contenedor que scrollea—
+     porque las columnas ancladas (`sticky`) se pegan al borde del scroll: con el relleno
+     en el contenedor perderían el margen justo al desplazarse, que es cuando más se nota. */
+  .tabla-panel :is(th, td):first-child { @apply pl-5; }
+  .tabla-panel :is(th, td):last-child { @apply pr-5; }
   .card-title { @apply text-sm font-semibold text-slate-800; }
   .card-sub { @apply text-xs text-slate-400; }
 

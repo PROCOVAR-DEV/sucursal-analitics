@@ -377,7 +377,7 @@ export default function GestorSkuView({ sourceId, period }) {
               desplazarse igual, y si el total se va con ellos la tabla obliga a
               ir y volver para leer una sola fila. */}
           <div className="w-full min-w-0 overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-full text-sm tabla-panel">
               <thead>
                 <tr className="text-left border-b border-slate-200">
                   <th className="py-2 pr-4 whitespace-nowrap sticky left-0 bg-white z-20 shadow-[2px_0_4px_-2px_rgba(0,0,0,.15)]">
@@ -496,7 +496,7 @@ export default function GestorSkuView({ sourceId, period }) {
             }
           />
           <div className="w-full min-w-0 overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-full text-sm tabla-panel">
               <thead>
                 <tr className="text-left border-b border-slate-200">
                   <th className="py-2 pr-4">Gestor</th>
@@ -549,7 +549,7 @@ export default function GestorSkuView({ sourceId, period }) {
       <Panel>
         <PanelHeader title="Totales por gestor" />
         <div className="w-full min-w-0 overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-full text-sm tabla-panel">
             <thead>
               <tr className="text-left border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                 <th className="py-2 pr-2 w-8">#</th>
