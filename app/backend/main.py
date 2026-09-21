@@ -36,7 +36,7 @@ from services.diario import compute_diario
 from services.metas_cantidad_gestor import compute_metas_cantidad_gestor
 from services.clientes_dormidos import compute_clientes_dormidos
 from services.movimiento_clientes import compute_movimiento_clientes
-from services.metas_gestor import compute_metas_gestor
+from services.metas_gestor import compute_metas_gestor, meta_por_formato
 from services.plan_sku import repartir_plan_sku
 from services.roster import quien_recibe
 from services.excel_export import (
@@ -1109,16 +1109,38 @@ _FORMATOS_DESGLOSE = [
 ]
 
 
+def _codigo_formato(producto: str, size: str) -> str:
+    """`Parranda` + `1500` -> `P1500`, que es como se guardan las metas."""
+    return f"{'P' if producto == 'Parranda' else 'M'}{size}"
+
+
 def _desglose_formato_general(report, eff) -> list[dict]:
+    """HL vendidos de cada SKU, con la meta del mes al lado y cómo va.
+
+    El cumplimiento se mide contra la meta ENTERA del mes, no contra la parte
+    proporcional a los días transcurridos. Es lo mismo que hace el «% Cumplimiento» de
+    arriba y la tabla de gestores de esta misma pantalla: si aquí se prorrateara, dos
+    porcentajes pegados uno encima del otro dirían cosas distintas sin decir por qué.
+    (La versión prorrateada —meta acumulada por días laborales— está en Metas por gestor.)
+    """
     dfx = only_valid(enrich_for_sucursal(report, eff), gestor_keys(eff))
     size_col = STD_COLS["size"]
+    metas = meta_por_formato(eff)
     out: list[dict] = []
     for prod, flag, size, label in _FORMATOS_DESGLOSE:
         hl = 0.0
         if not dfx.empty and "Hectolitros" in dfx.columns and flag in dfx.columns and size_col in dfx.columns:
             mask = dfx[flag].fillna(False) & (dfx[size_col] == size)
             hl = round(float(dfx.loc[mask, "Hectolitros"].sum()), 2)
-        out.append({"producto": prod, "tamano": label, "formato": f"{prod} {label}", "hectolitros": hl})
+        meta = float(metas.get(_codigo_formato(prod, size), 0.0))
+        out.append({
+            "producto": prod, "tamano": label, "formato": f"{prod} {label}", "hectolitros": hl,
+            "meta": round(meta, 2),
+            # Sin meta puesta NO se inventa un 0 %: un cero ahí se lee «va fatal», y lo
+            # que pasa es que nadie le puso meta a ese formato. Va en null y la pantalla
+            # pone una raya.
+            "cumplimiento_pct": round(hl / meta * 100, 1) if meta else None,
+        })
     return out
 
 
@@ -1164,8 +1186,10 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
                  "delta": -v, "necesario_por_dia": 0.0, "estado": "critico"}
                 for k, v in eff["metas_productos_ces"].items()],
             "desglose_formato": [
-                {"producto": p, "tamano": lbl, "formato": f"{p} {lbl}", "hectolitros": 0.0}
-                for p, _f, _s, lbl in _FORMATOS_DESGLOSE],
+                {"producto": p, "tamano": lbl, "formato": f"{p} {lbl}", "hectolitros": 0.0,
+                 "meta": float(meta_por_formato(eff).get(_codigo_formato(p, sz), 0.0)),
+                 "cumplimiento_pct": None}
+                for p, _f, sz, lbl in _FORMATOS_DESGLOSE],
         }
     report = filter_by_period(report, mes, desde, hasta)
     eff = _eff_scoped(suc, report, mes, user)
@@ -1244,10 +1268,18 @@ def _aggregate_dashboards(items: list[dict]) -> dict:
         for d in it.get("desglose_formato") or []:
             key = (d.get("producto"), d.get("formato"))
             if key not in dg:
-                dg[key] = {"producto": d.get("producto"), "tamano": d.get("tamano"), "formato": d.get("formato"), "hectolitros": 0.0}
+                dg[key] = {"producto": d.get("producto"), "tamano": d.get("tamano"), "formato": d.get("formato"), "hectolitros": 0.0, "meta": 0.0}
                 dg_order.append(key)
             dg[key]["hectolitros"] += d.get("hectolitros") or 0
-    desglose = [{**dg[key], "hectolitros": round(dg[key]["hectolitros"], 2)} for key in dg_order]
+            dg[key]["meta"] += d.get("meta") or 0
+    # El % se recalcula sobre las sumas; promediar porcentajes de sucursales distintas
+    # daría un número que no es el cumplimiento de nada.
+    desglose = [
+        {**dg[key], "hectolitros": round(dg[key]["hectolitros"], 2), "meta": round(dg[key]["meta"], 2),
+         "cumplimiento_pct": (round(dg[key]["hectolitros"] / dg[key]["meta"] * 100, 1)
+                              if dg[key]["meta"] else None)}
+        for key in dg_order
+    ]
 
     cp: dict[str, dict] = {}
     cp_order: list[str] = []

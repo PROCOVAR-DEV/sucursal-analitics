@@ -40,6 +40,30 @@ def _meta_code(code_key: str) -> str | None:
     return None
 
 
+def meta_por_formato(eff: dict) -> dict[str, float]:
+    """La meta del MES de cada SKU: la suma de lo que tiene puesto cada gestor.
+
+    No hay una «meta global» guardada aparte, y es a propósito: la meta de la sucursal ES
+    la suma de las de su gente. Guardar las dos daría dos verdades que se separan en
+    cuanto alguien edite una — y entonces ninguna de las dos se puede creer.
+
+    Vive aquí, con `_meta_code`, porque la clave guardada (`PARRANDA-1500`) y el código
+    que usan las tablas (`P1500`) no son lo mismo, y esa traducción ya estaba escrita.
+    """
+    out: dict[str, float] = {}
+    for g in gestor_keys(eff):
+        mf = ((eff.get("gestores") or {}).get(g) or {}).get("metas_formato") or {}
+        for ck, val in mf.items():
+            mc = _meta_code(ck)
+            if not mc:
+                continue
+            try:
+                out[mc] = out.get(mc, 0.0) + float(val or 0)
+            except (TypeError, ValueError):
+                continue
+    return {k: round(v, 2) for k, v in out.items()}
+
+
 def _pct(n, d):
     return round((n / d * 100), 2) if d else 0.0
 

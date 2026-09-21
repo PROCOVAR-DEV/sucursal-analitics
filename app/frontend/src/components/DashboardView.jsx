@@ -4,6 +4,14 @@ import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
 import { RankingBarras } from "./Charts.jsx";
 import { Competencia } from "./Competencia.jsx";
 
+/**
+ * El color del cumplimiento, igual que en las demás pantallas: verde desde 100, ámbar
+ * desde 80, rojo por debajo. Sin meta no hay color ni número — una raya, porque un 0 %
+ * ahí se lee «va fatal» cuando lo que pasa es que nadie le puso meta a ese formato.
+ */
+const tonoPct = (pct) =>
+  pct == null ? "text-slate-300" : pct >= 100 ? "text-green-600" : pct >= 80 ? "text-amber-600" : "text-red-600";
+
 export default function DashboardView({ sourceId, period }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
@@ -80,25 +88,52 @@ export default function DashboardView({ sourceId, period }) {
         <div className="card">
           <h3 className="font-semibold mb-1">Desglose general por formato</h3>
           <p className="text-sm text-slate-500 mb-3">
-            Hectolitros por SKU de Cerveza Parranda y Malta Guajira (todos los vendedores)
+            Hectolitros por SKU de Cerveza Parranda y Malta Guajira (todos los vendedores),
+            con la meta del mes y cómo va cada uno
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {["Parranda", "Malta"].map((prod) => {
               const rows = data.desglose_formato.filter((r) => r.producto === prod);
               const subtotal = rows.reduce((s, r) => s + (r.hectolitros || 0), 0);
+              const metaProd = rows.reduce((s, r) => s + (r.meta || 0), 0);
+              // El % del producto se saca de las SUMAS, no promediando los de sus
+              // formatos: un 200 % de un SKU pequeño no compensa un 40 % del grande.
+              const pctProd = metaProd ? (subtotal / metaProd) * 100 : null;
               return (
                 <div key={prod} className="rounded-xl border border-slate-200 overflow-hidden">
-                  <div className="px-4 py-2.5 bg-slate-700 text-white flex items-center justify-between">
+                  <div className="px-4 py-2.5 bg-slate-700 text-white flex items-center justify-between gap-2">
                     <span className="font-semibold">{prod}</span>
-                    <span className="text-sm tabular-nums">{formatNumber(subtotal, 2)} HL</span>
+                    <span className="text-sm tabular-nums">
+                      {formatNumber(subtotal, 2)} HL
+                      {metaProd > 0 && (
+                        <span className="text-slate-300"> / {formatNumber(metaProd, 0)}</span>
+                      )}
+                      {pctProd != null && (
+                        <span className="ml-2 font-semibold">{formatNumber(pctProd, 1)} %</span>
+                      )}
+                    </span>
                   </div>
                   <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[11px] uppercase tracking-wide text-slate-400">
+                        <th className="px-4 py-1.5 text-left font-medium">Formato</th>
+                        <th className="px-4 py-1.5 text-right font-medium">Vendido</th>
+                        <th className="px-4 py-1.5 text-right font-medium">Meta</th>
+                        <th className="px-4 py-1.5 text-right font-medium">Cumpl.</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {rows.map((r) => (
                         <tr key={r.formato} className="border-t border-slate-100">
                           <td className="px-4 py-2 text-slate-700">{r.tamano}</td>
                           <td className="px-4 py-2 text-right font-mono tabular-nums text-slate-900">
                             {formatNumber(r.hectolitros, 2)} HL
+                          </td>
+                          <td className="px-4 py-2 text-right font-mono tabular-nums text-slate-400">
+                            {r.meta ? formatNumber(r.meta, 0) : "—"}
+                          </td>
+                          <td className={`px-4 py-2 text-right font-mono tabular-nums font-semibold ${tonoPct(r.cumplimiento_pct)}`}>
+                            {r.cumplimiento_pct == null ? "—" : `${formatNumber(r.cumplimiento_pct, 1)} %`}
                           </td>
                         </tr>
                       ))}
@@ -108,12 +143,31 @@ export default function DashboardView({ sourceId, period }) {
               );
             })}
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-600">Total (Malta + Parranda)</span>
-            <span className="text-lg font-bold text-brand-700 tabular-nums">
-              {formatNumber(data.desglose_formato.reduce((s, r) => s + (r.hectolitros || 0), 0), 2)} HL
-            </span>
-          </div>
+          {(() => {
+            const totalHl = data.desglose_formato.reduce((s, r) => s + (r.hectolitros || 0), 0);
+            const totalMeta = data.desglose_formato.reduce((s, r) => s + (r.meta || 0), 0);
+            const totalPct = totalMeta ? (totalHl / totalMeta) * 100 : null;
+            return (
+              <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-3 flex-wrap">
+                <span className="text-sm font-semibold text-slate-600">Total (Malta + Parranda)</span>
+                <span className="flex items-baseline gap-3">
+                  <span className="text-lg font-bold text-brand-700 tabular-nums">
+                    {formatNumber(totalHl, 2)} HL
+                  </span>
+                  {totalMeta > 0 && (
+                    <span className="text-sm text-slate-400 tabular-nums">
+                      de {formatNumber(totalMeta, 0)} HL
+                    </span>
+                  )}
+                  {totalPct != null && (
+                    <span className={`text-lg font-bold tabular-nums ${tonoPct(totalPct)}`}>
+                      {formatNumber(totalPct, 1)} %
+                    </span>
+                  )}
+                </span>
+              </div>
+            );
+          })()}
         </div>
       )}
 
