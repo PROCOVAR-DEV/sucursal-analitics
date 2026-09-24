@@ -658,7 +658,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
                 después cambiar a mano a quien haga falta.
               </p>
             ) : (
-              <div className="overflow-x-auto scroll-thin">
+              <div className="tabla-alta">
                 <table className="tbl">
                   <thead><tr><th className="col-fija">Vendedor</th><th className="!text-right">Plan</th><th className="!text-right">% del total</th></tr></thead>
                   <tbody>
@@ -701,7 +701,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       <Panel>
         <PanelHeader icon={Calculator} title={`Metas por vendedor · ${MESES[ym.m - 1]} ${ym.y}`}
           right={<span className="text-sm text-slate-500">Total: <b className="text-brand-700">{formatNumber(grandTotal, 2)} HL</b></span>} />
-        <div className="overflow-x-auto scroll-thin">
+        <div className="tabla-alta">
           <table className="tbl">
             <thead><tr><th className="!text-center">En el mes</th><th>Vendedor</th><th className="!text-right">Meta HL</th><th className="!text-right">Meta CCC</th><th className="!text-right">HL / Día</th><th className="!text-center">Acción</th></tr></thead>
             <tbody>
@@ -805,7 +805,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
               <Button size="sm" variant="subtle" icon={Copy} onClick={() => copyToAll(sel)}>Aplicar a todos</Button>
               <Button size="sm" variant="subtle" icon={RotateCcw} onClick={() => resetVendor(sel)}>Reiniciar</Button>
             </div>} />
-          <div className="overflow-x-auto scroll-thin">
+          <div className="tabla-alta">
             <table className="tbl">
               <thead><tr><th>Producto</th><th>Formato</th><th className="!text-right">Pallets</th><th className="!text-right">Blísters</th><th className="!text-right">Hectolitros</th><th className="!text-right">Cantidad</th><th></th></tr></thead>
               <tbody>

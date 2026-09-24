@@ -442,7 +442,7 @@ export function Buscador({ value, onChange, placeholder = "Filtrar…", classNam
  */
 export function TablaScroll({ children, className }) {
   return (
-    <div className={cn("-mx-5 overflow-x-auto scroll-thin px-5 sm:mx-0 sm:px-0", className)}>
+    <div className={cn("tabla-alta -mx-5 px-5 sm:mx-0 sm:px-0", className)}>
       {children}
     </div>
   );

@@ -94,7 +94,7 @@ export default function MovimientoClientesView({ sourceId, period }) {
           title="Por vendedor"
           sub="Ordenado por lo que se dejó de vender, no por cuántos clientes: perder tres pequeños no es perder uno grande"
         />
-        <div className="overflow-x-auto scroll-thin">
+        <div className="tabla-alta">
           <table className="min-w-full text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-500">
               <tr>

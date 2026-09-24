@@ -56,7 +56,7 @@ function CumplTable({ title, subtitle, tone, rows, showAyer = false, showDeberia
         <div className="font-semibold text-sm">{title}</div>
         {subtitle && <div className="text-[11px] text-white/80">{subtitle}</div>}
       </div>
-      <div className="overflow-x-auto scroll-thin">
+      <div className="tabla-alta">
       <table className="tbl">
         <thead>
           <tr>
@@ -187,7 +187,7 @@ function round2(n) {
 export function GeneralTable({ data, sel, onSel }) {
   if (!data?.general?.length) return null;
   return (
-    <div className="overflow-x-auto scroll-thin border border-slate-200 rounded-lg">
+    <div className="tabla-alta border border-slate-200 rounded-lg">
       <table className="tbl">
         <thead>
           <tr>

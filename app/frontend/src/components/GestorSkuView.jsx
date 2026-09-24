@@ -376,7 +376,7 @@ export default function GestorSkuView({ sourceId, period }) {
               columna Total se ancla a la derecha: con muchos productos hay que
               desplazarse igual, y si el total se va con ellos la tabla obliga a
               ir y volver para leer una sola fila. */}
-          <div className="w-full min-w-0 overflow-x-auto">
+          <div className="tabla-alta w-full min-w-0">
             <table className="min-w-full text-sm tabla-panel">
               <thead>
                 <tr className="text-left border-b border-slate-200">
@@ -495,7 +495,7 @@ export default function GestorSkuView({ sourceId, period }) {
               </select>
             }
           />
-          <div className="w-full min-w-0 overflow-x-auto">
+          <div className="tabla-alta w-full min-w-0">
             <table className="min-w-full text-sm tabla-panel">
               <thead>
                 <tr className="text-left border-b border-slate-200">
@@ -548,7 +548,7 @@ export default function GestorSkuView({ sourceId, period }) {
 
       <Panel>
         <PanelHeader title="Totales por gestor" />
-        <div className="w-full min-w-0 overflow-x-auto">
+        <div className="tabla-alta w-full min-w-0">
           <table className="min-w-full text-sm tabla-panel">
             <thead>
               <tr className="text-left border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">

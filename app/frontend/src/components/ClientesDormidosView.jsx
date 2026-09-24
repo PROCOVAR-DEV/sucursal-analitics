@@ -78,7 +78,7 @@ export default function ClientesDormidosView({ sourceId, period }) {
           title="Por vendedor"
           sub="Ordenado por lo que compraban los dormidos: un cliente grande callado pesa más que cinco pequeños"
         />
-        <div className="overflow-x-auto scroll-thin">
+        <div className="tabla-alta">
           <table className="min-w-full text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -122,7 +122,7 @@ export default function ClientesDormidosView({ sourceId, period }) {
             title={`${g.nombre} — callados`}
             sub={`${g.dormidos} clientes que llevan más del doble de lo que suelen tardar`}
           />
-          <div className="overflow-x-auto scroll-thin">
+          <div className="tabla-alta">
             <table className="min-w-full text-sm">
               <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>

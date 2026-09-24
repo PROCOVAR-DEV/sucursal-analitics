@@ -31,6 +31,9 @@ body {
      18/09/2026. Va en las celdas de los extremos —y no en el contenedor que scrollea—
      porque las columnas ancladas (`sticky`) se pegan al borde del scroll: con el relleno
      en el contenedor perderían el margen justo al desplazarse, que es cuando más se nota. */
+  /* Las tablas de los paneles (`min-w-full text-sm`) no usan `.tbl`, así que llevan su
+     propio fondo: sin él, las filas se ven A TRAVÉS de la cabecera al desplazarse. */
+  .tabla-panel thead th { @apply sticky top-0 z-10 bg-white; }
   .tabla-panel :is(th, td):first-child { @apply pl-5; }
   .tabla-panel :is(th, td):last-child { @apply pr-5; }
   /* LA PRIMERA COLUMNA NO SE VA.
@@ -43,7 +46,12 @@ body {
     @apply sticky left-0 z-20 bg-white;
     box-shadow: 2px 0 4px -2px rgb(0 0 0 / 0.15);
   }
+  /* La esquina —cabecera Y primera columna— tiene que ir por encima de las dos. */
   thead .col-fija { @apply bg-slate-50 z-30; }
+  .tabla-panel thead .col-fija { @apply bg-white; }
+
+  /* El contenedor que hace posible lo de arriba: alto máximo y scroll propio. */
+  .tabla-alta { @apply max-h-[32rem] overflow-auto scroll-thin; }
   tbody tr:hover > .col-fija { @apply bg-slate-50; }
   .card-title { @apply text-sm font-semibold text-slate-800; }
   .card-sub { @apply text-xs text-slate-400; }
@@ -111,6 +119,16 @@ body {
     @apply bg-slate-50 text-slate-500 font-semibold text-xs uppercase tracking-wide
            px-3 py-2.5 text-left border-b border-slate-200 whitespace-nowrap;
   }
+  /* LA CABECERA TAMPOCO SE VA.
+     Al bajar por una lista larga se perdía qué era cada columna, y en una tabla de diez
+     números eso la deja ilegible. Lo pidió Santiago el 24/09/2026, junto con la columna
+     del producto.
+
+     Va con el contenedor `.tabla-alta` de abajo, y no sin él: un `sticky` se ancla al
+     ANTECESOR QUE SCROLLEA, y estos contenedores sólo llevaban `overflow-x`. Sin una
+     altura máxima, ese antecesor es tan alto como la tabla entera y la cabecera no se
+     pega a nada — se ve igual que antes y uno cree que el CSS no funcionó. */
+  .tbl thead th { @apply sticky top-0 z-10; }
   .tbl tbody td { @apply px-3 py-2 border-b border-slate-100 text-slate-700 align-middle; }
   .tbl tbody tr:hover td { @apply bg-brand-50/40; }
   .tbl-zebra tbody tr:nth-child(even) td { @apply bg-slate-50/60; }
