@@ -41,7 +41,14 @@ function activeFormatos(formatos, ...rows) {
 
 // Tabla profesional: una fila por producto, con barra de cumplimiento.
 // `showAyer`: añade las columnas "Ayer" y "Δ vs ayer" (crecimiento) para la tabla del día.
-function CumplTable({ title, subtitle, tone, rows, showAyer = false }) {
+/**
+ * `showDeberia` es la tabla del MES: enseña la meta ENTERA del mes y, al lado, lo que
+ * «debería llevar» a hoy por días laborales. Antes esa segunda cifra salía sola, bajo el
+ * rótulo «Meta», y no cuadraba con lo que el supervisor había tecleado en la calculadora:
+ * puso 270 de azúcar y aquí leía 209. Lo dijo Santiago el 24/09/2026: «no coinciden».
+ * Eran dos números distintos con el mismo nombre.
+ */
+function CumplTable({ title, subtitle, tone, rows, showAyer = false, showDeberia = false }) {
   const sum = (k) => rows.reduce((s, r) => s + (Number(r[k]) || 0), 0);
   return (
     <div className="rounded-xl border border-slate-200 overflow-hidden">
@@ -53,25 +60,27 @@ function CumplTable({ title, subtitle, tone, rows, showAyer = false }) {
       <table className="tbl">
         <thead>
           <tr>
-            <th>Producto</th>
-            <th className="!text-right">Meta</th>
+            <th className="col-fija">Producto</th>
+            <th className="!text-right">{showDeberia ? "Meta mes" : "Meta"}</th>
+            {showDeberia && <th className="!text-right" title="Lo que tendría que llevar vendido a hoy, por días laborales transcurridos">Debería</th>}
             {showAyer && <th className="!text-right">Ayer</th>}
             <th className="!text-right">{showAyer ? "Hoy" : "Vendido"}</th>
             <th className="!text-left !pl-4">Cumplimiento</th>
-            <th className="!text-right">Δ vs meta</th>
+            <th className="!text-right">{showDeberia ? "Δ vs debería" : "Δ vs meta"}</th>
             {showAyer && <th className="!text-right">Δ vs ayer</th>}
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.f}>
-              <td className="whitespace-nowrap">
+              <td className="col-fija whitespace-nowrap">
                 <span className="inline-flex items-center gap-2">
                   <span className={cn("w-2 h-2 rounded-full", FMT_TONE[r.f[0]] || "bg-slate-400")} />
                   <span className="font-medium text-slate-700">{label(r.f)}</span>
                 </span>
               </td>
               <td className="text-right tabular-nums text-slate-500">{num(r.meta)}</td>
+              {showDeberia && <td className="text-right tabular-nums text-slate-400">{num(r.deberia)}</td>}
               {showAyer && <td className="text-right tabular-nums text-slate-400">{num(r.ayer)}</td>}
               <td className="text-right tabular-nums font-semibold text-slate-800">{num(r.real)}</td>
               <td className="pl-4"><Bar pct={r.pct} /></td>
@@ -84,6 +93,7 @@ function CumplTable({ title, subtitle, tone, rows, showAyer = false }) {
           <tr className="bg-slate-800 text-white font-semibold">
             <td className="px-3 py-2.5">TOTAL</td>
             <td className="px-3 py-2.5 text-right tabular-nums">{num(sum("meta"))}</td>
+            {showDeberia && <td className="px-3 py-2.5 text-right tabular-nums">{num(sum("deberia"))}</td>}
             {showAyer && <td className="px-3 py-2.5 text-right tabular-nums">{num(sum("ayer"))}</td>}
             <td className="px-3 py-2.5 text-right tabular-nums">{num(sum("real"))}</td>
             <td className="px-3 py-2.5">
@@ -134,15 +144,18 @@ export function VendorFormatoTables({ block, formatos, unidad = "HL", vacio = nu
 
   const fmts = activeFormatos(formatos, m.meta_total, m.venta_acum, d.venta_dia);
 
-  // MES: acumulado del SKU vs. su META ACUMULADA = meta diaria del SKU × días laborales
-  // transcurridos. Así se ve cómo van en el mes (no contra la meta del mes completo).
+  // MES: la META es la del mes entero —la que el supervisor tecleó— y el cumplimiento se
+  // mide contra ella, igual que el «% Cumplimiento» del Resumen y la tabla de Productos.
+  // «Debería» es lo acumulado a hoy por días laborales, y el delta va contra eso: dice si
+  // va adelantado o atrasado SIN cambiarle el nombre a la meta.
   const mesRows = fmts.map((f) => {
-    const meta = Number(m.meta_acum[f]) || 0;      // meta acumulada a la fecha (por días laborales)
-    const real = Number(m.venta_acum[f]) || 0;     // acumulado vendido del SKU en el mes
+    const meta = Number(m.meta_total[f]) || 0;     // la meta del MES, tal como se puso
+    const deberia = Number(m.meta_acum[f]) || 0;   // lo que tendría que llevar a hoy
+    const real = Number(m.venta_acum[f]) || 0;     // acumulado vendido en el mes
     return {
-      f, meta, real,
+      f, meta, deberia, real,
       pct: meta ? (real / meta) * 100 : (real > 0 ? 100 : 0),
-      delta: Number(m.delta_acum[f]) || 0,
+      delta: Number(m.delta_acum[f]) || 0,        // vendido − debería
     };
   });
   // DÍA: hoy contra la meta diaria Y contra ayer (para ver el crecimiento).
@@ -160,7 +173,7 @@ export function VendorFormatoTables({ block, formatos, unidad = "HL", vacio = nu
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <CumplTable title={`Acumulado del mes (${unidad})`} subtitle="Acumulado por producto vs. meta acumulada (días laborales)" tone="bg-brand-700" rows={mesRows} />
+      <CumplTable title={`Acumulado del mes (${unidad})`} subtitle="Meta del mes · lo que debería llevar a hoy (días laborales) · lo vendido" tone="bg-brand-700" rows={mesRows} showDeberia />
       <CumplTable title={`Ventas del día (${unidad})`} subtitle="Hoy vs. meta diaria y vs. ayer, por producto" tone="bg-slate-700" rows={diaRows} showAyer />
     </div>
   );
