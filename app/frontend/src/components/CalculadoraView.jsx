@@ -416,7 +416,23 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
    * las metas por cantidad—, sólo cambia por dónde se entra a escribirlos.
    */
   const [prodSel, setProdSel] = useState("");
-  const [entraron, setEntraron] = useState(0);
+
+  /**
+   * CUÁNTO ENTRÓ NO SE TECLEA AQUÍ: ES LA META DEL MES.
+   *
+   * Ese número ya está puesto en Configuración › Metas y es el que sale en «Cumplimiento
+   * de metas → Por producto». Pedirlo otra vez es pedir que alguien lo copie, y el día
+   * que se copie mal habrá dos verdades: la meta que se mide y la que se repartió. Se
+   * lee, no se escribe.
+   *
+   * La del MES pisa a la global, que es como se leen en todas partes.
+   */
+  const metasProducto = useMemo(() => ({
+    ...(cfg?.metas?.metas_productos_ces || {}),
+    ...(cfg?.metas_mensuales?.[pkey]?.metas_productos_ces || {}),
+  }), [cfg, pkey]);
+  const metaDe = (producto) => Number(metasProducto[producto] || 0);
+  const entraron = metaDe(prodSel);
 
   /** Lo que tiene puesto un vendedor de ESE producto (las filas sin formato). */
   const cantidadDe = (k, producto) =>
@@ -460,7 +476,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
    * y entonces el plan de la sucursal no es lo que llegó al almacén.
    */
   function repartirIgual() {
-    const total = Number(entraron) || 0;
+    const total = metaDe(prodSel);
 
     if (!prodSel || !delMes.length || total <= 0) return;
 
@@ -593,16 +609,23 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
                 <label className="block text-xs text-slate-500 mb-1">Producto</label>
                 <SearchSelect
                   className="w-72"
-                  options={catalogo}
+                  /* Con la meta al lado se elige sabiendo lo que hay que repartir, sin
+                     tener que abrir la otra pantalla a mirarla. */
+                  options={catalogo.map((o) => ({
+                    ...o,
+                    hint: metaDe(o.value) ? `${o.hint} · meta ${formatNumber(metaDe(o.value), 0)}` : `${o.hint} · sin meta`,
+                  }))}
                   placeholder="Elige el producto…"
                   value={prodSel}
-                  onChange={(v) => { setProdSel(v); setEntraron(0); }}
+                  onChange={setProdSel}
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Entraron (total del mes)</label>
-                <input type="number" step="1" className="input input-sm w-32 num"
-                  value={entraron || ""} onChange={(e) => setEntraron(Number(e.target.value) || 0)} />
+                <label className="block text-xs text-slate-500 mb-1">Meta del mes</label>
+                <div className={cn("h-9 min-w-32 px-3 rounded-lg border flex items-center justify-end tabular-nums font-semibold",
+                  entraron ? "bg-slate-50 border-slate-200 text-slate-800" : "bg-amber-50 border-amber-200 text-amber-700 font-normal")}>
+                  {prodSel ? (entraron ? formatNumber(entraron, 0) : "sin meta") : "—"}
+                </div>
               </div>
               <Button variant="subtle" onClick={repartirIgual} disabled={!prodSel || !entraron}>
                 Repartir igual
@@ -617,6 +640,14 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
                   Repartido: <b className="tabular-nums">{formatNumber(repartido, 0)}</b>
                   {entraron ? <> de {formatNumber(entraron, 0)}{Math.abs(repartido - entraron) > 0.5
                     ? <> · faltan {formatNumber(entraron - repartido, 0)}</> : <> · cuadra</>}</> : null}
+                </span>
+              )}
+              {prodSel && !entraron && (
+                /* Sin meta no hay nada que repartir, y hay que decir DÓNDE se pone en vez
+                   de dejar un botón apagado sin explicación. */
+                <span className="text-xs text-amber-700">
+                  Este producto no tiene meta en {MESES[ym.m - 1]}. Se pone en
+                  <b> Configuración › Metas</b>, y desde aquí sólo se reparte.
                 </span>
               )}
             </div>
