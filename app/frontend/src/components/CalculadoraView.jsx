@@ -1,4 +1,4 @@
-import { Calculator, Check, Copy, Download, Info, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Calculator, Check, Copy, Download, Info, Package, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getPlanSku, getSucursal, getSucursalId, updateSucursal } from "../api.js";
 import { formatNumber } from "./Kpi.jsx";
@@ -403,6 +403,95 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
     return out;
   }
   const enMes = (k) => incluidos[k] !== false;
+
+  /**
+   * EL PLAN DE UN PRODUCTO, REPARTIDO ENTRE LA GENTE.
+   *
+   * La calculadora se mira por VENDEDOR: eliges a uno y le pones sus productos. Pero el
+   * plan no llega así. Llega al revés: «entraron 2.700 pacas de azúcar», y hay que
+   * repartirlas. Con la vista por vendedor eso son doce pantallas y una suma a mano para
+   * comprobar que cuadra. Lo pidió Santiago el 24/09/2026.
+   *
+   * Los datos son los MISMOS —una fila por producto sin formato, que es como se guardan
+   * las metas por cantidad—, sólo cambia por dónde se entra a escribirlos.
+   */
+  const [prodSel, setProdSel] = useState("");
+  const [entraron, setEntraron] = useState(0);
+
+  /** Lo que tiene puesto un vendedor de ESE producto (las filas sin formato). */
+  const cantidadDe = (k, producto) =>
+    (plans[k] || [])
+      .filter((r) => r.producto === producto && !r.size)
+      .reduce((acc, r) => acc + (Number(r.cantidad) || 0), 0);
+
+  /**
+   * Escribe la cantidad de un producto para un vendedor.
+   *
+   * Si ya tiene fila, se cambia la primera y se dejan en cero las demás —un producto
+   * repetido en dos filas sumaría dos veces—. Si no la tiene, se crea. Y con cero se
+   * quita: una meta en cero no es una meta, es ruido en la pantalla del vendedor.
+   */
+  function setCantidad(k, producto, valor) {
+    const v = Number(valor) || 0;
+    setRows(k, (rs) => {
+      const suyas = rs.filter((r) => r.producto === producto && !r.size);
+
+      if (!suyas.length) return v > 0 ? [...rs, { id: ++_uid, producto, size: "", pallets: 0, cantidad: v }] : rs;
+      if (v <= 0) return rs.filter((r) => !(r.producto === producto && !r.size));
+
+      let primera = true;
+
+      return rs.map((r) => {
+        if (r.producto !== producto || r.size) return r;
+        if (primera) { primera = false; return { ...r, cantidad: v }; }
+
+        return { ...r, cantidad: 0 };
+      });
+    });
+  }
+
+  /** Los vendedores que cuentan este mes, que son entre los que se reparte. */
+  const delMes = gestores.filter(([k]) => enMes(k));
+  const repartido = delMes.reduce((sum, [k]) => sum + cantidadDe(k, prodSel), 0);
+
+  /**
+   * Repartir a partes iguales. El sobrante va al primero, para que la suma cuadre EXACTA
+   * con lo que entró: dividir 2.700 entre 11 y redondear cada parte deja 2.695 o 2.706,
+   * y entonces el plan de la sucursal no es lo que llegó al almacén.
+   */
+  function repartirIgual() {
+    const total = Number(entraron) || 0;
+
+    if (!prodSel || !delMes.length || total <= 0) return;
+
+    const base = Math.floor(total / delMes.length);
+    const resto = total - base * delMes.length;
+
+    delMes.forEach(([k], i) => setCantidad(k, prodSel, base + (i === 0 ? resto : 0)));
+    flash("ok", `${formatNumber(total, 0)} repartidos entre ${delMes.length} vendedores.`);
+  }
+
+  /**
+   * Guarda SÓLO las metas por cantidad, sin tocar el resto del mes.
+   *
+   * No se reutiliza «Guardar metas del mes» porque ése borra el mes y lo reescribe
+   * entero: quien viene a repartir azúcar no espera que eso toque las cuotas de
+   * hectolitros de nadie. El servidor mezcla por vendedor, así que mandar sólo esta
+   * clave conserva `cuota_hl` y las metas por formato.
+   */
+  async function saveCantidades() {
+    setSavingAll(true);
+    try {
+      const payload = {};
+
+      delMes.forEach(([k]) => { payload[k] = { metas_cantidad: vendorCantidad(k) }; });
+      const fresh = await updateSucursal(sid, { metas_mensuales: { [pkey]: { gestores: payload } } });
+
+      setCfg(fresh);
+      flash("ok", `Planes por producto guardados en ${MESES[ym.m - 1]} ${ym.y}.`);
+    } catch (e) { flash("err", e?.response?.data?.detail || e.message); }
+    finally { setSavingAll(false); }
+  }
   const grandTotal = gestores.reduce((s, [k]) => s + (enMes(k) ? vendorHL(k) : 0), 0);
   const grandTotalCcc = gestores.reduce((s, [k]) => s + (enMes(k) ? (Number(quickCcc[k]) || 0) : 0), 0);
 
@@ -484,12 +573,99 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       <Toast msg={msg} onClose={() => setMsg(null)} />
 
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <Segmented value={mode} onChange={setMode} options={[{ value: "rapido", label: "Rápido (total HL)" }, { value: "detalle", label: "Detallado (por SKU)" }]} />
+        <Segmented value={mode} onChange={setMode} options={[{ value: "rapido", label: "Rápido (total HL)" }, { value: "detalle", label: "Detallado (por SKU)" }, { value: "producto", label: "Por producto (cantidades)" }]} />
         <div className={cn("flex items-center gap-2 text-xs rounded-lg px-3 py-1.5 border", monthConfigured ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-amber-50 border-amber-100 text-amber-700")}>
           <Info size={14} className="shrink-0" />
           {monthConfigured ? `${MESES[ym.m - 1]} ${ym.y} tiene metas guardadas.` : `${MESES[ym.m - 1]} ${ym.y} aún sin metas: llena y guarda.`}
         </div>
       </div>
+
+      {mode === "producto" && (
+        <Panel>
+          <PanelHeader icon={Package} title={`Plan por producto · ${MESES[ym.m - 1]} ${ym.y}`}
+            sub="Lo que entró de un producto, repartido entre los vendedores del mes."
+            right={<Button icon={Save} onClick={saveCantidades} disabled={savingAll || !prodSel}>
+              {savingAll ? "Guardando…" : "Guardar planes"}
+            </Button>} />
+          <div className="p-3 space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Producto</label>
+                <SearchSelect
+                  className="w-72"
+                  options={catalogo}
+                  placeholder="Elige el producto…"
+                  value={prodSel}
+                  onChange={(v) => { setProdSel(v); setEntraron(0); }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Entraron (total del mes)</label>
+                <input type="number" step="1" className="input input-sm w-32 num"
+                  value={entraron || ""} onChange={(e) => setEntraron(Number(e.target.value) || 0)} />
+              </div>
+              <Button variant="subtle" onClick={repartirIgual} disabled={!prodSel || !entraron}>
+                Repartir igual
+              </Button>
+              {/* Que se vea si cuadra ANTES de guardar: el plan de la sucursal tiene que
+                  ser lo que llegó al almacén, ni una paca más ni una menos. */}
+              {prodSel && (
+                <span className={cn("text-sm rounded-lg px-3 py-1.5 border",
+                  entraron && Math.abs(repartido - entraron) > 0.5
+                    ? "bg-amber-50 border-amber-200 text-amber-700"
+                    : "bg-slate-50 border-slate-200 text-slate-600")}>
+                  Repartido: <b className="tabular-nums">{formatNumber(repartido, 0)}</b>
+                  {entraron ? <> de {formatNumber(entraron, 0)}{Math.abs(repartido - entraron) > 0.5
+                    ? <> · faltan {formatNumber(entraron - repartido, 0)}</> : <> · cuadra</>}</> : null}
+                </span>
+              )}
+            </div>
+
+            {!prodSel ? (
+              <p className="py-8 text-center text-sm text-slate-400">
+                Elige un producto y reparte lo que entró. Puedes darle a «Repartir igual» y
+                después cambiar a mano a quien haga falta.
+              </p>
+            ) : (
+              <div className="overflow-x-auto scroll-thin">
+                <table className="tbl">
+                  <thead><tr><th className="col-fija">Vendedor</th><th className="!text-right">Plan</th><th className="!text-right">% del total</th></tr></thead>
+                  <tbody>
+                    {delMes.map(([k, g]) => {
+                      const v = cantidadDe(k, prodSel);
+
+                      return (
+                        <tr key={k} className="hover:bg-slate-50">
+                          <td className="col-fija font-medium">{k} <span className="text-slate-400 font-normal">· {g.nombre}</span></td>
+                          <td className="text-right">
+                            <input type="number" step="1" className="input input-sm w-28 num text-brand-700 font-semibold"
+                              value={v || 0} onChange={(e) => setCantidad(k, prodSel, e.target.value)} />
+                          </td>
+                          <td className="text-right tabular-nums text-slate-500">
+                            {repartido ? formatNumber((v / repartido) * 100, 1) : "0,0"}%
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-800 text-white font-semibold">
+                      <td className="px-3 py-2.5">TOTAL</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(repartido, 0)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">100%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+            <p className="text-xs text-slate-500">
+              Estos planes son los que salen en <b>Quién vende → el vendedor → «Sus metas por
+              cantidad»</b>, con lo vendido al lado. Los vendedores desmarcados arriba no entran
+              en el reparto.
+            </p>
+          </div>
+        </Panel>
+      )}
 
       <Panel>
         <PanelHeader icon={Calculator} title={`Metas por vendedor · ${MESES[ym.m - 1]} ${ym.y}`}

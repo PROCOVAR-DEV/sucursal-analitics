@@ -107,7 +107,7 @@ export default function ProductosView({ sourceId, period }) {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Grupo</th><th className="!text-right">Productos</th>
+                  <th className="col-fija">Grupo</th><th className="!text-right">Productos</th>
                   <th className="!text-right">Meta</th><th className="!text-right">Real</th>
                   <th className="!text-right">% Cumpl.</th><th className="!text-right">Debería</th>
                   <th className="!text-right">Delta</th><th className="!text-right">Prom. día</th><th className="!text-right">Nec./día</th>
@@ -119,7 +119,7 @@ export default function ProductosView({ sourceId, period }) {
                   // pregunta que sigue a «va mal» es siempre «¿por cuál?».
                   <tr key={g.grupo} className="hover:bg-slate-50 cursor-pointer"
                     onClick={() => { setGrupo(g.grupo); setVista("producto"); }}>
-                    <td className="font-medium">{g.grupo}</td>
+                    <td className="col-fija font-medium">{g.grupo}</td>
                     <td className="text-right tabular-nums text-slate-500">{g.productos}</td>
                     <td className="text-right tabular-nums">{formatNumber(g.meta, 0)}</td>
                     <td className="text-right tabular-nums">{formatNumber(g.real, 2)}</td>
@@ -140,7 +140,7 @@ export default function ProductosView({ sourceId, period }) {
           <table className="tbl">
             <thead>
               <tr>
-                <th>Producto</th><th>Grupo</th>
+                <th className="col-fija">Producto</th><th>Grupo</th>
                 <th className="!text-right">Meta</th><th className="!text-right">Real</th>
                 <th className="!text-right">% Cumpl.</th><th className="!text-right">Debería</th>
                 <th className="!text-right">Delta</th><th className="!text-right">Prom. día</th><th className="!text-right">Nec./día</th>
@@ -149,7 +149,7 @@ export default function ProductosView({ sourceId, period }) {
             <tbody>
               {porGrupo.map((p) => (
                 <tr key={p.producto} className="hover:bg-slate-50">
-                  <td className="font-medium">{p.producto}</td>
+                  <td className="col-fija font-medium">{p.producto}</td>
                   <td>{p.grupo ? <Badge tone="slate">{p.grupo}</Badge> : <span className="text-slate-300">—</span>}</td>
                   <td className="text-right tabular-nums">{formatNumber(p.meta, 0)}</td>
                   <td className="text-right tabular-nums">{formatNumber(p.real, 2)}</td>

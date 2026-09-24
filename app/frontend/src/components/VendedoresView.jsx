@@ -393,7 +393,7 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
                   una lista larga se pierde de qué es cada columna. */}
               <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold">Producto</th>
+                  <th className="col-fija px-3 py-2 text-left font-semibold">Producto</th>
                   <th className="px-3 py-2 text-left font-semibold">Familia</th>
                   <th className="px-3 py-2 text-right font-semibold">Importe</th>
                   {/* Se llamaban «% suyo» y «% oficina» y no se entendían: Jose las leyó
@@ -418,7 +418,7 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
               <tbody>
                 {filtrarFilas(vendor.top_productos, qProd).map((p) => (
                   <tr key={p.producto} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-1.5 font-medium">{p.producto}</td>
+                    <td className="col-fija px-3 py-1.5 font-medium">{p.producto}</td>
                     <td className="px-3 py-1.5 text-xs text-slate-500">{p.grupo || "—"}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{formatMoney(p.total)}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{formatNumber(p.pct_del_gestor, 1)}%</td>

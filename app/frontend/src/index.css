@@ -33,6 +33,18 @@ body {
      en el contenedor perderían el margen justo al desplazarse, que es cuando más se nota. */
   .tabla-panel :is(th, td):first-child { @apply pl-5; }
   .tabla-panel :is(th, td):last-child { @apply pr-5; }
+  /* LA PRIMERA COLUMNA NO SE VA.
+     Estas tablas tienen diez columnas y se miran desde el teléfono y desde la tablet:
+     al desplazarse a la derecha se perdía DE QUÉ producto era cada número, que es lo
+     único que no se puede deducir mirando. Lo pidió Santiago el 24/09/2026.
+     El fondo es obligatorio —si no, el contenido de debajo se ve a través— y la sombra
+     es lo que dice que ahí hay un corte y que sigue habiendo tabla detrás. */
+  .col-fija {
+    @apply sticky left-0 z-20 bg-white;
+    box-shadow: 2px 0 4px -2px rgb(0 0 0 / 0.15);
+  }
+  thead .col-fija { @apply bg-slate-50 z-30; }
+  tbody tr:hover > .col-fija { @apply bg-slate-50; }
   .card-title { @apply text-sm font-semibold text-slate-800; }
   .card-sub { @apply text-xs text-slate-400; }
 
