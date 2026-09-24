@@ -4,7 +4,7 @@ import { getMetasCantidad, getMetasGestor, getVendedores } from "../api.js";
 import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
 import { VendorFormatoTables } from "./MetasGestorReport.jsx";
 import FiltroMulti from "./FiltroMulti.jsx";
-import { Buscador, filtrarFilas } from "./ui.jsx";
+import { Buscador, cn, filtrarFilas } from "./ui.jsx";
 
 /**
  * El nombre en corto para la tira: primero y último.
