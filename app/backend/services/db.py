@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -89,8 +90,17 @@ def _conectar_reintentando():
     raise ultimo  # type: ignore[misc]
 
 
+# EL DRIVER LO DECIDE ESTA LÍNEA, NO LA URL NI LA VERSIÓN DE SQLALCHEMY.
+#
+# `_conectar_reintentando` abre la conexión con psycopg2 a mano, así que el dialecto
+# tiene que ser el de psycopg2 o SQLAlchemy hablaría con una conexión que no es la que
+# espera. Con `postgresql://` a secas lo elige él, y en la 2.1 cambió de opinión: pasó a
+# psycopg (v3), que no está instalado, y la API dejó de arrancar de un día para otro sin
+# que se tocara una línea. Escrito aquí, da igual qué versión entre y qué diga la URL.
+_URL = make_url(DATABASE_URL).set(drivername="postgresql+psycopg2")
+
 engine = create_engine(
-    DATABASE_URL,
+    _URL,
     creator=_conectar_reintentando,
     pool_pre_ping=True,
     future=True,

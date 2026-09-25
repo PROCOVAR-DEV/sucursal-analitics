@@ -11,6 +11,15 @@ pyarrow==18.1.0
 httpx==0.28.1
 
 # Migración a PostgreSQL (storage de reportes)
-sqlalchemy>=2.0
-psycopg2-binary
+#
+# SQLAlchemy VA CLAVADA. Estaba como `>=2.0`, y el 25/09/2026 una compilación normal se
+# trajo la 2.1.0 recién salida, que cambió el driver por defecto de `postgresql://` de
+# psycopg2 a psycopg (v3) — que no está instalado. La API se quedó sin arrancar:
+# `ModuleNotFoundError: No module named 'psycopg'`. Swarm volvió sola a la tarea anterior
+# y Dokploy dio el despliegue por bueno, así que durante CUATRO DÍAS el servidor siguió
+# corriendo el contenedor del 21/09 mientras cada despliegue decía «done».
+#
+# Lo mismo vale para el resto: aquí las versiones se fijan, y se suben a mano cuando toca.
+sqlalchemy==2.0.54
+psycopg2-binary==2.9.13
 pytest
