@@ -31,6 +31,7 @@ export default function DashboardView({ sourceId, period }) {
   if (!data) return <div className="p-6">Cargando…</div>;
 
   const { kpis } = data;
+  const sinMeta = !Number(kpis.meta_hectolitros);
 
   return (
     <div className="space-y-6">
@@ -54,9 +55,13 @@ export default function DashboardView({ sourceId, period }) {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi label="Hectolitros" value={formatNumber(kpis.total_hectolitros, 2)} hint={`Meta: ${formatNumber(kpis.meta_hectolitros, 0)}`} />
-        <Kpi label="% Cumplimiento" value={`${formatNumber(kpis.cumplimiento_pct, 1)} %`}
-          tone={kpis.cumplimiento_pct >= 100 ? "green" : kpis.cumplimiento_pct >= 80 ? "amber" : "red"} />
+        <Kpi label="Hectolitros" value={formatNumber(kpis.total_hectolitros, 2)}
+          hint={sinMeta ? "Sin cuota propia" : `Meta: ${formatNumber(kpis.meta_hectolitros, 0)}`} />
+        {/* Un vendedor mide contra SU cuota, no contra la de la sucursal. Y si no tiene
+            cuota puesta no hay porcentaje: un «0,0 %» en rojo se lee como que va fatal,
+            cuando lo que pasa es que nadie le puso meta. */}
+        <Kpi label="% Cumplimiento" value={sinMeta ? "—" : `${formatNumber(kpis.cumplimiento_pct, 1)} %`}
+          tone={sinMeta ? "slate" : kpis.cumplimiento_pct >= 100 ? "green" : kpis.cumplimiento_pct >= 80 ? "amber" : "red"} />
         <Kpi label="Venta Total" value={formatMoney(kpis.total_importe)} tone="slate" />
         <Kpi label="Clientes" value={formatInt(kpis.total_clientes)}
           hint={`${formatInt(kpis.total_skus)} SKUs vendidos`} tone="brand" />

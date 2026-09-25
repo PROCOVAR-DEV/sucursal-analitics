@@ -38,6 +38,7 @@ from services.clientes_dormidos import compute_clientes_dormidos
 from services.movimiento_clientes import compute_movimiento_clientes
 from services.metas_gestor import compute_metas_gestor, meta_por_formato
 from services.plan_sku import repartir_plan_sku
+from services.permisos import recortar_a_gestor
 from services.roster import quien_recibe
 from services.excel_export import (
     export_all, export_clientes_analisis, export_gestor_sku, export_market,
@@ -275,11 +276,14 @@ def require_manage_users(user: dict = Depends(current_user)) -> dict:
 
 
 def _scope_for_user(eff: dict, user: dict) -> dict:
-    """El rol 'gestor' solo ve SUS datos: restringe los gestores efectivos al suyo."""
+    """El rol 'gestor' solo ve SUS datos: sus ventas y SUS METAS.
+
+    La regla entera —y por qué recortar las filas sin recortar las metas hacía que la
+    misma fila dijera 3 % en la pantalla del vendedor y 41 % en la del supervisor— está
+    en `services/permisos.recortar_a_gestor`, que no toca la base y se puede probar.
+    """
     if user.get("role") == "gestor" and user.get("gestor"):
-        g = str(user["gestor"]).upper()
-        eff = dict(eff)
-        eff["gestores"] = {k: v for k, v in (eff.get("gestores") or {}).items() if str(k).upper() == g}
+        return recortar_a_gestor(eff, str(user["gestor"]))
     return eff
 
 

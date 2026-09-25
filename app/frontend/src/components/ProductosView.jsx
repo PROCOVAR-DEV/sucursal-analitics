@@ -9,7 +9,12 @@ const GROUP_COLORS = {
   PARRANDA: "#2563eb", IMPORTACIONES: "#16a34a", CONSIGNACION: "#f59e0b", "TECNOLOGIA Y KAPITAL": "#7c3aed",
 };
 
-export default function ProductosView({ sourceId, period }) {
+export default function ProductosView({ sourceId, period, user }) {
+  // Un vendedor mide contra SUS metas, no contra las de la sucursal (ver
+  // `permisos.recortar_a_gestor`). El rótulo lo dice, porque el número cambia de
+  // significado según quién mire y antes las dos pantallas enseñaban 2.945 en la misma
+  // fila: la suya y la del equipo.
+  const esVendedor = user?.role === "gestor";
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   // El filtro va ANTES de los `return` de carga y error: un hook no se puede llamar a
@@ -79,7 +84,7 @@ export default function ProductosView({ sourceId, period }) {
       {/* Cumplimiento de metas: por grupo o producto a producto */}
       <Panel>
         <PanelHeader icon={Package} title="Cumplimiento de metas"
-          sub={data.periodo ? `Metas del periodo ${data.periodo}` : "Metas del mes"}
+          sub={`${esVendedor ? "Tus metas" : "Metas"} ${data.periodo ? `del periodo ${data.periodo}` : "del mes"}`}
           right={
             <div className="flex items-center gap-2 flex-wrap justify-end">
               <Segmented
@@ -102,7 +107,19 @@ export default function ProductosView({ sourceId, period }) {
               {vista === "producto" && <Buscador onChange={setQ} placeholder="Producto o grupo…" value={q} />}
             </div>
           } />
-        {vista === "grupo" ? (
+        {!(data.cumplimiento || []).length ? (
+          // Sin metas no hay cumplimiento que enseñar, y una tabla con la cabecera sola
+          // se lee como «esto está roto». A un vendedor le pasa cuando aún no le han
+          // repartido nada; antes veía las de la sucursal y creía que eran suyas.
+          <div className="py-10 text-center text-sm text-slate-400">
+            {esVendedor ? "Todavía no tienes metas por producto en este periodo." : "Sin metas por producto en este periodo."}
+            <span className="block mt-1 text-xs">
+              {esVendedor
+                ? "Las reparte tu supervisor entre los vendedores; hasta que lo haga, aquí no hay nada que comparar."
+                : "Se reparten en Configuración › Calculadora, pestaña «Por producto»."}
+            </span>
+          </div>
+        ) : vista === "grupo" ? (
           <TablaScroll>
             <table className="tbl">
               <thead>

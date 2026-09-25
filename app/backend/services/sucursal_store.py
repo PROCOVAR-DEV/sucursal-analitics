@@ -226,9 +226,20 @@ def config_accumulated(suc: dict, months: list) -> dict:
     for e in effs:
         for k, gv in (e.get("gestores") or {}).items():
             if k not in gest:
-                gest[k] = {**gv, "cuota_hl": 0.0, "cuota_ccc": 0.0}
+                gest[k] = {**gv, "cuota_hl": 0.0, "cuota_ccc": 0.0, "metas_cantidad": {}}
             gest[k]["cuota_hl"] = round(gest[k]["cuota_hl"] + float(gv.get("cuota_hl", 0)), 2)
             gest[k]["cuota_ccc"] = round(gest[k]["cuota_ccc"] + float(gv.get("cuota_ccc", 0)), 2)
+            # Las metas por producto del vendedor se suman igual que las de la sucursal
+            # (`metas_productos_ces`, arriba). Desde que el vendedor mide su cumplimiento
+            # contra las SUYAS, quedarse con las del primer mes le enseñaría el plan de
+            # septiembre contra lo vendido en tres meses.
+            for prod, cant in (gv.get("metas_cantidad") or {}).items():
+                try:
+                    n = float(cant or 0)
+                except (TypeError, ValueError):
+                    continue
+                gest[k]["metas_cantidad"][str(prod)] = round(
+                    gest[k]["metas_cantidad"].get(str(prod), 0.0) + n, 2)
     base["gestores"] = gest
     base["_period"] = None
     base["_accumulated"] = True
