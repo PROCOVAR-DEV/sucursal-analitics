@@ -76,6 +76,24 @@ class AuthStore:
         self._ensure_seed()
 
     def _load_secret(self) -> bytes:
+        """La llave con la que se firman las sesiones.
+
+        **`AUTH_SECRET` MANDA SOBRE EL FICHERO.** Estaba al revés, y por eso cada
+        despliegue echaba a todo el mundo: el contenedor no tiene volumen, así que
+        `/app/data/secret.key` nace vacío con la imagen nueva, el disco contesta el
+        primero —corre como root, nunca falla— y la variable no se llegaba a mirar. La
+        sesión de todos quedaba firmada con una llave que moría con el contenedor.
+        Comprobado el 25/09/2026: el `secret.key` del contenedor estaba fechado a la
+        hora exacta en que arrancó.
+
+        La variable existe justo para esto y está puesta en Dokploy. El fichero se queda
+        detrás, para el desarrollo y para el día que alguien levante esto sin
+        configurar nada: entonces sí conviene que se invente una y la guarde.
+        """
+        env = os.environ.get("AUTH_SECRET")
+        if env:
+            return env.encode()
+
         if self._base is not None:
             try:
                 self._base.mkdir(parents=True, exist_ok=True)
@@ -94,8 +112,10 @@ class AuthStore:
                 # otro usuario, el archivo es 0600 de root). Se cae a env/efímero. En
                 # PRODUCCIÓN el servicio corre como root y sí lee el secret real.
                 pass
-        env = os.environ.get("AUTH_SECRET")
-        return env.encode() if env else os.urandom(32)
+
+        # Sin variable y sin disco: una llave de usar y tirar. Las sesiones duran lo que
+        # dure el proceso, que es lo único honesto cuando no hay dónde guardarla.
+        return os.urandom(32)
 
     @staticmethod
     def _to_dict(u: User) -> dict:
