@@ -9,8 +9,9 @@ import io
 
 import pandas as pd
 
-from core.constants import COLORS, GROUP_BG_COLORS
+from core.constants import COLORS, GROUP_BG_COLORS, SIZE_MULT
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
+from services.metas_gestor import metas_formato_de
 from services.loader import STD_COLS
 from services.market import WEEKS, compute_market
 from services.productos import compute_productos
@@ -445,6 +446,62 @@ def export_clientes_analisis(report, eff: dict, grupos: list[str] | None = None,
 # Hectolitros) SOLO de Parranda/Malta, KPIs y conversión a Blisters/Pallets; más una
 # hoja Supervisor con el resumen. Sirve para revisar factura por factura.
 _UNITS_PP = {"330": 496, "500": 336, "1500": 110}  # unidades por pallet (fallback del script)
+
+
+def _codigo_fmt(producto: str, size: str) -> str:
+    """`Parranda` + `1500` -> `P1500`, que es la clave con la que se guardan las metas."""
+    return f"{'P' if str(producto).upper().startswith('P') else 'M'}{size}"
+
+
+def _metas_por_cantidad(ws, f, sub, fila: int, *, metas: dict, merc: str, cant: str) -> int:
+    """Las metas de lo que se cuenta en unidades. Devuelve la fila libre siguiente.
+
+    Arroz, papel, azúcar, vodka: no tienen hectolitros ni blísters, así que no caben en
+    la tabla de conversión. Sus metas se ponen por vendedor en la calculadora
+    (`metas_cantidad`) y hasta ahora no salían en el fichero de facturas, que es el que
+    se le manda a cada uno.
+
+    Se cruza por NOMBRE con `contains`, exactamente igual que «Sus metas por cantidad»
+    de la pantalla de vendedores. Si aquí se cruzara de otra forma, el mismo producto
+    daría dos cifras distintas según de dónde se mirara, y no habría manera de saber
+    cuál creerse.
+
+    La meta es la del MES ENTERO, sin prorratear por días: es la que se puso en la
+    configuración y es la que el vendedor reconoce. El fichero de facturas sale de un
+    rango de fechas cualquiera —una semana, un día— y prorratear aquí daría un número
+    que no está escrito en ningún sitio.
+    """
+    limpias = {}
+    for producto, v in (metas or {}).items():
+        try:
+            n = float(v or 0)
+        except (TypeError, ValueError):
+            continue
+        # Un cero no es una meta: es una fila que sólo sirve para enseñar un 0 % que se
+        # lee como «va fatal». Misma regla que `recortar_a_gestor`.
+        if n > 0:
+            limpias[str(producto)] = n
+    if not limpias:
+        return fila
+
+    ws.merge_range(fila, 0, fila, 4, "Metas por Cantidad (productos sin hectolitros)", f["kpi_txt"])
+    for j, h in enumerate(["Producto", "Meta (empaques)", "Vendido", "Falta", "Cumplimiento"]):
+        ws.write(fila + 1, j, h, f["header"])
+
+    r = fila + 2
+    for producto in sorted(limpias):
+        meta = round(limpias[producto], 2)
+        real = 0.0
+        if not sub.empty and merc in sub.columns and cant in sub.columns:
+            casan = sub[merc].astype(str).str.contains(str(producto), case=False, na=False)
+            real = round(float(pd.to_numeric(sub.loc[casan, cant], errors="coerce").fillna(0).sum()), 2)
+        ws.write(r, 0, producto, f["band"])
+        ws.write_number(r, 1, meta, f["int"])
+        ws.write_number(r, 2, real, f["int"])
+        ws.write_number(r, 3, round(max(0.0, meta - real), 2), f["int"])
+        ws.write_number(r, 4, real / meta, f["pct"])
+        r += 1
+    return r + 1
 # (columna en el df normalizado, encabezado, tipo de formato)
 _INV_COLS = [
     ("__op__", "No. Operación", "int"),
@@ -568,6 +625,9 @@ def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
     keys = gestor_keys(eff)
     gestores_cfg = eff.get("gestores") or {}
     upp_cfg = {str(k): float(v) for k, v in (eff.get("units_per_pallet") or {}).items()}
+    # El mismo factor con el que el enriquecido saca los HL de cada línea. Hace falta
+    # para el camino de vuelta: pasar una meta en hectolitros a blísters.
+    mult_cfg = {str(k): float(v) for k, v in (eff.get("size_mult") or {}).items()}
 
     df = only_valid(enrich_for_sucursal(report, eff), keys)
     if not df.empty and solo_cerveza:
@@ -645,14 +705,33 @@ def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
         ws.write(kr + 1, 2, "Cumplimiento", f["block_txt"])
         ws.write(kr + 1, 3, (total_hl / cuota) if cuota else 0.0, pct_ctr)
 
-        # Conversión a Blisters/Pallets por producto (como el script)
+        # Conversión a Blisters/Pallets por producto, CON LA META AL LADO.
+        #
+        # Cada meta va pegada a su vecina y en su misma unidad: la de blísters junto a
+        # Blísters y la de hectolitros junto a Hectolitros. Una sola columna de meta
+        # obligaría a convertir de cabeza para saber si se llegó o no, que es justo lo
+        # que esta tabla viene a evitar.
+        #
+        # Y son las metas DE ESTE VENDEDOR (`metas_formato_de`), no la suma de la
+        # sucursal. Su hoja mide lo que vende él; ponerle enfrente el plan de los diez
+        # es el 3 % de Santiago del 25/09/2026 otra vez.
+        metas_fmt = metas_formato_de(gestores_cfg.get(g))
         cr = kr + 3
-        ws.merge_range(cr, 0, cr, 4, "Conversión Cantidad → Blisters y Pallets", f["kpi_txt"])
-        conv_hdr = ["Producto", "Tamaño", "Blisters", "Pallets", "Hectolitros"]
+        ws.merge_range(cr, 0, cr, 6, "Conversión Cantidad → Blisters y Pallets", f["kpi_txt"])
+        conv_hdr = ["Producto", "Tamaño", "Meta (blísters)", "Blisters", "Pallets",
+                    "Meta (HL)", "Hectolitros"]
         for j, h in enumerate(conv_hdr):
             ws.write(cr + 1, j, h, f["header"])
-        conv_rows = [("Malta", "330", M330), ("Parranda", "330", P330),
-                     ("Parranda", "500", P500), ("Parranda", "1500", P1500)]
+        # LOS SEIS FORMATOS, no cuatro.
+        #
+        # Faltaban Malta 500 y Malta 1500, así que la tabla no cuadraba con el «Total
+        # Hectolitros» de tres filas más arriba y nadie sabía por qué. En la hoja de
+        # Gari del 26/09/2026: 105,10 aquí contra 153,34 allí — los 48,24 que faltaban
+        # eran exactamente la Malta de 1500, que sí se había vendido y aquí no salía.
+        # Con la columna de metas encima era peor: una meta puesta a M1500 no tendría
+        # fila donde ponerse y desaparecería sin avisar.
+        conv_rows = [("Malta", "330", M330), ("Malta", "500", M500), ("Malta", "1500", M1500),
+                     ("Parranda", "330", P330), ("Parranda", "500", P500), ("Parranda", "1500", P1500)]
         for i, (prod, size, hlv) in enumerate(conv_rows):
             iscol = "IsMalta" if prod == "Malta" else "IsParranda"
             bl = 0.0
@@ -660,14 +739,28 @@ def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
                 bl = round(float(sub.loc[sub[iscol] & (sub[size_col] == size), cant].sum()), 2)
             upp = upp_cfg.get(size, _UNITS_PP.get(size, 0))
             pal = round(bl / upp, 2) if upp else 0.0
+            # La meta se guarda en hectolitros. A blísters se vuelve por el mismo factor
+            # con el que se sacaron los HL de la venta (HL = blísters × size_mult), para
+            # que las dos columnas de meta digan lo mismo contado de dos maneras.
+            meta_hl = float(metas_fmt.get(_codigo_fmt(prod, size), 0.0))
+            mult = mult_cfg.get(size, SIZE_MULT.get(size, 0.0))
+            meta_bl = round(meta_hl / mult, 2) if mult else 0.0
             rr = cr + 2 + i
             ws.write(rr, 0, prod, f["band"]); ws.write(rr, 1, size, f["band"])
-            ws.write_number(rr, 2, bl, f["num"]); ws.write_number(rr, 3, pal, f["num"])
-            ws.write_number(rr, 4, hlv, f["num"])
+            ws.write_number(rr, 2, meta_bl, f["num"]); ws.write_number(rr, 3, bl, f["num"])
+            ws.write_number(rr, 4, pal, f["num"])
+            ws.write_number(rr, 5, meta_hl, f["num"]); ws.write_number(rr, 6, hlv, f["num"])
+
+        # Las metas de lo que NO es cerveza, en su propia tabla: un saco de arroz no
+        # tiene blísters ni hectolitros, y meterlo arriba sería escribir números en
+        # columnas donde no aplican.
+        sig = _metas_por_cantidad(ws, f, sub, cr + 2 + len(conv_rows) + 1,
+                                  metas=(gestores_cfg.get(g) or {}).get("metas_cantidad") or {},
+                                  merc=merc, cant=cant)
 
         # Desglose por producto, al pie. Lo pidió Santiago el 17/09/2026: la tabla de
         # conversión de arriba solo habla de cerveza y en el fichero general no dice nada.
-        _resumen_por_producto(ws, f, sub, cr + 2 + len(conv_rows) + 1,
+        _resumen_por_producto(ws, f, sub, sig,
                               merc=merc, cant=cant, imp=imp,
                               con_grupo=con_grupo, con_hl=con_hl, con_pallets=con_pallets)
 

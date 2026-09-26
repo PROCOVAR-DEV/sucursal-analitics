@@ -40,6 +40,27 @@ def _meta_code(code_key: str) -> str | None:
     return None
 
 
+def metas_formato_de(gestor_cfg: dict | None) -> dict[str, float]:
+    """Las metas por formato de UN vendedor, con la clave ya traducida a `P1500`.
+
+    Existe aparte de `meta_por_formato` porque la hoja de un vendedor tiene que medirse
+    contra LO SUYO. Medir sus ventas contra la meta del equipo es el error de Santiago
+    del 25/09/2026 —82 pacas contra el plan de diez personas, 3 %— y del 26/09 por el
+    otro lado. Una vez cada cosa: el que suma, que sume; el que mira a uno, que mire al
+    suyo.
+    """
+    out: dict[str, float] = {}
+    for ck, val in ((gestor_cfg or {}).get("metas_formato") or {}).items():
+        mc = _meta_code(ck)
+        if not mc:
+            continue
+        try:
+            out[mc] = out.get(mc, 0.0) + float(val or 0)
+        except (TypeError, ValueError):
+            continue
+    return {k: round(v, 2) for k, v in out.items()}
+
+
 def meta_por_formato(eff: dict) -> dict[str, float]:
     """La meta del MES de cada SKU: la suma de lo que tiene puesto cada gestor.
 
@@ -52,15 +73,8 @@ def meta_por_formato(eff: dict) -> dict[str, float]:
     """
     out: dict[str, float] = {}
     for g in gestor_keys(eff):
-        mf = ((eff.get("gestores") or {}).get(g) or {}).get("metas_formato") or {}
-        for ck, val in mf.items():
-            mc = _meta_code(ck)
-            if not mc:
-                continue
-            try:
-                out[mc] = out.get(mc, 0.0) + float(val or 0)
-            except (TypeError, ValueError):
-                continue
+        for mc, val in metas_formato_de((eff.get("gestores") or {}).get(g)).items():
+            out[mc] = out.get(mc, 0.0) + val
     return {k: round(v, 2) for k, v in out.items()}
 
 
