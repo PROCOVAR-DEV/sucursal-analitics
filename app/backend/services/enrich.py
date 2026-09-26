@@ -163,21 +163,36 @@ def enrich_for_sucursal(report, eff: dict):
     else:
         df["SinPedido"] = False
 
-    # --- Hectolitros (Cantidad × size_mult) ---
+    # --- Hectolitros y Pallets: SÓLO de Parranda y Malta ---
+    #
+    # El tamaño se saca del nombre buscando 330, 500 o 1500, y eso también lo tienen
+    # productos que no son cerveza: «REFRESCO SANTA COLA 330 ML CAJA 24U» salía con
+    # tamaño 330 y se le aplicaba 0,02 HL por unidad, que es lo que mide un blíster de
+    # SEIS de cerveza. Una caja de veinticuatro refrescos son 7,92 litros, no 2.
+    #
+    # El daño no estaba en los totales —el Resumen, Ventas (HL) y las metas filtran por
+    # Parranda/Malta y dan los cuatro el mismo número—, sino en las tablas que enseñan
+    # los hectolitros PRODUCTO A PRODUCTO: «Quién vende» y el Excel. Ahí los refrescos
+    # aparecían con hectolitros, y quien sumaba esa columna se llevaba 95,72 HL de más
+    # sobre 1.806 (Santiago, septiembre de 2026). Dos cifras distintas del mismo mes en
+    # la misma aplicación, y ninguna decía cuál era cuál.
+    #
+    # Los hectolitros son la unidad de la CERVEZA: sus formatos, sus multiplicadores y
+    # sus metas. De lo demás no se sabe el volumen, así que no se inventa: va en cero.
+    # Lo mismo con los pallets, que se cuentan con `units_per_pallet` de la cerveza.
     size_col = STD_COLS["size"]
     cant_col = STD_COLS["cant"]
-    if cant_col in df.columns and size_col in df.columns:
-        mult = df[size_col].map(size_mult).fillna(0.0)
-        df["Hectolitros"] = (pd.to_numeric(df[cant_col], errors="coerce").fillna(0) * mult).round(2)
-    else:
-        df["Hectolitros"] = 0.0
+    es_cerveza = df[STD_COLS["parr"]].fillna(False) | df[STD_COLS["malta"]].fillna(False)
 
-    # --- Pallets (Cantidad / units_per_pallet[size]) ---
     if cant_col in df.columns and size_col in df.columns:
-        upp = df[size_col].map(units_pp)
         cant = pd.to_numeric(df[cant_col], errors="coerce").fillna(0)
+        mult = df[size_col].map(size_mult).fillna(0.0).where(es_cerveza, 0.0)
+        df["Hectolitros"] = (cant * mult).round(2)
+
+        upp = df[size_col].map(units_pp).where(es_cerveza)
         df["Pallets"] = (cant / upp).where(upp.notna() & (upp != 0), 0.0).round(4)
     else:
+        df["Hectolitros"] = 0.0
         df["Pallets"] = 0.0
 
     # --- Grupo comercial ---
