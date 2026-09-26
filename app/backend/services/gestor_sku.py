@@ -27,11 +27,46 @@ from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 
 
+def _total_sucursal(report, eff_sucursal: dict | None, grupos, medida: str) -> float | None:
+    """El total de la SUCURSAL ENTERA para esa medida y esos mismos filtros.
+
+    Es el denominador del «% del total» cuando quien mira es un vendedor. A él se le
+    recorta la configuracion a su ficha (`recortar_a_gestor`), asi que el total que sale
+    de sus propias filas es el suyo, y dividir lo suyo entre lo suyo da 100 % SIEMPRE.
+    Eso es lo que veia Gari el 26/09/2026: 27.563 de 27.563. El numero era cierto y
+    completamente inutil —un vendedor no representa el 100 % de nada— y ademas se
+    contradecia con la tabla del supervisor, donde esa misma fila es el 8 %.
+
+    Se enriquece aparte con la config SIN recortar porque `GestorDetectado` y
+    `GrupoComercial` las pone el enriquecido a partir de los alias de la config: con la
+    recortada, las lineas de los demas ni siquiera llegan a tener gestor.
+
+    Los mismos filtros de grupo que la tabla, a proposito. Con «sólo PARRANDA» puesto, el
+    porcentaje tiene que ser sobre lo que la sucursal vendio DE PARRANDA; contra el total
+    de todo saldria un numero pequeño que no es el peso de nadie.
+    """
+    if not eff_sucursal:
+        return None
+
+    col = STD_COLS["cant"] if medida == "cantidad" else STD_COLS["importe"]
+    df = enrich_for_sucursal(report, eff_sucursal)
+    df = only_valid(df, gestor_keys(eff_sucursal))
+    if df is None or df.empty or col not in df.columns:
+        return None
+
+    if grupos and "GrupoComercial" in df.columns:
+        df = df[df["GrupoComercial"].astype(str).isin([str(g) for g in grupos])]
+
+    total = round(float(df[col].sum()), 2)
+    return total if total > 0 else None
+
+
 def compute_gestor_sku(
     report,
     eff: dict,
     grupos: list[str] | None = None,
     metrica: str = "importe",
+    eff_sucursal: dict | None = None,
 ) -> dict:
     """El cruce gestor × producto, en importe o en cantidad.
 
@@ -67,6 +102,7 @@ def compute_gestor_sku(
         "filas": [], "matriz": [], "gestores": [], "productos": [],
         "totales_gestor": [], "totales_producto": [],
         "total_importe": 0.0, "total_cantidad": 0.0, "total_hectolitros": 0.0,
+        "peso_pct_total": 0.0,
         "grupos_disponibles": [], "grupos": list(grupos or []), "metrica": "importe",
     }
     if df is None or df.empty or merc not in df.columns:
@@ -142,6 +178,15 @@ def compute_gestor_sku(
     def suma(col: str) -> float:
         return round(float(agrupado[col].sum()), 2) if col in agrupado.columns else 0.0
 
+    total_medida = round(float(agrupado[medida].sum()), 2)
+    # El denominador del «% del total». Si no viene la config de la sucursal —o no se
+    # pudo sacar el total— se cae al de esta tabla, que es lo que habia: para un
+    # supervisor los dos numeros son el mismo, porque su tabla ES la sucursal.
+    total_peso = _total_sucursal(report, eff_sucursal, grupos, medida) or total_medida
+
+    def peso(v: float) -> float:
+        return round(float(v) / total_peso * 100, 1) if total_peso else 0.0
+
     totales_gestor = []
     for g in tot_g.index:
         sub = agrupado[agrupado[col_gestor] == g]
@@ -155,6 +200,11 @@ def compute_gestor_sku(
             # que quien lo lea no tenga que adivinar si "importe" trae dólares o
             # empaques según cómo se pidió.
             "medida": round(float(sub[medida].sum()), 2),
+            # El peso lo calcula el servidor y no la pantalla, porque el denominador NO
+            # es el total de esta tabla: es el de la sucursal, y el vendedor no lo tiene
+            # —ni debe tenerlo: su importe es suyo, el de sus compañeros no es asunto
+            # suyo—. Va el porcentaje ya hecho y no el total con el que se hizo.
+            "peso_pct": peso(sub[medida].sum()),
             "productos_distintos": int(sub[merc].nunique()),
         })
 
@@ -175,7 +225,10 @@ def compute_gestor_sku(
         "metrica": medida,
         # El total de lo que se está midiendo. `total_importe` sigue siendo el de
         # dólares siempre, para que no cambie de significado a mitad.
-        "total_medida": round(float(agrupado[medida].sum()), 2),
+        "total_medida": total_medida,
+        # Lo que pesa TODO lo de esta tabla dentro de la sucursal. Para un supervisor es
+        # 100 %; para un vendedor es su parte, y es lo que va en la fila de totales.
+        "peso_pct_total": peso(total_medida),
         "filas": filas,
         "matriz": matriz,
         "gestores": gestores,

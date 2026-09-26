@@ -270,12 +270,21 @@ export default function GestorSkuView({ sourceId, period }) {
   }
 
   const gestores = data.gestores;
-  // El % que representa cada gestor sobre el total, para leer el peso sin dividir.
+  // El % que representa cada gestor SOBRE LA SUCURSAL, no sobre esta tabla.
+  //
+  // Lo calcula el servidor (`peso_pct`) y aquí sólo se pinta. A un vendedor se le
+  // recortan las filas a las suyas, así que su tabla ES él: dividiendo aquí, lo suyo
+  // entre lo suyo daba 100,0 % siempre. Gari, 26/09/2026: 27.563 de 27.563 → 100 %,
+  // cuando en la sucursal es el 8 %. Un vendedor nunca es el 100 % de nada.
+  // La división local se queda de red por si la respuesta es vieja (caché del
+  // navegador, servidor sin desplegar): ahí vuelve a salir el número de antes, que es
+  // malo, pero no una tabla en blanco.
   const pesoDe = (v) => (totalMedida ? (v / totalMedida) * 100 : 0);
+  const pesoTotal = data.peso_pct_total ?? pesoDe(totalMedida);
   // El peso del primero: es contra lo que se dibujan las barras. Contra 100 saldrían todas
   // cortitas —el primero suele andar por el 20 %— y no se distinguiría ninguna.
   const mayorPeso = Math.max(
-    ...(data?.totales_gestor || []).map((x) => pesoDe(x.medida ?? x.importe)),
+    ...(data?.totales_gestor || []).map((x) => x.peso_pct ?? pesoDe(x.medida ?? x.importe)),
     1,
   );
 
@@ -563,7 +572,7 @@ export default function GestorSkuView({ sourceId, period }) {
             </thead>
             <tbody>
               {data.totales_gestor.map((t, i) => {
-                const peso = pesoDe(t.medida ?? t.importe);
+                const peso = t.peso_pct ?? pesoDe(t.medida ?? t.importe);
 
                 return (
                   <tr key={t.gestor} className="border-b border-slate-100">
@@ -594,12 +603,22 @@ export default function GestorSkuView({ sourceId, period }) {
               })}
             </tbody>
             <tfoot>
+              {/* SIETE celdas, las mismas que la cabecera y que cada fila. Le faltaban
+                  dos —el «#» y la columna de la barra— y una fila de <td> de menos no
+                  falla: el navegador la pega a la izquierda y CORRE todo lo demás, así
+                  que los hectolitros caían bajo «% del total» y los productos bajo la
+                  barra. Números buenos leídos en la columna equivocada, que es peor que
+                  no enseñarlos. */}
               <tr className="border-t-2 border-slate-300 font-semibold">
+                <td className="py-2 pr-2 w-8" />
                 <td className="py-2 pr-4">Total</td>
                 <td className="py-2 px-3 text-right tabular-nums">
                   {fmt(totalMedida)}
                 </td>
-                <td className="py-2 px-3 text-right tabular-nums">100,0%</td>
+                <td className="py-2 px-3 text-right tabular-nums">
+                  {formatNumber(pesoTotal, 1)}%
+                </td>
+                <td className="py-2 px-3 w-32" />
                 <td className="py-2 px-3 text-right tabular-nums">
                   {formatNumber(data.total_hectolitros)}
                 </td>

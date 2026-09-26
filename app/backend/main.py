@@ -820,10 +820,18 @@ def src_gestor_sku(
     suc: dict = Depends(require_access),
     user: dict = Depends(current_user),
 ) -> dict:
-    """Cruce gestor x producto, en importe o cantidad, con totales en ambas direcciones."""
+    """Cruce gestor x producto, en importe o cantidad, con totales en ambas direcciones.
+
+    Las FILAS van recortadas (`_eff_scoped`): un vendedor sigue viendo sólo lo suyo. Lo
+    que NO se recorta es el denominador del «% del total», y por eso entra también la
+    config sin recortar. Mismo criterio que `competencia` unas líneas más arriba: lo que
+    limita es qué campos salen, no contra qué se miden. Del total de la sucursal sale el
+    porcentaje y sólo el porcentaje; el importe de los demás no viaja.
+    """
     report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     return compute_gestor_sku(
-        report, _eff_scoped(suc, report, mes, user), grupos=grupo, metrica=metrica
+        report, _eff_scoped(suc, report, mes, user), grupos=grupo, metrica=metrica,
+        eff_sucursal=_eff(suc, report, mes),
     )
 
 
