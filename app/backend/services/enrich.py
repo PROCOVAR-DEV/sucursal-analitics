@@ -12,7 +12,7 @@ import re
 
 import pandas as pd
 
-from core.utils import build_alias_map, detect_product_group, normalize_text
+from core.utils import build_alias_map, detect_product_group, detect_size, is_malta, is_parranda, normalize_text
 from services.loader import STD_COLS
 
 
@@ -182,7 +182,24 @@ def enrich_for_sucursal(report, eff: dict):
     # Lo mismo con los pallets, que se cuentan con `units_per_pallet` de la cerveza.
     size_col = STD_COLS["size"]
     cant_col = STD_COLS["cant"]
-    es_cerveza = df[STD_COLS["parr"]].fillna(False) | df[STD_COLS["malta"]].fillna(False)
+    nombre_col = STD_COLS["merc"]
+
+    # Normalmente estas tres columnas ya vienen puestas por el lector del informe
+    # (`_add_stable_helpers`), pero no se dan por hechas: si faltan se sacan del nombre
+    # aquí mismo. Darlas por hechas era un `KeyError` esperando a un informe que no
+    # pasara por ese camino, y lo peor de un fallo así es que se ve tardísimo.
+    def _del_nombre(columna, funcion):
+        if columna in df.columns:
+            return df[columna]
+        if nombre_col in df.columns:
+            return df[nombre_col].apply(funcion)
+        return pd.Series(False, index=df.index)
+
+    if size_col not in df.columns and nombre_col in df.columns:
+        df[size_col] = df[nombre_col].apply(detect_size)
+
+    es_cerveza = (_del_nombre(STD_COLS["parr"], is_parranda).fillna(False).astype(bool)
+                  | _del_nombre(STD_COLS["malta"], is_malta).fillna(False).astype(bool))
 
     if cant_col in df.columns and size_col in df.columns:
         cant = pd.to_numeric(df[cant_col], errors="coerce").fillna(0)
