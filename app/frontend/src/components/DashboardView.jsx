@@ -62,7 +62,18 @@ export default function DashboardView({ sourceId, period }) {
             cuando lo que pasa es que nadie le puso meta. */}
         <Kpi label="% Cumplimiento" value={sinMeta ? "—" : `${formatNumber(kpis.cumplimiento_pct, 1)} %`}
           tone={sinMeta ? "slate" : kpis.cumplimiento_pct >= 100 ? "green" : kpis.cumplimiento_pct >= 80 ? "amber" : "red"} />
-        <Kpi label="Venta Total" value={formatMoney(kpis.total_importe)} tone="slate" />
+        {/* VENTA TOTAL = MERCANCÍA. El cobro del reparto no cuenta aquí.
+            En AxisPOS el reparto se cobra con una línea de catálogo, «ENTREGA A
+            DOMICILIO», así que venía dentro de la venta e inflaba también la comisión de
+            los vendedores. Se quita del total y se enseña AL LADO, no se esconde: el
+            30/09/2026 se perdió una mañana comparando este número con un reporte de AXIS
+            que no lo llevaba, y sin la tarjeta de al lado volvería a pasar. */}
+        <Kpi label="Venta Total" value={formatMoney(kpis.total_importe)} tone="slate"
+          hint={kpis.total_domicilio ? "Mercancía, sin el domicilio" : undefined} />
+        {kpis.total_domicilio ? (
+          <Kpi label="Entrega a domicilio" value={formatMoney(kpis.total_domicilio)} tone="amber"
+            hint="Cobrado por el reparto — no es venta del vendedor" />
+        ) : null}
         <Kpi label="Clientes" value={formatInt(kpis.total_clientes)}
           hint={`${formatInt(kpis.total_skus)} SKUs vendidos`} tone="brand" />
       </div>

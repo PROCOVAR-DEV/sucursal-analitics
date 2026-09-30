@@ -1190,7 +1190,8 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
         return {
             "id": source_id, "filename": "Sin archivos", "rango": "—", "filas": 0, "empty": True,
             "kpis": {"total_hectolitros": 0.0, "meta_hectolitros": eff["meta_hectolitros_total"],
-                     "cumplimiento_pct": 0.0, "total_importe": 0.0, "total_clientes": 0,
+                     "cumplimiento_pct": 0.0, "total_importe": 0.0, "total_domicilio": 0.0,
+                     "total_clientes": 0,
                      "total_skus": 0, "dias_laborales_transcurridos": 0, "dias_laborales_totales": 0},
             "gestores_ventas": [], "ranking_general": [], "ranking_semanal": [],
             "cumplimiento_productos": [
@@ -1214,6 +1215,8 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
         "kpis": {
             "total_hectolitros": ventas["total_hectolitros"], "meta_hectolitros": ventas["meta_hectolitros"],
             "cumplimiento_pct": ventas["cumplimiento_pct"], "total_importe": ventas["total_importe"],
+            # El cobro del reparto, aparte. `total_importe` ya NO lo lleva dentro.
+            "total_domicilio": ventas.get("total_domicilio", 0.0),
             "total_clientes": clientes["oficina"]["num_clientes"], "total_skus": clientes["oficina"]["num_skus"],
             "dias_laborales_transcurridos": productos["dias_laborales_transcurridos"],
             "dias_laborales_totales": productos["dias_laborales_totales"]},
@@ -1238,6 +1241,9 @@ def _aggregate_dashboards(items: list[dict]) -> dict:
     no hay cruce de gestores entre sucursales.
     """
     k = {"total_hectolitros": 0.0, "meta_hectolitros": 0.0, "total_importe": 0.0,
+         # Se suma como los demás: si una sucursal cobra domicilio y otra no, el
+         # consolidado tiene que decir cuánto hay en total, no callarlo.
+         "total_domicilio": 0.0,
          "total_clientes": 0, "total_skus": 0,
          "dias_laborales_transcurridos": 0, "dias_laborales_totales": 0}
     for it in items:
@@ -1245,6 +1251,7 @@ def _aggregate_dashboards(items: list[dict]) -> dict:
         k["total_hectolitros"] += kp.get("total_hectolitros") or 0
         k["meta_hectolitros"] += kp.get("meta_hectolitros") or 0
         k["total_importe"] += kp.get("total_importe") or 0
+        k["total_domicilio"] += kp.get("total_domicilio") or 0
         k["total_clientes"] += kp.get("total_clientes") or 0
         k["total_skus"] += kp.get("total_skus") or 0
         k["dias_laborales_transcurridos"] = max(k["dias_laborales_transcurridos"], kp.get("dias_laborales_transcurridos") or 0)
@@ -1252,6 +1259,7 @@ def _aggregate_dashboards(items: list[dict]) -> dict:
     k["total_hectolitros"] = round(k["total_hectolitros"], 2)
     k["meta_hectolitros"] = round(k["meta_hectolitros"], 2)
     k["total_importe"] = round(k["total_importe"], 2)
+    k["total_domicilio"] = round(k["total_domicilio"], 2)
     k["cumplimiento_pct"] = round(k["total_hectolitros"] / k["meta_hectolitros"] * 100, 1) if k["meta_hectolitros"] else 0.0
 
     gest: dict[str, dict] = {}

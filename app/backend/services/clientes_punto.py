@@ -1,13 +1,17 @@
 """Servicio Clientes Punto: clientes identificados con '!!' en la Nota."""
 from __future__ import annotations
 
+from services import servicios
 from services.enrich import enrich_for_sucursal, gestor_keys
 from services.loader import STD_COLS
 
 
 def compute_clientes_punto(report, eff: dict) -> dict:
     keys = gestor_keys(eff)
-    df = enrich_for_sucursal(report, eff)
+    # El único que no pasa por `only_valid`, así que el cobro del reparto se quita aquí a
+    # mano. Si no, un cliente-punto cuyo único renglón fuera el domicilio contaría como
+    # venta suya. La regla es la misma de siempre y vive en `services/servicios.py`.
+    df = servicios.solo_mercancia(enrich_for_sucursal(report, eff))
     imp, socio, fec = STD_COLS["importe"], STD_COLS["socio"], STD_COLS["fecha"]
 
     if df.empty or "GestorPunto" not in df.columns:

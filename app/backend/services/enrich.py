@@ -13,6 +13,7 @@ import re
 import pandas as pd
 
 from core.utils import build_alias_map, detect_product_group, detect_size, is_malta, is_parranda, normalize_text
+from services import servicios
 from services.loader import STD_COLS
 
 
@@ -69,6 +70,10 @@ def _match_sheet_to_gestor(sheet, keys: list[str]) -> str | None:
 # pasaria la comprobacion de "existe" y reventaria igual en el primer .sum().
 COLUMNAS_ENRIQUECIDAS = {
     "GestorDetectado": "object",
+    # La marca de las líneas que son un COBRO y no una venta (el reparto facturado como
+    # producto). Va en el contrato del vacío igual que las demás: sin ella, un periodo sin
+    # ventas revienta en el filtro con un KeyError en vez de devolver cero filas.
+    servicios.COL: "bool",
     "GestorPunto": "object",
     "GrupoComercial": "object",
     "Hectolitros": "float64",
@@ -226,6 +231,13 @@ def enrich_for_sucursal(report, eff: dict):
     for c in ("GestorDetectado", "GestorPunto", "GrupoComercial"):
         df[c] = df[c].astype("string")
 
+    # --- Lo que es un COBRO y no una venta ---
+    #
+    # Se MARCA aquí y se quita en `only_valid`, que es por donde pasan todas las
+    # pantallas. Marcarlo sin quitarlo deja el dato disponible para enseñar el domicilio
+    # aparte, que es lo que hace que el número de arriba se pueda explicar.
+    df = servicios.marcar(df)
+
     # Se guarda para las otras siete llamadas de este mismo dashboard. Va sobre
     # el objeto report, que vive solo mientras dura la petición: no hay riesgo
     # de servir un enriquecido viejo en una petición posterior.
@@ -243,6 +255,17 @@ def gestor_keys(eff: dict) -> list[str]:
 
 
 def only_valid(df: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
+    """Las filas que CUENTAN: de un gestor válido y que sean venta de verdad.
+
+    Lo segundo se añadió el 30/09/2026. El cobro del reparto viene facturado como un
+    producto —«ENTREGA A DOMICILIO», categoría `SERV`— y se estaba sumando en la Venta
+    Total y en el ingreso de cada vendedor. Se quita AQUÍ, y no en cada uno de los veinte
+    servicios que suman dinero, porque una regla escrita en veinte sitios se arregla en
+    diecinueve. El porqué entero está en `services/servicios.py`.
+
+    Quien necesite el cobro —el panel, para enseñarlo aparte— usa el enriquecido de antes
+    de este filtro, que sí lo trae marcado.
+    """
     if "GestorDetectado" not in df.columns:
         return df.iloc[0:0].copy()
-    return df[df["GestorDetectado"].isin(keys)].copy()
+    return servicios.solo_mercancia(df[df["GestorDetectado"].isin(keys)]).copy()

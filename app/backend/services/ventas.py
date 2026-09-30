@@ -4,6 +4,7 @@ from __future__ import annotations
 import pandas as pd
 
 from services.comisiones import comision_de
+from services import servicios
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 
@@ -56,8 +57,17 @@ def compute_ventas(report, eff: dict) -> dict:
     supervisor_key = _quien_supervisa(eff, keys, gestores_cfg)
     desc_sin_pedido = float(eff.get("descuento_sin_pedido", 0.0))
 
-    df_all = enrich_for_sucursal(report, eff)
-    df_all = only_valid(df_all, keys)
+    df_bruto = enrich_for_sucursal(report, eff)
+    df_all = only_valid(df_bruto, keys)
+
+    # EL COBRO DEL REPARTO, APARTE Y A LA VISTA.
+    #
+    # `only_valid` ya lo quitó de la venta —viene facturado como un producto y estaba
+    # inflando el total y la comisión de los vendedores—, pero quitarlo en silencio es
+    # cómo se pierde una tarde comparando el panel con el reporte de AXIS. Así que se mide
+    # sobre el enriquecido de ANTES del filtro, con los mismos gestores que el total al
+    # que acompaña, y se devuelve para que el panel lo enseñe al lado.
+    total_domicilio = servicios.importe_de_servicios(df_bruto, keys)
 
     # NINGUN GRUPO PUEDE QUEDARSE SIN COLUMNA.
     #
@@ -198,6 +208,7 @@ def compute_ventas(report, eff: dict) -> dict:
         "supervisor_gestor": supervisor_key,
         "meta_hectolitros": meta_total, "meta_dinero": meta_dinero,
         "total_hectolitros": total_hl, "total_importe": total_importe,
+        "total_domicilio": total_domicilio,
         "total_comision_gestores": total_comision,
         "comision_supervisor": total_comision_supervisor,
         "comision_supervisor_pct": com_super,
