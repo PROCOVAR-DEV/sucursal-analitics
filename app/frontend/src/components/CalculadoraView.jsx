@@ -511,7 +511,25 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
   const grandTotal = gestores.reduce((s, [k]) => s + (enMes(k) ? vendorHL(k) : 0), 0);
   const grandTotalCcc = gestores.reduce((s, [k]) => s + (enMes(k) ? (Number(quickCcc[k]) || 0) : 0), 0);
 
-  function flash(t, text) { setMsg({ t, text }); setTimeout(() => setMsg(null), 3500); }
+  /**
+   * UN AVISO NO PUEDE DESAPARECER ANTES QUE EL NÚMERO QUE EXPLICA.
+   *
+   * Esto borraba TODO a los 3,5 s, y ahí se perdió la mañana del 01/10/2026: Sidney
+   * repartió octubre, la pantalla le dijo «REVISA: Parranda 330 pide ×693 lo vendido»,
+   * el mensaje se fue solo, y lo que quedó delante fue una tabla donde Dayla tenía 465
+   * HL sin ninguna razón visible. El aviso estaba bien y duró menos que la duda.
+   *
+   * Peor todavía era el del descuadre, que dice «NO lo guardes y avísame» y también se
+   * iba solo: tres segundos y medio para leer que no guardes algo que está en pantalla.
+   *
+   * Así que sólo se desvanece el «ok». Lo que avisa o falla se queda hasta que lo
+   * cierren —el Toast lleva su ✕— o hasta el siguiente reparto, que es cuando deja de
+   * hablar de lo que hay delante.
+   */
+  function flash(t, text) {
+    setMsg({ t, text });
+    if (t === "ok") setTimeout(() => setMsg(null), 3500);
+  }
   function setRows(k, up) { setPlans((p) => ({ ...p, [k]: typeof up === "function" ? up(p[k] || []) : up })); }
   const update = (k, id, pallets) => setRows(k, (rs) => rs.map((r) => (r.id === id ? { ...r, pallets } : r)));
   const setField = (k, id, f, v) => setRows(k, (rs) => rs.map((r) => (r.id === id ? { ...r, [f]: v } : r)));
@@ -778,6 +796,32 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
                   value={metasGlobales[f] ?? ""}
                   onChange={(e) => setMetasGlobales((m) => ({ ...m, [f]: e.target.value }))}
                 />
+                {/*
+                  * LO QUE SE VENDIÓ, AL LADO DE LA META QUE SE TECLEA.
+                  *
+                  * El aviso de después llegaba tarde: para cuando dice «×693» la meta ya
+                  * está puesta y el reparto hecho. Aquí se ve mientras se escribe, que es
+                  * cuando todavía se puede decidir marcar «por cabeza».
+                  *
+                  * El ×10 es sólo el punto a partir del cual se pinta en ámbar; no cambia
+                  * ningún número ni bloquea nada — a partir de cuántas veces una base
+                  * «deja de valer» lo decide quien planifica, no esto.
+                  */}
+                {ventasBase && (() => {
+                  const vendido = Number(ventasBase[f] || 0);
+                  const meta = Number(metasGlobales[f] || 0);
+                  const veces = meta > 0 && vendido > 0 ? meta / vendido : null;
+                  const flojo = veces != null && veces >= 10;
+                  return (
+                    <span className={`text-[11px] ${flojo ? "text-amber-600 font-medium" : "text-slate-400"}`}
+                      title={flojo
+                        ? "La base es tan pequeña que la proporción no dice nada: quien lo vendiera se lleva casi toda la meta. Marca «por cabeza» si quieres repartirlo a partes iguales."
+                        : "Lo que se vendió de este formato el mes de referencia, entre todos."}>
+                      vendido {formatNumber(vendido, 2)} HL
+                      {veces != null && ` · ×${formatNumber(veces, veces >= 10 ? 0 : 1)}`}
+                    </span>
+                  );
+                })()}
                 <label className="flex items-center gap-1 text-[11px] text-slate-500 cursor-pointer"
                   title="Reparte esta meta a partes iguales en vez de por lo vendido. Úsalo cuando el mes pasado se vendió tan poco que la proporción no dice nada.">
                   <input type="checkbox" className="accent-slate-500"
