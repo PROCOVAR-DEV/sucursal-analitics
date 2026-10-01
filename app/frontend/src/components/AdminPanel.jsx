@@ -301,15 +301,27 @@ function GestorRow({ clave, g, onSave, onDelete, onBaja, monthConf, mg, inMonth 
       <td className={td}><input className="input input-sm w-24" value={row.agencia} onChange={(e) => set("agencia", e.target.value)} /></td>
       <td className={td}><input className="input input-sm w-36" value={row.aliases} onChange={(e) => set("aliases", e.target.value)} /></td>
       <td className={cn(td, "text-center")}><input type="checkbox" className="accent-brand-600 w-4 h-4" checked={!!row.activo} onChange={(e) => set("activo", e.target.checked)} /></td>
-      {/* La BAJA, que no es lo mismo que desmarcar "activo".
-          "Activo" es global: lo apaga en TODOS los meses, así que un vendedor que se
-          va desaparece también de los informes de cuando sí vendía — y esos ya se
-          miraron y se pagaron. La baja dice desde QUÉ MES deja de contar: antes sigue
-          entero, y desde ahí no se le reparte plan de un mes que no va a trabajar. */}
-      <td className={td}>
-        <input type="month" className="input input-sm w-32" value={row.baja_desde || ""}
-          title="Desde qué mes deja de contar. Antes de esa fecha sigue apareciendo entero."
-          onChange={(e) => set("baja_desde", e.target.value)} />
+      {/* LA BAJA SE MIRA, NO SE TECLEA.
+          Era un selector de mes, y era un mal sitio para tomar esa decisión: hay que
+          saber que la baja cuenta DESDE ese mes —ése incluido— y que ponerla en un mes
+          en el que la persona vendió le borra esas ventas de un informe ya cerrado. Eso
+          no cabe en un campo de fecha. Ahora lo pone el botón de la derecha, que avisa
+          de lo que hace, y aquí sólo se lee el resultado.
+
+          Y en quien está activo no se pinta nada: una columna llena de guiones es ruido
+          en once filas para decir algo de una.
+
+          La baja NO es desmarcar "activo". "Activo" es global y lo apaga en TODOS los
+          meses, así que un vendedor que se va desaparece también de los informes de
+          cuando sí vendía. La baja dice desde qué mes deja de contar: antes sigue
+          entero. */}
+      <td className={cn(td, "whitespace-nowrap")}>
+        {row.baja_desde
+          ? <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200"
+              title="Desde este mes deja de contar y de recibir plan. Los anteriores se conservan enteros.">
+              {mesEnPalabras(row.baja_desde)}
+            </span>
+          : null}
       </td>
       {/* Quién supervisa. Al supervisor NO se le descuenta el 10%: es el suyo, lo
           cobra de los demás. Marcarlo mal le quita dinero a alguien, así que se marca
@@ -343,6 +355,14 @@ function GestorRow({ clave, g, onSave, onDelete, onBaja, monthConf, mg, inMonth 
   );
 }
 const formatNumber2 = (n) => Number(n).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** `2026-10` -> `octubre 2026`. Si viene otra cosa, se enseña tal cual: inventarse un
+ *  mes para un valor que no se entiende sería peor que mostrarlo crudo. */
+function mesEnPalabras(v) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(v || ""));
+  if (!m) return v;
+  const i = Number(m[2]) - 1;
+  return MESES[i] ? `${MESES[i]} ${m[1]}` : v;
+}
 
 // ---------------- Metas (globales + por mes)
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
