@@ -186,6 +186,8 @@ export default function VendedoresView({ sourceId, period }) {
           metasCantBlock={metasCantBlock}
           productosConMeta={metasCant?.formatos || []}
           prorrateado={(data.proporcion_periodo ?? 1) < 1}
+          totalOficina={data.total_importe}
+          totalOficinaHL={data.total_hectolitros}
           diasRango={data.dias_del_rango}
           diasMes={data.dias_del_mes}
         />
@@ -194,7 +196,7 @@ export default function VendedoresView({ sourceId, period }) {
   );
 }
 
-function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia, hayHL = true, grupos = [], comisionSobreTodo = false, prorrateado = false, diasRango = 0, diasMes = 0, metasCantBlock = null, productosConMeta = [] }) {
+function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia, hayHL = true, grupos = [], comisionSobreTodo = false, prorrateado = false, diasRango = 0, diasMes = 0, metasCantBlock = null, productosConMeta = [], totalOficina = 0, totalOficinaHL = 0 }) {
   /**
    * Filtrar la lista de productos del gestor.
    *
@@ -271,9 +273,24 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
       </div>
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi label="Total Ventas" value={formatMoney(vendor.total_importe)} />
+        {/*
+          * CUÁNTO PESA ESTA PERSONA EN LA SUCURSAL.
+          *
+          * Lo pidió Sidney el 01/10/2026, y no es un adorno: el plan del mes se reparte
+          * por la parte que cada uno puso del total —`vendido / total × plan`— así que
+          * este porcentaje ES el reparto antes de repartirlo. Verlo aquí es poder
+          * comprobar de un vistazo si la meta que le salió tiene sentido.
+          *
+          * Van los dos, y no sobra ninguno: el de IMPORTE dice quién factura más, y el
+          * de HECTOLITROS es con el que se reparte el plan. Son distintos —se puede
+          * facturar mucho vendiendo poco volumen— y confundirlos es justo lo que llevó
+          * a creer que el reparto estaba mal.
+          */}
+        <Kpi label="Total Ventas" value={formatMoney(vendor.total_importe)}
+          hint={totalOficina ? `${formatNumber(vendor.total_importe / totalOficina * 100, 1)} % de la oficina` : undefined} />
         {hayHL
-          ? <Kpi label="Hectolitros" value={formatNumber(vendor.total_hectolitros, 2)} tone="brand" />
+          ? <Kpi label="Hectolitros" value={formatNumber(vendor.total_hectolitros, 2)} tone="brand"
+              hint={totalOficinaHL ? `${formatNumber(vendor.total_hectolitros / totalOficinaHL * 100, 1)} % de la oficina — es con esto con lo que se reparte el plan` : undefined} />
           : <Kpi label="Cantidad" value={formatNumber(vendor.total_cantidad, 2)} tone="brand" hint="Unidades vendidas" />}
         <Kpi label="Operaciones" value={formatInt(vendor.num_operaciones)} tone="slate" />
         <Kpi label="Clientes Únicos" value={formatInt(vendor.num_clientes)} tone="slate" />
