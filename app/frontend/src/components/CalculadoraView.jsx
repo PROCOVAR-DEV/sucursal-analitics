@@ -419,6 +419,20 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
     return out;
   }
   const enMes = (k) => incluidos[k] !== false;
+  /**
+   * LLEVA CUOTA = va en el mes Y no está marcado `sin_meta`.
+   *
+   * Las dos condiciones juntas y en un solo sitio. Va aquí arriba, pegado a `enMes`,
+   * porque lo usan los dos repartos —el de hectolitros y el de cantidades— y tenerlo
+   * más abajo que uno de ellos es cómo se llega a que cada camino aplique su propia
+   * media regla.
+   *
+   * Y eso es exactamente lo que pasó, dos veces seguidas: el 01/10/2026 el total de HL
+   * sumaba a un vendedor «sin meta» que arrastraba su cuota de un reparto anterior, se
+   * arregló, y el MISMO fallo seguía vivo en el reparto por cantidades —a Sidney le
+   * salían 504 unidades de arroz, aceite y papel sin llevar cuota ninguna.
+   */
+  const llevaCuota = (k) => enMes(k) && !cfg?.gestores?.[k]?.sin_meta;
 
   /**
    * EL PLAN DE UN PRODUCTO, REPARTIDO ENTRE LA GENTE.
@@ -482,9 +496,18 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
     });
   }
 
-  /** Los vendedores que cuentan este mes, que son entre los que se reparte. */
+  /**
+   * Los que se VEN y los que RECIBEN, que no son los mismos.
+   *
+   * `delMes` es quién sale en la tabla: todo el que va en el mes, incluido el que no
+   * lleva cuota. Sale para que se vea que está y que no recibe, no para repartirle.
+   *
+   * `conCuotaDelMes` es entre quiénes se reparte de verdad y qué suma en el total. Un
+   * «sin meta» en el denominador se lleva una parte que nadie va a vender.
+   */
   const delMes = gestores.filter(([k]) => enMes(k));
-  const repartido = delMes.reduce((sum, [k]) => sum + cantidadDe(k, prodSel), 0);
+  const conCuotaDelMes = gestores.filter(([k]) => llevaCuota(k));
+  const repartido = conCuotaDelMes.reduce((sum, [k]) => sum + cantidadDe(k, prodSel), 0);
 
   /**
    * Repartir a partes iguales. El sobrante va al primero, para que la suma cuadre EXACTA
@@ -494,13 +517,16 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
   function repartirIgual() {
     const total = metaDe(prodSel);
 
-    if (!prodSel || !delMes.length || total <= 0) return;
+    if (!prodSel || !conCuotaDelMes.length || total <= 0) return;
 
-    const base = Math.floor(total / delMes.length);
-    const resto = total - base * delMes.length;
+    const base = Math.floor(total / conCuotaDelMes.length);
+    const resto = total - base * conCuotaDelMes.length;
 
-    delMes.forEach(([k], i) => setCantidad(k, prodSel, base + (i === 0 ? resto : 0)));
-    flash("ok", `${formatNumber(total, 0)} repartidos entre ${delMes.length} vendedores.`);
+    conCuotaDelMes.forEach(([k], i) => setCantidad(k, prodSel, base + (i === 0 ? resto : 0)));
+    // A quien no lleva cuota se le pone a CERO, no se le deja lo de antes: si no, su
+    // parte vieja sigue en la tabla y vuelve a contar en cuanto alguien guarde.
+    delMes.forEach(([k]) => { if (!llevaCuota(k)) setCantidad(k, prodSel, 0); });
+    flash("ok", `${formatNumber(total, 0)} repartidos entre ${conCuotaDelMes.length} vendedores.`);
   }
 
   /**
@@ -516,7 +542,10 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
     try {
       const payload = {};
 
-      delMes.forEach(([k]) => { payload[k] = { metas_cantidad: vendorCantidad(k) }; });
+      // El que no lleva cuota se guarda VACÍO, no se omite: omitirlo dejaría lo que
+      // tuviera guardado y volvería en el siguiente cargado, que es como Sidney
+      // conservó 504 unidades de plan sin tener cuota.
+      delMes.forEach(([k]) => { payload[k] = { metas_cantidad: llevaCuota(k) ? vendorCantidad(k) : {} }; });
       const fresh = await updateSucursal(sid, { metas_mensuales: { [pkey]: { gestores: payload } } });
 
       setCfg(fresh);
@@ -524,15 +553,6 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
     } catch (e) { flash("err", e?.response?.data?.detail || e.message); }
     finally { setSavingAll(false); }
   }
-  /**
-   * LLEVA CUOTA = va en el mes Y no está marcado `sin_meta`.
-   *
-   * Las dos condiciones juntas y en un solo sitio, porque antes el total sumaba sólo
-   * por la primera: un vendedor marcado «sin meta» pero presente en el mes arrastraba
-   * su meta de un reparto anterior y la metía en el total. Separadas, se arregla una y
-   * la otra se queda rota — que es lo que pasó.
-   */
-  const llevaCuota = (k) => enMes(k) && !cfg?.gestores?.[k]?.sin_meta;
   const grandTotal = gestores.reduce((s, [k]) => s + (llevaCuota(k) ? vendorHL(k) : 0), 0);
   const grandTotalCcc = gestores.reduce((s, [k]) => s + (llevaCuota(k) ? (Number(quickCcc[k]) || 0) : 0), 0);
 
@@ -595,7 +615,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
          * y así se lee lo que es: está en el mes y no lleva meta.
          */
         if (!llevaCuota(k)) {
-          gestoresPayload[k] = { cuota_hl: 0, cuota_ccc: 0, metas_formato: {}, metas_cantidad: vendorCantidad(k) };
+          gestoresPayload[k] = { cuota_hl: 0, cuota_ccc: 0, metas_formato: {}, metas_cantidad: {} };
           return;
         }
         gestoresPayload[k] = { cuota_hl: round2(vendorHL(k)), cuota_ccc: Number(quickCcc[k]) || 0, metas_formato: vendorFormato(k), metas_cantidad: vendorCantidad(k) };
@@ -719,16 +739,25 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
                   <tbody>
                     {delMes.map(([k, g]) => {
                       const v = cantidadDe(k, prodSel);
+                      /* El que no lleva cuota SALE, pero no se le puede escribir un plan.
+                         Esconderlo haría pensar que falta alguien; dejarle el campo
+                         abierto es lo que llevó a que Sidney tuviera 504 unidades sin
+                         tener cuota. Se ve, se lee por qué, y no recibe. */
+                      const recibe = llevaCuota(k);
 
                       return (
-                        <tr key={k} className="hover:bg-slate-50">
+                        <tr key={k} className={cn("hover:bg-slate-50", !recibe && "text-slate-400")}>
                           <td className="col-fija font-medium">{k} <span className="text-slate-400 font-normal">· {g.nombre}</span></td>
                           <td className="text-right">
-                            <input type="number" step="1" className="input input-sm w-28 num text-brand-700 font-semibold"
-                              value={v || 0} onChange={(e) => setCantidad(k, prodSel, e.target.value)} />
+                            {recibe ? (
+                              <input type="number" step="1" className="input input-sm w-28 num text-brand-700 font-semibold"
+                                value={v || 0} onChange={(e) => setCantidad(k, prodSel, e.target.value)} />
+                            ) : (
+                              <span className="text-xs italic" title="Marcado «sin meta» en Gestores: no se le reparte ni cerveza ni cantidades.">sin cuota</span>
+                            )}
                           </td>
                           <td className="text-right tabular-nums text-slate-500">
-                            {repartido ? formatNumber((v / repartido) * 100, 1) : "0,0"}%
+                            {recibe ? `${repartido ? formatNumber((v / repartido) * 100, 1) : "0,0"}%` : "—"}
                           </td>
                         </tr>
                       );
