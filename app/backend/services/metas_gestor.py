@@ -148,18 +148,35 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
 
     # Código de formato por fila; solo bebidas (Malta/Parranda), como el reporte.
     df["__code__"] = [_fmt_code(m, s) for m, s in zip(df[merc], df.get(STD_COLS["size"], pd.Series([None] * len(df), index=df.index)))]
-    df = df[df["__code__"].isin(formatos)].copy()
     # El estudio es del ÚLTIMO día subido: se limita a su mes.
     df = df[(df[fec].dt.year == report_date.year) & (df[fec].dt.month == report_date.month)].copy()
-    if df.empty:
-        return {**empty, "report_date": report_date.strftime("%Y-%m-%d"), "dias_mes": dias_mes, "factor": factor}
-    month_mask = df[fec].dt.normalize() <= report_date
-    day_mask = df[fec].dt.normalize() == report_date
-    # Días del mes CON datos: los que se pueden elegir como día de corte (selector).
+
+    # Los días con datos salen de TODO lo del mes, no sólo de la cerveza: el 01/10/2026
+    # sólo se vendieron importaciones, y el selector de día tiene que poder ir a ese día
+    # igual. Por eso esto va ANTES de quedarse con las bebidas.
     dias_disponibles = [pd.Timestamp(d).strftime("%Y-%m-%d") for d in sorted(df[fec].dt.normalize().unique())]
-    # Día anterior con datos (para la comparativa).
     prev_days = sorted(d for d in df[fec].dt.normalize().unique() if d < report_date)
     prev_date = prev_days[-1] if prev_days else None
+
+    """
+    Y A PARTIR DE AQUÍ, SÓLO BEBIDAS — pero sin cortar la salida si no hay ninguna.
+
+    Aquí había un `if df.empty: return` y se llevaba por delante el PLAN. El 01/10/2026
+    Sidney abrió octubre y no le salían las metas de sus vendedores: «aquí salía lo de
+    los planes individuales de cada gestor, pero no lo veo ahora». Era el día 1 del mes y
+    lo único vendido eran importaciones —aceite, azúcar, arroz—, ni un hectolitro. Sin
+    una sola fila de cerveza, esta función devolvía `por_gestor: []` y la pantalla se
+    quedaba sin el bloque entero.
+
+    Pero la meta NO depende de las ventas: es el objetivo, está guardado, y el día que
+    más falta hace verlo es justamente el primero del mes, cuando todavía no se ha
+    vendido nada. Lo que vale cero es la VENTA, y eso ya sale solo: `sub` vacío suma
+    cero en todas partes, que es lo que ya le pasa a cualquier gestor que aún no haya
+    vendido.
+    """
+    df = df[df["__code__"].isin(formatos)].copy()
+    month_mask = df[fec].dt.normalize() <= report_date
+    day_mask = df[fec].dt.normalize() == report_date
     day_prev_mask = (df[fec].dt.normalize() == prev_date) if prev_date is not None else pd.Series(False, index=df.index)
     hl = "Hectolitros"
 
