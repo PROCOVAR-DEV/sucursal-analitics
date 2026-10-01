@@ -251,9 +251,25 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       gestores.forEach(([k]) => {
         // A los que no van en el mes no se les toca nada: no reciben meta.
         if (!enMes(k)) return;
-        // A los que no llevan cuota tampoco se les toca: no reciben y no se les borra
-        // lo que tuvieran.
-        if (cfg?.gestores?.[k]?.sin_meta) return;
+        /**
+         * QUIEN NO LLEVA CUOTA SE QUEDA EN CERO, no con lo que tuviera.
+         *
+         * Antes se le dejaba intacto «para no borrarle lo suyo», y ahí estaba el
+         * agujero: su meta vieja seguía en la tabla Y SEGUÍA SUMANDO en el total. El
+         * 01/10/2026 Sidney repartió 2.872 HL y la pantalla le puso 3.106 — los 234
+         * de diferencia eran los 232,44 que SIDNEY llevaba guardados de un reparto
+         * anterior, estando marcado `sin_meta`. El aviso incluso lo decía («Sin meta
+         * este mes: AMSALE, SIDNEY») y el número de al lado lo desmentía.
+         *
+         * Es exactamente el mismo fallo que ya se arregló abajo para quien no recibe
+         * plan, y la regla es la misma: si va en el mes y no le toca nada, le toca
+         * CERO, y así se ve. Lo que no es cerveza se conserva igual que en el resto.
+         */
+        if (cfg?.gestores?.[k]?.sin_meta) {
+          p[k] = (plans[k] || []).filter((row) => !esHL(row.producto));
+          q[k] = 0;
+          return;
+        }
 
         const plan = porGestor[k] || {};
         const porFormato = {};
@@ -508,8 +524,17 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
     } catch (e) { flash("err", e?.response?.data?.detail || e.message); }
     finally { setSavingAll(false); }
   }
-  const grandTotal = gestores.reduce((s, [k]) => s + (enMes(k) ? vendorHL(k) : 0), 0);
-  const grandTotalCcc = gestores.reduce((s, [k]) => s + (enMes(k) ? (Number(quickCcc[k]) || 0) : 0), 0);
+  /**
+   * LLEVA CUOTA = va en el mes Y no está marcado `sin_meta`.
+   *
+   * Las dos condiciones juntas y en un solo sitio, porque antes el total sumaba sólo
+   * por la primera: un vendedor marcado «sin meta» pero presente en el mes arrastraba
+   * su meta de un reparto anterior y la metía en el total. Separadas, se arregla una y
+   * la otra se queda rota — que es lo que pasó.
+   */
+  const llevaCuota = (k) => enMes(k) && !cfg?.gestores?.[k]?.sin_meta;
+  const grandTotal = gestores.reduce((s, [k]) => s + (llevaCuota(k) ? vendorHL(k) : 0), 0);
+  const grandTotalCcc = gestores.reduce((s, [k]) => s + (llevaCuota(k) ? (Number(quickCcc[k]) || 0) : 0), 0);
 
   /**
    * UN AVISO NO PUEDE DESAPARECER ANTES QUE EL NÚMERO QUE EXPLICA.
@@ -561,6 +586,18 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
       const gestoresPayload = {};
       gestores.forEach(([k]) => {
         if (!enMes(k)) return;   // no incluir en el roster del mes
+        /*
+         * Quien no lleva cuota se guarda en CERO, no se omite.
+         *
+         * Omitirlo lo sacaría del roster del mes y dejaría de verse; guardarle lo que
+         * tuviera devolvería el problema en el siguiente cargado, que es como los
+         * 232,44 de SIDNEY sobrevivieron a varios repartos. Va en el roster, con cero,
+         * y así se lee lo que es: está en el mes y no lleva meta.
+         */
+        if (!llevaCuota(k)) {
+          gestoresPayload[k] = { cuota_hl: 0, cuota_ccc: 0, metas_formato: {}, metas_cantidad: vendorCantidad(k) };
+          return;
+        }
         gestoresPayload[k] = { cuota_hl: round2(vendorHL(k)), cuota_ccc: Number(quickCcc[k]) || 0, metas_formato: vendorFormato(k), metas_cantidad: vendorCantidad(k) };
       });
       // Reemplaza el roster del mes por los vendedores incluidos.
