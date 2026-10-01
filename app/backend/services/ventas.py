@@ -69,6 +69,31 @@ def compute_ventas(report, eff: dict) -> dict:
     # que acompaña, y se devuelve para que el panel lo enseñe al lado.
     total_domicilio = servicios.importe_de_servicios(df_bruto, keys)
 
+    """
+    Y LO QUE NO TIENE VENDEDOR, TAMBIÉN A LA VISTA.
+
+    `only_valid` se queda con las filas de un gestor conocido, y las que no lo tienen
+    desaparecen del total sin dejar rastro. El 01/10/2026 Sidney comparó su reporte de
+    AXIS (18.615,50) con el panel (18.588,10) y la diferencia eran 27,40 de **una sola
+    factura**: azúcar a CRISTIAN MARCOS MONTOYA GONZÁLEZ, cuya nota traía el nombre del
+    cliente y NINGÚN segmento `V-`, así que no hay vendedor a quien atribuirla.
+
+    No se puede contar —el panel entero es por vendedor y no hay vendedor— pero tampoco
+    se puede restar callando: ésa es media mañana comparando dos números que no tienen
+    por qué coincidir. Se enseña al lado, como el domicilio.
+
+    Esto fue enorme y está casi resuelto: 125.189,87 en junio (18,7 % de la venta),
+    51.226,57 en julio, 5.422,78 en agosto, y 12,00 en septiembre. Que se vea es lo que
+    hace que se siga arreglando en vez de volver a crecer sin que nadie mire.
+    """
+    col_imp = STD_COLS["importe"]
+    sin_vendedor = (
+        df_bruto[df_bruto["GestorDetectado"].isna() & ~df_bruto[servicios.COL].astype(bool)]
+        if not df_bruto.empty and "GestorDetectado" in df_bruto.columns and servicios.COL in df_bruto.columns
+        else df_bruto.iloc[0:0]
+    )
+    total_sin_vendedor = round(float(sin_vendedor[col_imp].sum()), 2) if col_imp in sin_vendedor.columns else 0.0
+
     # NINGUN GRUPO PUEDE QUEDARSE SIN COLUMNA.
     #
     # `groups_order` son las cuatro familias configuradas, y el clasificador devuelve
@@ -209,6 +234,9 @@ def compute_ventas(report, eff: dict) -> dict:
         "meta_hectolitros": meta_total, "meta_dinero": meta_dinero,
         "total_hectolitros": total_hl, "total_importe": total_importe,
         "total_domicilio": total_domicilio,
+        # Lo facturado que no se le puede atribuir a nadie. Ver arriba: no se cuenta,
+        # pero se dice, para que el total se pueda explicar contra el reporte de AXIS.
+        "total_sin_vendedor": total_sin_vendedor,
         "total_comision_gestores": total_comision,
         "comision_supervisor": total_comision_supervisor,
         "comision_supervisor_pct": com_super,

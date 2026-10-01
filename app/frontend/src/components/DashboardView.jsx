@@ -74,6 +74,16 @@ export default function DashboardView({ sourceId, period }) {
           <Kpi label="Entrega a domicilio" value={formatMoney(kpis.total_domicilio)} tone="amber"
             hint="Cobrado por el reparto — no es venta del vendedor" />
         ) : null}
+        {/* LO QUE NO SE LE PUEDE ATRIBUIR A NADIE.
+            Una factura cuya nota no trae el segmento `V-` no tiene vendedor, y el panel
+            entero es por vendedor: no se puede contar. Pero restarlo en silencio es lo
+            que hace que el total no cuadre con el reporte de AXIS y nadie sepa por qué —
+            el 01/10/2026 fueron 27,40 de una sola factura y costó media mañana.
+            Sólo sale cuando hay algo: una tarjeta en cero todos los días es ruido. */}
+        {kpis.total_sin_vendedor ? (
+          <Kpi label="Sin vendedor" value={formatMoney(kpis.total_sin_vendedor)} tone="red"
+            hint="Facturado sin «V-» en la nota: no se cuenta porque no hay a quién atribuirlo" />
+        ) : null}
         <Kpi label="Clientes" value={formatInt(kpis.total_clientes)}
           hint={`${formatInt(kpis.total_skus)} SKUs vendidos`} tone="brand" />
       </div>
