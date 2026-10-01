@@ -1,6 +1,6 @@
 import {
   Building2, Calculator, Layers, Percent, Plus, RotateCcw, Save, Settings2, SlidersHorizontal,
-  Target, Trash2, UserPlus, Users, X,
+  Target, Trash2, UserMinus, UserPlus, Users, X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -247,6 +247,29 @@ function Gestores({ cfg, sid, reload, flash }) {
             {gestores.map(([clave, g]) => (
               <GestorRow key={clave} clave={clave} g={g} onSave={saveRow}
                 monthConf={monthConf} mg={monthG[clave]} inMonth={clave in monthG}
+                /*
+                 * DAR DE BAJA EN UN BOTÓN, como en PEDIDO.
+                 *
+                 * Antes había que abrir el selector de mes de la columna «Baja desde»,
+                 * elegir mes y año, y después encontrar el disquete al final de una
+                 * tabla que se desplaza. Tres pasos y dos de ellos a ciegas: el
+                 * 01/10/2026 Sidney puso la baja de Amsale y no pudo guardarla.
+                 *
+                 * El mes es el que está seleccionado arriba en «Revisar mes», que es el
+                 * que tiene delante. Y se dice en el aviso lo que significa, porque la
+                 * baja cuenta DESDE ese mes, ése incluido: ponerla en un mes en el que
+                 * la persona vendió le borra esas ventas de un informe ya cerrado.
+                 */
+                onBaja={async (row) => {
+                  const dada = !!row.baja_desde;
+                  const ok = confirm(dada
+                    ? `¿Reactivar a ${clave}?\n\nVuelve a contar y a recibir plan.`
+                    : `¿Dar de baja a ${clave} desde ${MESES[ym.m - 1]} de ${ym.y}?\n\n`
+                      + `Deja de contar y de recibir plan a partir de ese mes, ÉSE INCLUIDO.\n`
+                      + `Los meses anteriores se conservan enteros, con sus ventas.`);
+                  if (!ok) return;
+                  await saveRow(clave, { ...row, baja_desde: dada ? "" : pkey });
+                }}
                 onDelete={async () => { if (confirm(`¿Eliminar gestor ${clave}?`)) { await deleteGestor(sid, clave); await reload(); flash("ok", "Gestor eliminado"); } }} />
             ))}
             <tr className="bg-brand-50/50">
@@ -265,7 +288,7 @@ function Gestores({ cfg, sid, reload, flash }) {
   );
 }
 
-function GestorRow({ clave, g, onSave, onDelete, monthConf, mg, inMonth }) {
+function GestorRow({ clave, g, onSave, onDelete, onBaja, monthConf, mg, inMonth }) {
   const [row, setRow] = useState({ ...g, _clave: clave, aliases: (g.aliases || []).join(", ") });
   useEffect(() => setRow({ ...g, _clave: clave, aliases: (g.aliases || []).join(", ") }), [g, clave]);
   const set = (k, v) => setRow({ ...row, [k]: v });
@@ -306,6 +329,12 @@ function GestorRow({ clave, g, onSave, onDelete, monthConf, mg, inMonth }) {
           estaban al final de una tabla que se desplaza y no habia forma de alcanzarlos. */}
       <td className={cn(td, "whitespace-nowrap col-fija-der")}>
         <div className="flex gap-1">
+          {/* El de la baja va PRIMERO: es lo que se busca cuando alguien se va, y
+              dejarlo al lado de la papelera invita a pulsar la que no es. */}
+          <IconButton variant={row.baja_desde ? "subtle" : "outline"}
+            icon={row.baja_desde ? RotateCcw : UserMinus} size={13}
+            onClick={() => onBaja(row)}
+            title={row.baja_desde ? `Reactivar — hoy está de baja desde ${row.baja_desde}` : "Dar de baja"} />
           <IconButton variant="subtle" icon={Save} size={13} onClick={() => onSave(clave, row)} title="Guardar" />
           <IconButton variant="danger" icon={Trash2} size={13} onClick={onDelete} title="Eliminar" />
         </div>
