@@ -53,6 +53,21 @@ body {
   /* El contenedor que hace posible lo de arriba: alto máximo y scroll propio. */
   .tabla-alta { @apply max-h-[32rem] overflow-auto scroll-thin; }
   tbody tr:hover > .col-fija { @apply bg-slate-50; }
+
+  /* LA COLUMNA DE ACCIONES, PEGADA AL BORDE DERECHO.
+     Gemela de `col-fija` pero por el otro lado, y existe por un motivo concreto: en
+     Gestores los botones de Guardar y Eliminar son la ultima columna de una tabla que
+     se desplaza en horizontal, asi que en una pantalla estrecha quedaban SIEMPRE fuera
+     de la vista. El 01/10/2026 Sidney puso una baja y no tenia con que guardarla —«no
+     me sale el guardar ni el eliminar»—. Un boton al que no se puede llegar es un boton
+     que no esta. */
+  .col-fija-der {
+    @apply sticky right-0 z-20 bg-white;
+    box-shadow: -2px 0 4px -2px rgb(0 0 0 / 0.15);
+  }
+  thead .col-fija-der { @apply bg-slate-50 z-30; }
+  .tabla-panel thead .col-fija-der { @apply bg-white; }
+  tbody tr:hover > .col-fija-der { @apply bg-slate-50; }
   .card-title { @apply text-sm font-semibold text-slate-800; }
   .card-sub { @apply text-xs text-slate-400; }
 

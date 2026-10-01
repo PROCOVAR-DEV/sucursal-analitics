@@ -237,7 +237,11 @@ function Gestores({ cfg, sid, reload, flash }) {
       <div className="overflow-x-auto scroll-thin">
         <table className="tbl">
           <thead>
-            <tr>{["Clave", "Nombre", "Sector", "Agencia", "Alias", "Activo", "Baja desde", "Sin meta", "Supervisor", `Meta HL · ${MESES[ym.m - 1]}`, "Meta CCC", ""].map((h) => <th key={h}>{h}</th>)}</tr>
+            {/* La ultima cabecera va fija a la derecha, como su celda: si no, al
+                desplazar la tabla la cabecera se va y los botones se quedan solos. */}
+            <tr>{["Clave", "Nombre", "Sector", "Agencia", "Alias", "Activo", "Baja desde", "Sin meta", "Supervisor", `Meta HL · ${MESES[ym.m - 1]}`, "Meta CCC", ""].map((h, i, todas) => (
+              <th key={h || "acciones"} className={i === todas.length - 1 ? "col-fija-der" : undefined}>{h}</th>
+            ))}</tr>
           </thead>
           <tbody>
             {gestores.map(([clave, g]) => (
@@ -298,7 +302,9 @@ function GestorRow({ clave, g, onSave, onDelete, monthConf, mg, inMonth }) {
       <td className={cn(td, "text-center")}><input type="checkbox" className="accent-amber-500 w-4 h-4" checked={!!row.es_supervisor} onChange={(e) => set("es_supervisor", e.target.checked)} title="Es el supervisor de la sucursal" /></td>
       <td className={cn(td, "text-right tabular-nums font-semibold")}>{mg?.cuota_hl != null ? formatNumber2(mg.cuota_hl) : <span className="text-slate-300 italic font-normal text-xs">sin configurar</span>}</td>
       <td className={cn(td, "text-right tabular-nums")}>{mg?.cuota_ccc != null ? formatNumber2(mg.cuota_ccc) : <span className="text-slate-300 italic text-xs">—</span>}</td>
-      <td className={cn(td, "whitespace-nowrap")}>
+      {/* Guardar y Eliminar, SIEMPRE a la vista. Ver `.col-fija-der` en index.css:
+          estaban al final de una tabla que se desplaza y no habia forma de alcanzarlos. */}
+      <td className={cn(td, "whitespace-nowrap col-fija-der")}>
         <div className="flex gap-1">
           <IconButton variant="subtle" icon={Save} size={13} onClick={() => onSave(clave, row)} title="Guardar" />
           <IconButton variant="danger" icon={Trash2} size={13} onClick={onDelete} title="Eliminar" />
