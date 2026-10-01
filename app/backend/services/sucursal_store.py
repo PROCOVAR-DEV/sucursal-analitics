@@ -199,6 +199,36 @@ def config_for_period(suc: dict, year: int | None, month: int | None) -> dict:
         # la regla vive aparte para poder probarla sin levantar la base.
         eff["gestores"] = filtrar_por_baja(eff.get("gestores"), key)
 
+        """
+        SIN META ES SIN META, también de lo que no es cerveza.
+
+        `sin_meta` dice que a esa persona no se le reparte cuota: vende, cuenta para el
+        total de la oficina, pero no tiene objetivo. Y aun así podía arrastrar las metas
+        guardadas de un mes en que sí la llevaba, y todas las pantallas se las medían.
+
+        El 01/10/2026 Sidney estaba sin cuota —0 HL, sin formatos— y le salían 504
+        unidades de plan en arroz, aceite, azúcar, papel y caja de buffet, con su barra
+        de cumplimiento al 0 %. Se le estaba midiendo contra objetivos que nadie le puso.
+
+        Se limpia AQUÍ, y eso importa dos veces:
+
+        1. Por aquí pasa TODA la configuración. Arreglarlo en el estudio de cantidades
+           habría dejado el de hectolitros, el export y el total por formato contando lo
+           mismo — que es exactamente cómo este fallo sobrevivió a dos arreglos: primero
+           se corrigió el reparto de HL, después el de cantidades, y lo ya guardado
+           seguía viéndose igual.
+        2. Se limpia al LEER, no al guardar. Así vale también para lo que ya está en la
+           base: nadie tiene que volver a guardar nada para que desaparezca.
+
+        El dato NO se borra: sigue en `metas_mensuales` por si a esa persona se le vuelve
+        a dar cuota. Lo que se quita es que cuente mientras no la lleve.
+        """
+        eff["gestores"] = {
+            k: ({**g, "cuota_hl": 0.0, "cuota_ccc": 0.0, "metas_formato": {}, "metas_cantidad": {}}
+                if (g or {}).get("sin_meta") else g)
+            for k, g in (eff.get("gestores") or {}).items()
+        }
+
         eff["_period"] = key
     return eff
 
