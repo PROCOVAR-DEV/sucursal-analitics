@@ -411,8 +411,8 @@ def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict, metrica: str
     ws.freeze_panes(hdr_row + 1, 2)
 
 
-#: Como se llama este informe, para que se llame igual en la pantalla, en las hojas y
-#: en el nombre del archivo. Ver el comentario de dentro de `export_clientes_analisis`.
+#: Cómo se llama el MODELO ESTANDARIZADO, para que se llame igual en la pantalla, en
+#: las hojas y en el nombre del archivo. No es el `clientes-analisis` de abajo.
 NOMBRE_INFORME = "Modelo estandarizado de ventas por cliente"
 
 
@@ -443,10 +443,13 @@ def export_clientes_analisis(report, eff: dict, grupos: list[str] | None = None,
     # ninguno el que usa Procovar. Jose, 02/10/2026: «el nombre es modelo estandarizado
     # de ventas por cliente». Un informe que se reenvía por correo tiene que llamarse
     # igual en el correo, en la pestaña y dentro del archivo.
-    _sheet_clientes(wb, f, "Oficina", f"{NOMBRE_INFORME} — Oficina (total){sufijo}",
+    # Éste NO es el «Modelo estandarizado»: es el detalle por SKU del catálogo, que
+    # sirve para trabajar los datos. Tenerlos con el mismo nombre dejó dos descargas
+    # casi iguales en Reportes y Jose no sabía cuál bajar. Cada uno con el suyo.
+    _sheet_clientes(wb, f, "Oficina", f"Análisis de clientes — Oficina (total){sufijo}",
                     data["oficina"], real)
     for g in data["por_gestor"]:
-        titulo = f"{NOMBRE_INFORME} — {g['gestor']}{sufijo}"
+        titulo = f"Clientes de {g['gestor']}{sufijo}"
         _sheet_clientes(wb, f, g["gestor"], titulo, g, real)
     wb.close()
     return bio.getvalue()
@@ -1113,8 +1116,50 @@ def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = N
     hay_ccsa = (not pedidos) or any(str(g).upper() == "PARRANDA" for g in pedidos)
 
     bio, wb = _new_wb()
-    f = _formats(wb)
     periodo = getattr(report, "rango_str", "") or ""
+
+    """
+    LOS COLORES Y LA TIPOGRAFÍA SON LOS DE SU HOJA, no los del resto de informes.
+
+    Sacados del fichero que mandó Jose —`MODELO ESTANDARIZADO DE VENTAS POR CLIENTES -
+    Agosto - new.xlsx`, Camagüey— resolviendo los colores de tema con su tinte:
+
+        bandas    «Mes:», «Ingresos CCSA», «Ingresos PROCOVAR»   #FFF2CA  (crema)
+        totales   «Cliente», «Ingresos totales», los dos Total   #E3F2D9  (verde claro)
+        producto  las columnas de cada SKU                       sin fondo, sólo borde
+
+    Todo Arial 12 en las cabeceras. Y los números como los suyos: las columnas de total
+    sin decimales y en rojo si bajan de cero; los productos con dos decimales.
+
+    Va aquí y no en `_formats` a propósito: aquélla es la paleta de los demás informes
+    —azules— y mezclarlas haría que este fichero dejara de parecerse al suyo en cuanto
+    alguien tocara la otra. Este informe se imprime y se compara con el de ellos.
+    """
+    CREMA, VERDE = "#FFF2CA", "#E3F2D9"
+    _base_cab = {"bold": True, "border": 1, "font_name": "Arial", "font_size": 12,
+                 "align": "center", "valign": "vcenter", "text_wrap": True}
+    f = {
+        "banda": wb.add_format({**_base_cab, "bg_color": CREMA}),
+        "tot_cab": wb.add_format({**_base_cab, "bg_color": VERDE}),
+        "cab": wb.add_format({**_base_cab}),
+        "txt": wb.add_format({"border": 1, "font_name": "Arial", "font_size": 10}),
+        "num": wb.add_format({"border": 1, "font_name": "Arial", "font_size": 10,
+                              "num_format": "#,##0.00;[Red]-#,##0.00"}),
+        "int": wb.add_format({"border": 1, "font_name": "Arial", "font_size": 10,
+                              "num_format": "#,##0;[Red]#,##0"}),
+        "tot": wb.add_format({"border": 1, "font_name": "Arial", "font_size": 12,
+                              "num_format": "#,##0;[Red]#,##0"}),
+        # El Grand Total: lo mismo pero en negrita y con el verde, que es la fila que se
+        # mira y en su hoja va resaltada.
+        "gt_txt": wb.add_format({"bold": True, "border": 1, "font_name": "Arial",
+                                 "font_size": 12, "bg_color": VERDE}),
+        "gt_num": wb.add_format({"bold": True, "border": 1, "font_name": "Arial",
+                                 "font_size": 12, "bg_color": VERDE,
+                                 "num_format": "#,##0.00;[Red]-#,##0.00"}),
+        "gt_int": wb.add_format({"bold": True, "border": 1, "font_name": "Arial",
+                                 "font_size": 12, "bg_color": VERDE,
+                                 "num_format": "#,##0;[Red]#,##0"}),
+    }
     # La etiqueta de la columna de conteo es el MES EN PALABRAS, como en su hoja
     # («Agosto 2026»), no `2026-08`: la hoja se imprime y se pasa a gente que no lee
     # fechas de ordenador.
@@ -1137,23 +1182,23 @@ def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = N
         ncols = c_tot_proco + 1
 
         # --- Fila de BANDAS (la crema), con las mismas combinaciones que su hoja.
-        ws.write(BANDA, 0, "Mes:", f["kpi_txt"])
-        ws.merge_range(BANDA, 1, CAB, 1, etiqueta_mes, f["kpi_txt"])
-        ws.merge_range(BANDA, 2, CAB, 2, "Ingresos totales", f["kpi_txt"])
+        ws.write(BANDA, 0, "Mes:", f["banda"])
+        ws.merge_range(BANDA, 1, CAB, 1, etiqueta_mes, f["banda"])
+        ws.merge_range(BANDA, 2, CAB, 2, "Ingresos totales", f["tot_cab"])
         if hay_ccsa:
-            ws.merge_range(BANDA, c_ccsa, BANDA, c_tot_ccsa - 1, "Ingresos CCSA", f["header"])
-        ws.merge_range(BANDA, c_tot_ccsa, CAB, c_tot_ccsa, "Total CCSA", f["kpi_txt"])
+            ws.merge_range(BANDA, c_ccsa, BANDA, c_tot_ccsa - 1, "Ingresos CCSA", f["banda"])
+        ws.merge_range(BANDA, c_tot_ccsa, CAB, c_tot_ccsa, "Total CCSA", f["tot_cab"])
         if columnas:
-            ws.merge_range(BANDA, c_proco, BANDA, c_tot_proco - 1, "Ingresos PROCOVAR", f["header"])
-        ws.merge_range(BANDA, c_tot_proco, CAB, c_tot_proco, "Total PROCO", f["kpi_txt"])
+            ws.merge_range(BANDA, c_proco, BANDA, c_tot_proco - 1, "Ingresos PROCOVAR", f["banda"])
+        ws.merge_range(BANDA, c_tot_proco, CAB, c_tot_proco, "Total PROCO", f["tot_cab"])
 
         # --- Fila de CABECERA.
-        ws.write(CAB, 0, etiqueta_primera, f["header"])
+        ws.write(CAB, 0, etiqueta_primera, f["tot_cab"])
         if hay_ccsa:
             for j, (_, corto) in enumerate(_CCSA_FORMATOS):
-                ws.write(CAB, c_ccsa + j, corto, f["header"])
+                ws.write(CAB, c_ccsa + j, corto, f["cab"])
         for j, (_g, p) in enumerate(columnas):
-            ws.write(CAB, c_proco + j, p, f["header"])
+            ws.write(CAB, c_proco + j, p, f["cab"])
 
         def pinta(r, fila, f_txt, f_num, f_tot, f_int):
             ws.write(r, 0, fila["nombre"], f_txt)
@@ -1169,7 +1214,7 @@ def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = N
 
         r = CAB + 1
         for fila in filas:
-            pinta(r, fila, f["label"], f["money"], f["money_b"], f["int"])
+            pinta(r, fila, f["txt"], f["num"], f["tot"], f["int"])
             r += 1
 
         # El GRAND TOTAL se SUMA de las filas de arriba y no se recalcula aparte: si se
@@ -1186,13 +1231,15 @@ def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = N
             "fmt": {c: suma(lambda x, cc=c: x["fmt"].get(cc, 0.0)) for c, _ in _CCSA_FORMATOS},
             "prod": {k: suma(lambda x, kk=k: x["prod"].get(kk, 0.0)) for k in columnas},
         }
-        pinta(r, gt, f["block_txt"], f["block"], f["block"], f["block"])
+        pinta(r, gt, f["gt_txt"], f["gt_num"], f["gt_int"], f["gt_int"])
 
         if filas:
             ws.autofilter(CAB, 0, r - 1, ncols - 1)
         ws.freeze_panes(CAB + 1, 1)
-        ws.set_column(0, 0, 34)
+        ws.set_column(0, 0, 34)          # el ancho que tiene su hoja
         ws.set_column(1, max(1, ncols - 1), 14)
+        ws.set_row(BANDA, 28)
+        ws.set_row(CAB, 34)
 
     def fila_de(sub, nombre: str) -> dict:
         renglones, fmt, prod = _modelo_filas(sub, imp, STD_COLS["op"])

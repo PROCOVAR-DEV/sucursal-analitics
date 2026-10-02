@@ -104,7 +104,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
     <div className="space-y-5 animate-fade-in">
       <div className="flex justify-between items-start gap-4 flex-wrap">
         <div>
-          <h2 className="section-title">Modelo estandarizado de ventas por cliente</h2>
+          <h2 className="section-title">Análisis de Clientes por Vendedor</h2>
           <p className="text-sm text-slate-500 mt-0.5">
             Clientes rankeados por {esCantidad ? "cantidad (por empaque)" : "ventas ($)"}. Cada columna es un producto comprado. · {data.rango}
           </p>

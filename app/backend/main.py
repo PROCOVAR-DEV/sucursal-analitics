@@ -1685,7 +1685,7 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
     # lejos de la pantalla, y `clientes-analisis.xlsx` no le dice nada a quien lo recibe
     # por correo.
     NOMBRES_DE_ARCHIVO = {
-        "clientes-analisis": "ventas-por-cliente-detalle",
+        "clientes-analisis": "analisis-clientes-por-sku",
         "modelo-ventas-cliente": "modelo-ventas-por-cliente",
     }
     partes = [NOMBRES_DE_ARCHIVO.get(modulo, modulo)]

@@ -120,21 +120,6 @@ const REPORTS = [
       "La fila del resumen es el Grand Total de la hoja del vendedor",
     ],
   },
-  {
-    id: "clientes-analisis",
-    title: "Modelo estandarizado de ventas por cliente",
-    icon: Users,
-    color: "text-purple-600",
-    bg: "bg-purple-50",
-    border: "border-purple-100",
-    desc: [
-      "Clientes rankeados por volumen de ventas ($) de mayor a menor",
-      "Una columna por cada SKU que el cliente compró (en $)",
-      "Total por cliente y # de SKUs que compra cada uno",
-      "Hoja Oficina (total) + una hoja por vendedor",
-      "Identifica clientes más valiosos y oportunidades de venta cruzada",
-    ],
-  },
 ];
 
 export default function ReportesView({ sourceId, period }) {
