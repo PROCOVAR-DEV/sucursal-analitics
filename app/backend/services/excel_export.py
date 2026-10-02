@@ -933,3 +933,289 @@ def export_gestor_sku(report, eff: dict, grupos: list[str] | None = None,
 
     wb.close()
     return bio.getvalue()
+
+
+# ====================================================== MODELO DE VENTAS POR CLIENTE
+#
+# La hoja que Procovar lleva a mano, reproducida: una de resumen con un VENDEDOR por
+# fila y una por vendedor con un CLIENTE por fila, las dos con las mismas columnas y en
+# el mismo orden, partidas en dos bloques —CCSA y PROCOVAR— cada uno con su subtotal.
+#
+# Es otra pregunta que la del `clientes-analisis` de siempre. Aquél saca una columna por
+# SKU tal como viene del catálogo, que sirve para trabajar los datos; éste es el modelo
+# con el que se habla de la sucursal: dos bloques, nombres cortos, y la misma rejilla
+# todos los meses aunque un mes falte un producto.
+
+#: Los cinco formatos de cerveza, con el nombre corto de la hoja y EN SU ORDEN.
+#:
+#: El bloque CCSA no va por producto sino por FORMATO: da igual que la cerveza se llame
+#: «CERVEZA PARRANDA 1500 ML BLISTER 6U» o cambie de envase, la columna es `P 1.5`. Por
+#: eso son cinco fijas y no salen de los datos — una rejilla que cambia de columnas cada
+#: mes no se puede comparar con la del mes pasado, que es justo para lo que se usa.
+_CCSA_FORMATOS = [
+    ("P1500", "P 1.5"), ("P500", "P 500"), ("P330", "P 330"),
+    ("M1500", "M 1.5"), ("M330", "M 330"),
+]
+
+#: Lo que se recorta del nombre del catálogo para dejar el nombre corto.
+#:
+#: `ARROZ PATEKO 1 KG PACA 10U` -> `Arroz Pateko`. Se corta en el primer trozo que es
+#: una MEDIDA —un número, o una unidad— porque de ahí en adelante el nombre describe el
+#: envase, no el producto, y el envase cambia sin que cambie lo que se vende.
+_MEDIDAS = {
+    "ML", "L", "LT", "LTS", "KG", "G", "GR", "M", "MM", "CM", "U", "UD", "UDS", "P",
+    "PACA", "PACAS", "CAJA", "CAJAS", "BLISTER", "BLISTERS", "BARRA", "BARRAS",
+    "SACO", "SACOS", "PAQUETE", "BOLSA", "DE", "X",
+}
+
+#: Y las dos abreviaturas que usa la hoja. No se inventan más: lo que no esté aquí sale
+#: con su nombre entero en minúsculas de título, que es legible y no engaña.
+_ABREVIA = {"SERVILLETA": "Serv.", "PAPEL HIGIENICO": "Papel", "REFRESCO": "Refr"}
+
+
+def nombre_corto(nombre: str) -> str:
+    """`PAPEL HIGIENICO MANATI 15 M PACA 12P DE 4U` -> `Papel Manatí`.
+
+    Puro y exportado para poder probarlo: es lo único de este informe que TRANSFORMA un
+    dato en vez de sumarlo, y un recorte que se pase de listo junta dos productos
+    distintos en una columna sin que nadie lo note.
+
+    La regla es conservadora a propósito: si no sabe recortar, devuelve el nombre entero.
+    Una columna con un nombre largo se lee; dos arroces sumados en una, no se ve.
+    """
+    t = " ".join(str(nombre or "").split()).upper()
+    if not t:
+        return ""
+    for largo, corto in _ABREVIA.items():
+        if t.startswith(largo):
+            t = corto.upper() + t[len(largo):]
+            break
+    palabras = t.split()
+    utiles: list[str] = []
+    for p in palabras:
+        limpio = p.strip(".")
+        # Un número, algo que empieza por número (`15`, `12P`, `100`) o una unidad: de
+        # aquí en adelante es el envase.
+        if limpio[:1].isdigit() or limpio in _MEDIDAS:
+            break
+        utiles.append(p)
+    if not utiles:
+        return str(nombre).title()
+    corto = " ".join(utiles).title()
+    # Las abreviaturas se dejan como están («Serv.», «Refr»), que `title()` las estropea.
+    for abrev in _ABREVIA.values():
+        if corto.upper().startswith(abrev.upper()):
+            corto = abrev + corto[len(abrev):]
+            break
+    return corto
+
+
+def _modelo_filas(df, imp, op):
+    """Suma un trozo del reporte en la forma de una fila del modelo.
+
+    Devuelve `(renglones, por_formato, por_producto)`, donde `por_producto` va indexado
+    por **(grupo, nombre corto)**: el grupo forma parte de la llave porque las columnas
+    se agrupan por él, y dos grupos podrían tener un producto que se llame parecido.
+
+    Se usa igual para una fila de cliente y para una de vendedor, que es lo que garantiza
+    que la hoja de resumen y la del vendedor digan lo mismo: la misma función con otro
+    agrupador, no dos cuentas.
+    """
+    # RENGLONES, no facturas. Es lo que cuenta la hoja de Procovar: comprobado contra la
+    # de Camagüey de agosto de 2026, los nueve vendedores cuadran al número (302, 225,
+    # 266, 250, 67, 366, 217, 57). Las facturas darían 1.684 donde su hoja dice 2.148.
+    renglones = int(len(df))
+    por_fmt, por_prod = {}, {}
+    if df.empty:
+        return renglones, por_fmt, por_prod
+    cerveza = df["IsMalta"] | df["IsParranda"]
+    for cod, _ in _CCSA_FORMATOS:
+        letra, size = cod[0], cod[1:]
+        es = df["IsMalta"] if letra == "M" else df["IsParranda"]
+        sel = cerveza & es & (df[STD_COLS["size"]].astype(str) == size)
+        v = round(float(df.loc[sel, imp].sum()), 2)
+        if v:
+            por_fmt[cod] = v
+    resto = df[~cerveza]
+    if not resto.empty:
+        llaves = list(zip(resto["GrupoComercial"].astype(str), resto[STD_COLS["merc"]].astype(str)))
+        for (grupo, nombre), v in resto.groupby([[g for g, _ in llaves], [n for _, n in llaves]])[imp].sum().items():
+            v = round(float(v), 2)
+            if v:
+                k = (str(grupo), nombre_corto(nombre))
+                por_prod[k] = round(por_prod.get(k, 0.0) + v, 2)
+    return renglones, por_fmt, por_prod
+
+
+def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = None) -> bytes:
+    """El MODELO ESTANDARIZADO DE VENTAS POR CLIENTE, con la hoja que usa Procovar.
+
+    Una «Resumen» con un VENDEDOR por fila y una hoja por vendedor con un CLIENTE por
+    fila. Misma rejilla en todas, copiada del fichero de Camagüey de agosto de 2026:
+
+        A  Cliente              (en el resumen, el vendedor)
+        B  «Agosto 2026»        los RENGLONES del mes
+        C  Ingresos totales
+        D..H  Ingresos CCSA     P 1.5 · P 500 · P 330 · M 1.5 · M 330
+        I  Total CCSA
+        J..   Ingresos PROCOVAR un producto por columna
+        ..    Total PROCO
+
+    # Los productos son LOS QUE HAY, no una lista fija
+
+    La plantilla de Procovar trae 26 columnas y el catálogo real de las diez sucursales
+    tiene 80 productos. Copiarla tal cual dejaría fuera dinero de verdad —VODKA REGIO son
+    39.114 en Santiago en agosto, y están además CERVEZA SANTA ISABEL, CONGELADOR ROYAL,
+    GALLETAS TOCO, ESPAGUETTI ALLEGRA, EXHIBIDOR ICOOL…— y un informe del que desaparece
+    una venta no sirve para cuadrar nada. Jose, 02/10/2026: «ponlo como lo tenemos
+    nosotros para que no perdamos, pero los colores y la organización igual, y pon los
+    productos que tengamos».
+
+    Así que la estructura es la suya y las columnas salen de los datos. Van ordenadas por
+    GRUPO y dentro del grupo por nombre, que es como está su hoja —los arroces juntos, los
+    papeles juntos— y así la rejilla no se reordena de un mes a otro.
+
+    **Un producto no puede salir dos veces**: `GrupoComercial` es una sola etiqueta por
+    línea y la cerveza va por formato, así que cada venta cae en una columna y nada más.
+    La garantía es estructural, no un filtro que alguien pueda quitar.
+
+    # La invariante
+
+    La fila de un vendedor en el Resumen es EXACTAMENTE el Grand Total de su hoja — lo
+    dijo Jose mirando la suya— y se cumple porque salen de la misma función con otro
+    agrupador. Hay una prueba que lo fija.
+
+    `grupos` acota a los grupos comerciales que se quieran; vacío son todos.
+    """
+    keys = gestor_keys(eff)
+    gestores_cfg = eff.get("gestores") or {}
+    df = only_valid(enrich_for_sucursal(report, eff), keys)
+    pedidos = [str(g) for g in (grupos or [])]
+    if not df.empty and pedidos and "GrupoComercial" in df.columns:
+        df = df[df["GrupoComercial"].astype(str).isin(pedidos)].copy()
+
+    imp, merc, socio = STD_COLS["importe"], STD_COLS["merc"], STD_COLS["socio"]
+
+    # Las columnas de PROCOVAR: por grupo (en el orden de la sucursal) y dentro del grupo
+    # por nombre. Se guarda el nombre corto Y de qué grupo es, para poder ordenarlas.
+    orden_grupos = [str(g) for g in (eff.get("groups_order") or [])]
+    columnas: list[tuple[str, str]] = []          # (grupo, nombre corto)
+    if not df.empty:
+        resto = df[~(df["IsMalta"] | df["IsParranda"])]
+        if not resto.empty:
+            vistas = {(str(g), nombre_corto(n))
+                      for g, n in zip(resto["GrupoComercial"].astype(str), resto[merc].astype(str))}
+            def clave(x):
+                g, n = x
+                return (orden_grupos.index(g) if g in orden_grupos else len(orden_grupos), g, n)
+            columnas = sorted(vistas, key=clave)
+
+    hay_ccsa = (not pedidos) or any(str(g).upper() == "PARRANDA" for g in pedidos)
+
+    bio, wb = _new_wb()
+    f = _formats(wb)
+    periodo = getattr(report, "rango_str", "") or ""
+    # La etiqueta de la columna de conteo es el MES EN PALABRAS, como en su hoja
+    # («Agosto 2026»), no `2026-08`: la hoja se imprime y se pasa a gente que no lee
+    # fechas de ordenador.
+    _MESES_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
+                 "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    etiqueta_mes = str(eff.get("_period") or "") or (periodo or "Mes")
+    try:
+        _y, _m = etiqueta_mes.split("-")[:2]
+        etiqueta_mes = f"{_MESES_ES[int(_m) - 1]} {_y}"
+    except (ValueError, IndexError):
+        pass
+
+    def hoja(nombre_hoja: str, etiqueta_primera: str, filas: list[dict]):
+        ws = wb.add_worksheet(nombre_hoja[:31])
+        BANDA, CAB = 1, 2                      # filas 2 y 3 del Excel, como su fichero
+        c_ccsa = 3
+        c_tot_ccsa = c_ccsa + (len(_CCSA_FORMATOS) if hay_ccsa else 0)
+        c_proco = c_tot_ccsa + 1
+        c_tot_proco = c_proco + len(columnas)
+        ncols = c_tot_proco + 1
+
+        # --- Fila de BANDAS (la crema), con las mismas combinaciones que su hoja.
+        ws.write(BANDA, 0, "Mes:", f["kpi_txt"])
+        ws.merge_range(BANDA, 1, CAB, 1, etiqueta_mes, f["kpi_txt"])
+        ws.merge_range(BANDA, 2, CAB, 2, "Ingresos totales", f["kpi_txt"])
+        if hay_ccsa:
+            ws.merge_range(BANDA, c_ccsa, BANDA, c_tot_ccsa - 1, "Ingresos CCSA", f["header"])
+        ws.merge_range(BANDA, c_tot_ccsa, CAB, c_tot_ccsa, "Total CCSA", f["kpi_txt"])
+        if columnas:
+            ws.merge_range(BANDA, c_proco, BANDA, c_tot_proco - 1, "Ingresos PROCOVAR", f["header"])
+        ws.merge_range(BANDA, c_tot_proco, CAB, c_tot_proco, "Total PROCO", f["kpi_txt"])
+
+        # --- Fila de CABECERA.
+        ws.write(CAB, 0, etiqueta_primera, f["header"])
+        if hay_ccsa:
+            for j, (_, corto) in enumerate(_CCSA_FORMATOS):
+                ws.write(CAB, c_ccsa + j, corto, f["header"])
+        for j, (_g, p) in enumerate(columnas):
+            ws.write(CAB, c_proco + j, p, f["header"])
+
+        def pinta(r, fila, f_txt, f_num, f_tot, f_int):
+            ws.write(r, 0, fila["nombre"], f_txt)
+            ws.write_number(r, 1, fila["renglones"], f_int)
+            ws.write_number(r, 2, fila["total"], f_tot)
+            if hay_ccsa:
+                for j, (cod, _) in enumerate(_CCSA_FORMATOS):
+                    ws.write_number(r, c_ccsa + j, fila["fmt"].get(cod, 0.0), f_num)
+            ws.write_number(r, c_tot_ccsa, fila["total_ccsa"], f_tot)
+            for j, k in enumerate(columnas):
+                ws.write_number(r, c_proco + j, fila["prod"].get(k, 0.0), f_num)
+            ws.write_number(r, c_tot_proco, fila["total_proco"], f_tot)
+
+        r = CAB + 1
+        for fila in filas:
+            pinta(r, fila, f["label"], f["money"], f["money_b"], f["int"])
+            r += 1
+
+        # El GRAND TOTAL se SUMA de las filas de arriba y no se recalcula aparte: si se
+        # recalculara podría no cuadrar con lo que hay encima y nadie sabría cuál creerse.
+        def suma(g):
+            return round(sum(g(x) for x in filas), 2)
+
+        gt = {
+            "nombre": "Grand Total",
+            "renglones": int(sum(x["renglones"] for x in filas)),
+            "total": suma(lambda x: x["total"]),
+            "total_ccsa": suma(lambda x: x["total_ccsa"]),
+            "total_proco": suma(lambda x: x["total_proco"]),
+            "fmt": {c: suma(lambda x, cc=c: x["fmt"].get(cc, 0.0)) for c, _ in _CCSA_FORMATOS},
+            "prod": {k: suma(lambda x, kk=k: x["prod"].get(kk, 0.0)) for k in columnas},
+        }
+        pinta(r, gt, f["block_txt"], f["block"], f["block"], f["block"])
+
+        if filas:
+            ws.autofilter(CAB, 0, r - 1, ncols - 1)
+        ws.freeze_panes(CAB + 1, 1)
+        ws.set_column(0, 0, 34)
+        ws.set_column(1, max(1, ncols - 1), 14)
+
+    def fila_de(sub, nombre: str) -> dict:
+        renglones, fmt, prod = _modelo_filas(sub, imp, STD_COLS["op"])
+        t_ccsa = round(sum(fmt.values()), 2) if hay_ccsa else 0.0
+        t_proco = round(sum(v for k, v in prod.items() if k in set(columnas)), 2)
+        return {"nombre": nombre, "renglones": renglones, "fmt": fmt, "prod": prod,
+                "total_ccsa": t_ccsa, "total_proco": t_proco,
+                "total": round(t_ccsa + t_proco, 2)}
+
+    por_vendedor = []
+    for g in keys:
+        sub = df[df["GestorDetectado"] == g] if not df.empty else df
+        por_vendedor.append(fila_de(sub, str(gestores_cfg.get(g, {}).get("nombre", g))))
+    hoja("Resumen", "Vendedor", por_vendedor)
+
+    for g in keys:
+        sub = df[df["GestorDetectado"] == g] if not df.empty else df
+        clientes = []
+        if not sub.empty and socio in sub.columns:
+            for cli, grp in sub.groupby(sub[socio].astype(str)):
+                clientes.append(fila_de(grp, cli))
+            clientes.sort(key=lambda x: -x["total"])
+        hoja(str(gestores_cfg.get(g, {}).get("nombre", g)), "Cliente", clientes)
+
+    wb.close()
+    return bio.getvalue()

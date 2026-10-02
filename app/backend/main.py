@@ -41,7 +41,7 @@ from services.plan_sku import repartir_plan_sku
 from services.permisos import recortar_a_gestor, ve_sin_vendedor
 from services.roster import quien_recibe
 from services.excel_export import (
-    export_all, export_clientes_analisis, export_gestor_sku, export_market,
+    export_all, export_clientes_analisis, export_modelo_ventas_cliente, export_gestor_sku, export_market,
     export_parranda_facturas, export_productos, export_ranking, export_ventas,
 )
 from services.loader import ReportData, STD_COLS, available_periods, filter_by_period, load_report
@@ -1647,6 +1647,9 @@ _EXPORTERS = {
         report, eff, grupos=grupos, solo_cerveza=False,
     ),
     "gestor-sku": export_gestor_sku,
+    # El modelo con el que Procovar habla de la sucursal: Resumen por vendedor + una
+    # hoja por vendedor con sus clientes, partido en CCSA y PROCOVAR.
+    "modelo-ventas-cliente": export_modelo_ventas_cliente,
 }
 
 
@@ -1670,7 +1673,7 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
         if modulo == "gestor-sku"
         # El de facturas de TODO acepta el filtro de grupo: sin grupo es el general.
         else {"grupos": grupo}
-        if modulo == "facturas"
+        if modulo in ("facturas", "modelo-ventas-cliente")
         else {}
     )
 
@@ -1681,11 +1684,14 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
     # ÉSE y no el identificador interno: el archivo se abre en la carpeta de descargas,
     # lejos de la pantalla, y `clientes-analisis.xlsx` no le dice nada a quien lo recibe
     # por correo.
-    NOMBRES_DE_ARCHIVO = {"clientes-analisis": "modelo-ventas-por-cliente"}
+    NOMBRES_DE_ARCHIVO = {
+        "clientes-analisis": "ventas-por-cliente-detalle",
+        "modelo-ventas-cliente": "modelo-ventas-por-cliente",
+    }
     partes = [NOMBRES_DE_ARCHIVO.get(modulo, modulo)]
     if mes:
         partes.append(mes)
-    if modulo in ("clientes-analisis", "gestor-sku", "facturas"):
+    if modulo in ("clientes-analisis", "gestor-sku", "facturas", "modelo-ventas-cliente"):
         if grupo:
             partes.append("-".join(g.replace(" ", "") for g in grupo))
         # El nombre del fichero dice en qué está medido. Sin eso, dos Excel del mismo

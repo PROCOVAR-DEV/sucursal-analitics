@@ -106,6 +106,21 @@ const REPORTS = [
     ],
   },
   {
+    id: "modelo-ventas-cliente",
+    title: "Modelo estandarizado de ventas por cliente",
+    icon: Users,
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
+    border: "border-emerald-100",
+    desc: [
+      "La hoja que Procovar lleva a mano, con su misma rejilla",
+      "Resumen con un vendedor por fila + una hoja por vendedor con sus clientes",
+      "Columnas en dos bloques: Ingresos CCSA (por formato) e Ingresos PROCOVAR",
+      "Sólo los productos que esa sucursal vendió en el periodo",
+      "La fila del resumen es el Grand Total de la hoja del vendedor",
+    ],
+  },
+  {
     id: "clientes-analisis",
     title: "Modelo estandarizado de ventas por cliente",
     icon: Users,
