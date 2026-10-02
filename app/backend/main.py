@@ -38,7 +38,7 @@ from services.clientes_dormidos import compute_clientes_dormidos
 from services.movimiento_clientes import compute_movimiento_clientes
 from services.metas_gestor import compute_metas_gestor, meta_por_formato
 from services.plan_sku import repartir_plan_sku
-from services.permisos import recortar_a_gestor
+from services.permisos import recortar_a_gestor, ve_sin_vendedor
 from services.roster import quien_recibe
 from services.excel_export import (
     export_all, export_clientes_analisis, export_gestor_sku, export_market,
@@ -1218,8 +1218,10 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
             "cumplimiento_pct": ventas["cumplimiento_pct"], "total_importe": ventas["total_importe"],
             # El cobro del reparto, aparte. `total_importe` ya NO lo lleva dentro.
             "total_domicilio": ventas.get("total_domicilio", 0.0),
-            # Lo facturado sin vendedor que atribuirle: no cuenta, pero se dice.
-            "total_sin_vendedor": ventas.get("total_sin_vendedor", 0.0),
+            # Lo facturado sin vendedor que atribuirle: no cuenta, pero se dice —
+            # y SÓLO de supervisor para arriba. Es un número de la oficina: sirve para
+            # cuadrar contra AXIS, no para medir a nadie. Ver `permisos.ve_sin_vendedor`.
+            "total_sin_vendedor": ventas.get("total_sin_vendedor", 0.0) if ve_sin_vendedor(user.get("role")) else 0.0,
             "total_clientes": clientes["oficina"]["num_clientes"], "total_skus": clientes["oficina"]["num_skus"],
             "dias_laborales_transcurridos": productos["dias_laborales_transcurridos"],
             "dias_laborales_totales": productos["dias_laborales_totales"]},

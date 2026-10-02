@@ -9,6 +9,29 @@ from __future__ import annotations
 ALL_SUCURSALES = "*"
 _ALL_ROLES = ("admin", "analitico")            # los únicos que llevan el comodín
 
+#: Quién ve lo facturado SIN VENDEDOR: de supervisor para arriba.
+#:
+#: Es un número de la OFICINA, no de nadie: una factura cuya nota no trae el segmento
+#: `V-` no se le puede atribuir a ninguna persona. Está en el panel para que el total
+#: cuadre contra el reporte de AXIS —el 01/10/2026 fueron 27,40 y costó media mañana
+#: encontrarlos—, y eso es trabajo de quien cuadra la sucursal.
+#:
+#: A un vendedor no le dice nada y le confunde: ve un dinero que no es suyo, que no
+#: puede arreglar y que no sale en ninguna de sus cuentas. Jose, 02/10/2026: «eso es
+#: una cosa que le sale de supervisores para arriba, no a los vendedores».
+_VEN_SIN_VENDEDOR = ("admin", "analitico", "supervisor")
+
+
+def ve_sin_vendedor(role: str | None) -> bool:
+    """¿A este rol se le enseña lo facturado sin vendedor?
+
+    Puro y aquí, con el resto de los permisos, porque la lista de roles cambia y un
+    `!= "gestor"` escrito en el endpoint se olvida el día que aparezca un rol nuevo:
+    lo vería sin que nadie lo decidiera. Así, un rol que no esté en la lista NO lo ve,
+    que es el lado seguro.
+    """
+    return str(role or "").strip().lower() in _VEN_SIN_VENDEDOR
+
 
 def sucursales_para(role: str, sucursales) -> list[str]:
     """Las sucursales que le tocan a un rol, con el COMODÍN quitado si no le corresponde.
