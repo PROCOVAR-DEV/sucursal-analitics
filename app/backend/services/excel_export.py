@@ -411,6 +411,11 @@ def _sheet_clientes(wb, f, sheet_name: str, titulo: str, blk: dict, metrica: str
     ws.freeze_panes(hdr_row + 1, 2)
 
 
+#: Como se llama este informe, para que se llame igual en la pantalla, en las hojas y
+#: en el nombre del archivo. Ver el comentario de dentro de `export_clientes_analisis`.
+NOMBRE_INFORME = "Modelo estandarizado de ventas por cliente"
+
+
 def export_clientes_analisis(report, eff: dict, grupos: list[str] | None = None,
                              metrica: str = "importe", exclusivo: bool = False) -> bytes:
     """El Excel sale con LO MISMO que se está viendo en pantalla.
@@ -431,10 +436,17 @@ def export_clientes_analisis(report, eff: dict, grupos: list[str] | None = None,
         sufijo += " (sólo compran esto)"
     bio, wb = _new_wb()
     f = _formats(wb)
-    _sheet_clientes(wb, f, "Oficina", f"Análisis de clientes — Oficina (total){sufijo}",
+    # EL NOMBRE DEL INFORME, uno solo y en todas partes.
+    #
+    # Se llamaba «Análisis de clientes» en la pantalla, «Clientes de X» en cada hoja y
+    # `clientes-analisis` en el fichero descargado: tres nombres para lo mismo, y
+    # ninguno el que usa Procovar. Jose, 02/10/2026: «el nombre es modelo estandarizado
+    # de ventas por cliente». Un informe que se reenvía por correo tiene que llamarse
+    # igual en el correo, en la pestaña y dentro del archivo.
+    _sheet_clientes(wb, f, "Oficina", f"{NOMBRE_INFORME} — Oficina (total){sufijo}",
                     data["oficina"], real)
     for g in data["por_gestor"]:
-        titulo = f"Clientes de {g['gestor']}{sufijo}"
+        titulo = f"{NOMBRE_INFORME} — {g['gestor']}{sufijo}"
         _sheet_clientes(wb, f, g["gestor"], titulo, g, real)
     wb.close()
     return bio.getvalue()

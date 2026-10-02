@@ -1677,7 +1677,12 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
     # El nombre del archivo dice qué lleva dentro. Sin esto, dos descargas con
     # filtros distintos se llaman igual y acaban confundidas en la carpeta de
     # descargas — que es donde se abren, lejos de la pantalla que las generó.
-    partes = [modulo]
+    # El nombre con el que se baja. Para los módulos que tienen nombre propio se usa
+    # ÉSE y no el identificador interno: el archivo se abre en la carpeta de descargas,
+    # lejos de la pantalla, y `clientes-analisis.xlsx` no le dice nada a quien lo recibe
+    # por correo.
+    NOMBRES_DE_ARCHIVO = {"clientes-analisis": "modelo-ventas-por-cliente"}
+    partes = [NOMBRES_DE_ARCHIVO.get(modulo, modulo)]
     if mes:
         partes.append(mes)
     if modulo in ("clientes-analisis", "gestor-sku", "facturas"):

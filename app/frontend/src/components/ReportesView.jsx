@@ -107,7 +107,7 @@ const REPORTS = [
   },
   {
     id: "clientes-analisis",
-    title: "Análisis de Clientes por Vendedor",
+    title: "Modelo estandarizado de ventas por cliente",
     icon: Users,
     color: "text-purple-600",
     bg: "bg-purple-50",
