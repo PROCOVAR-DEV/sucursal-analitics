@@ -54,11 +54,25 @@ def compute_market(report, eff: dict) -> dict:
             valid = sub.dropna(subset=[fec])
             for _, row in valid.iterrows():
                 w = _week_of(row[fec])
-                # HL solo cerveza (Malta/Parranda), igual que el reporte Supervisor
-                if bool(row.get("IsMalta")) or bool(row.get("IsParranda")):
+                """
+                ESTE INFORME ES DE CERVEZA, LAS DOS SECCIONES.
+
+                Los hectolitros ya filtraban a Malta/Parranda. El CLIENTE no: se contaba
+                a cualquiera que comprase algo, aunque sólo se llevara arroz o papel. Y el
+                CCC se mide contra una cuota de cerveza, así que el porcentaje salía
+                inflado sin que nada lo dijera.
+
+                Sidney, 03/10/2026: «me está sacando todos los clientes que se atienden en
+                vez de sacarme sólo los de parranda y malta que atendieron los vendedores».
+
+                La condición es la misma para los dos, y por eso va en una sola variable:
+                tenerla escrita dos veces es cómo se arregló una y se quedó la otra.
+                """
+                es_cerveza = bool(row.get("IsMalta")) or bool(row.get("IsParranda"))
+                if es_cerveza:
                     w_hl[w] += float(row.get("Hectolitros", 0) or 0)
-                if socio in valid.columns and pd.notna(row.get(socio)):
-                    w_cli[w].add(str(row[socio]))
+                    if socio in valid.columns and pd.notna(row.get(socio)):
+                        w_cli[w].add(str(row[socio]))
 
         real_hl_mes = round(sum(w_hl.values()), 2)
         real_ccc_mes = int(len(set().union(*w_cli.values()))) if w_cli else 0

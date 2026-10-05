@@ -505,6 +505,20 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
    * `conCuotaDelMes` es entre quiénes se reparte de verdad y qué suma en el total. Un
    * «sin meta» en el denominador se lleva una parte que nadie va a vender.
    */
+  /**
+   * Los productos que YA tienen plan puesto este mes, vengan del catálogo o no.
+   *
+   * Son las filas sin formato (`size` vacío) de cualquier vendedor. Hacen falta para que
+   * el desplegable de arriba los ofrezca: lo que está asignado tiene que poder mirarse.
+   */
+  const planificados = useMemo(() => {
+    const vistos = new Set();
+    Object.values(plans || {}).forEach((filas) => (filas || []).forEach((r) => {
+      if (!r.size && r.producto) vistos.add(r.producto);
+    }));
+    return [...vistos].sort();
+  }, [plans]);
+
   const delMes = gestores.filter(([k]) => enMes(k));
   const conCuotaDelMes = gestores.filter(([k]) => llevaCuota(k));
   const repartido = conCuotaDelMes.reduce((sum, [k]) => sum + cantidadDe(k, prodSel), 0);
@@ -686,7 +700,20 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
                   className="w-72"
                   /* Con la meta al lado se elige sabiendo lo que hay que repartir, sin
                      tener que abrir la otra pantalla a mirarla. */
-                  options={catalogo.map((o) => ({
+                  /* Y LOS QUE YA TIENEN PLAN PUESTO, aunque no estén en el catálogo.
+                     El desplegable salía sólo de `product_groups_keywords`, así que un
+                     producto con plan asignado y sin palabra clave NO se podía elegir —
+                     y sus planes quedaban invisibles desde aquí, sin forma de verlos ni
+                     de cambiarlos. Sidney, 03/10/2026: «debería sacarme los planes que ya
+                     le asigné a los vendedores de los productos que no son parranda».
+                     Es el mismo remedio que ya usa el selector de la fila del vendedor,
+                     veinte líneas más abajo. */
+                  options={[
+                    ...catalogo,
+                    ...planificados
+                      .filter((p) => !catalogo.some((o) => o.value === p))
+                      .map((p) => ({ value: p, label: p, hint: "ya planificado" })),
+                  ].map((o) => ({
                     ...o,
                     hint: metaDe(o.value) ? `${o.hint} · meta ${formatNumber(metaDe(o.value), 0)}` : `${o.hint} · sin meta`,
                   }))}
