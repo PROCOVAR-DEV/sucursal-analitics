@@ -87,7 +87,16 @@ def test_sin_cerveza_en_el_mes_el_CCC_es_CERO():
 
 
 def test_los_hectolitros_siguen_igual():
-    """La guarda no puede haberse llevado por delante lo que ya funcionaba."""
+    """La guarda no puede haberse llevado por delante lo que ya funcionaba.
+
+    Esta prueba NO se pone roja si se rompe la guarda de `es_cerveza` en los
+    hectolitros, y es correcto que no lo haga: `enrich` ya los deja en cero para
+    todo lo que no es Parranda ni Malta (`.where(es_cerveza, 0.0)`), así que la
+    guarda de `market.py` es redundante a propósito y ningún dato real puede
+    expresar el caso contrario. Comprobado con mutación el 05/10/2026 — si
+    mañana parece que esta prueba «no prueba», el motivo está aquí y no hay nada
+    que arreglar. Lo que sí muerde es el CCC: las otras cuatro se ponen rojas.
+    """
     r = compute_market(informe([fila(CERVEZA, "A"), fila(ARROZ, "B")]), EFF)
     hl = next(x for x in r["hl"] if x["gestor"] == "GARI")
 
