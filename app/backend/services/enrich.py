@@ -32,7 +32,10 @@ def _match_gestor_from_seg(vseg, keys: list[str], alias_map: dict[str, str]) -> 
     txt = str(vseg).strip()
     if not txt:
         return None
-    for g in keys:
+    # Las claves pueden solaparse por palabras (p. ej. «CARLOS» y «JOSE CARLOS»).
+    # Evaluar primero la más específica evita que la corta capture sus registros.
+    keys_by_specificity = sorted(keys, key=lambda g: len(normalize_text(g)), reverse=True)
+    for g in keys_by_specificity:
         gn = normalize_text(g)
         if gn and re.search(rf"(^|\b){re.escape(gn)}(\b|$)", txt):
             return g
@@ -41,7 +44,7 @@ def _match_gestor_from_seg(vseg, keys: list[str], alias_map: dict[str, str]) -> 
         if alias_ns and alias_ns in ns:
             return gestor
     parts = set(txt.split())
-    for g in keys:
+    for g in keys_by_specificity:
         words = normalize_text(g).split()
         if len(words) > 1 and all(w in parts for w in words):
             return g
