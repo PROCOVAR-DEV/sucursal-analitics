@@ -708,6 +708,11 @@ def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
                     ws.write(r, j, "" if (v is None or pd.isna(v)) else str(v))
             r += 1
 
+        # El desplegable de filtro queda en los encabezados y abarca solo las
+        # facturas; debajo empiezan los totales y otros resúmenes de la hoja.
+        if inv:
+            ws.autofilter(0, 0, r - 1, len(inv) - 1)
+
         total_importe = round(float(sub[imp].sum()) if imp in sub.columns and not sub.empty else 0.0, 2)
         M330, M500, M1500 = hl(sub, "IsMalta", "330"), hl(sub, "IsMalta", "500"), hl(sub, "IsMalta", "1500")
         P330, P500, P1500 = hl(sub, "IsParranda", "330"), hl(sub, "IsParranda", "500"), hl(sub, "IsParranda", "1500")
