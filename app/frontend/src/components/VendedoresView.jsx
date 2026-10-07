@@ -16,8 +16,17 @@ import { Buscador, cn, filtrarFilas } from "./ui.jsx";
  *
  * Dos palabras o menos se dejan tal cual: ahí no hay nada que acortar.
  */
-function nombreCorto(nombre) {
+function nombreCorto(nombre, gestor) {
   const p = String(nombre || "").trim().split(/\s+/);
+  const clave = String(gestor || "").trim().split(/\s+/);
+
+  // Si la clave del gestor es un nombre compuesto que aparece al inicio del nombre
+  // completo, conservarla en la tira. «Jose Carlos Feria» se veía como «Jose Feria»
+  // y ocultaba precisamente la clave que permite distinguirlo de otros gestores.
+  if (clave.length > 1 && p.length > clave.length &&
+      p.slice(0, clave.length).join(" ").toUpperCase() === clave.join(" ").toUpperCase()) {
+    return p.slice(0, clave.length).join(" ");
+  }
 
   return p.length <= 2 ? String(nombre || "") : `${p[0]} ${p[p.length - 1]}`;
 }
@@ -154,7 +163,7 @@ export default function VendedoresView({ sourceId, period }) {
               className={`tab shrink-0 flex flex-col items-start gap-0.5 py-2 px-4 max-w-[11rem] ${active ? "tab-active" : ""}`}
               onClick={() => setSelGestor(v.gestor)}
             >
-              <span className="font-semibold truncate w-full text-left">{nombreCorto(v.nombre || v.gestor)}</span>
+              <span className="font-semibold truncate w-full text-left">{nombreCorto(v.nombre || v.gestor, v.gestor)}</span>
               {!active && (
                 hayHL
                   ? (conCuota
