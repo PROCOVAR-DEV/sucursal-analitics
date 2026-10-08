@@ -116,7 +116,7 @@ const REPORTS = [
       "La hoja que Procovar lleva a mano, con su misma rejilla",
       "Resumen con un vendedor por fila + una hoja por vendedor con sus clientes",
       "Columnas en dos bloques: Ingresos CCSA (por formato) e Ingresos PROCOVAR",
-      "Sólo los productos que esa sucursal vendió en el periodo",
+      "Siempre los mismos productos y en el mismo orden, se vendan o no en el mes",
       "La fila del resumen es el Grand Total de la hoja del vendedor",
     ],
   },

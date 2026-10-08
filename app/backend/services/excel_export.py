@@ -163,9 +163,21 @@ def export_ventas(report, eff: dict) -> bytes:
     return bio.getvalue()
 
 
+def _catalogo(report, eff: dict, completo=None):
+    """Todo lo que la sucursal ha vendido ALGUNA vez, no sólo en el periodo.
+
+    De aquí salen las filas/columnas de los informes que se comparan mes a mes: si
+    salieran de lo vendido en el mes, un producto sin ventas desaparecería y los demás
+    cambiarían de sitio. `completo` es el informe sin recortar al periodo.
+    """
+    fuente = report if completo is None else completo
+    return only_valid(enrich_for_sucursal(fuente, eff), gestor_keys(eff))
+
+
 # ---------------------------------------------------------------- PRODUCTOS
-def export_productos(report, eff: dict) -> bytes:
+def export_productos(report, eff: dict, completo=None) -> bytes:
     data = compute_productos(report, eff)
+    catalogo = _catalogo(report, eff, completo)
     bio, wb = _new_wb()
     f = _formats(wb)
 
@@ -191,7 +203,12 @@ def export_productos(report, eff: dict) -> bytes:
     ws2 = wb.add_worksheet("Resumen")
     r = 0
     for grp in data["groups_order"]:
-        rows = data["resumen_por_grupo"].get(grp, [])
+        # Los productos del grupo son los que se han vendido alguna vez, por nombre y
+        # con 0 si este mes no se vendió: el orden no cambia de un mes a otro.
+        del_mes = {x["producto"]: x for x in data["resumen_por_grupo"].get(grp, [])}
+        sub = catalogo[catalogo["GrupoComercial"].astype(str) == grp]
+        nombres = set(del_mes) | set(sub[STD_COLS["merc"]].astype(str).str.strip())
+        rows = [del_mes.get(n, {"producto": n, "total": 0, "cantidad": 0}) for n in sorted(nombres)]
         if not rows:
             continue
         gfmt = wb.add_format({"bold": True, "font_color": "white", "bg_color": GROUP_BG_COLORS.get(grp, COLORS["header"]),
@@ -1055,7 +1072,8 @@ def _modelo_filas(df, imp, op):
     return renglones, por_fmt, por_prod
 
 
-def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = None) -> bytes:
+def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = None,
+                                 completo=None) -> bytes:
     """El MODELO ESTANDARIZADO DE VENTAS POR CLIENTE, con la hoja que usa Procovar.
 
     Una «Resumen» con un VENDEDOR por fila y una hoja por vendedor con un CLIENTE por
@@ -1069,7 +1087,7 @@ def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = N
         J..   Ingresos PROCOVAR un producto por columna
         ..    Total PROCO
 
-    # Los productos son LOS QUE HAY, no una lista fija
+    # Los productos son LOS QUE SE HAN VENDIDO ALGUNA VEZ, no una lista fija
 
     La plantilla de Procovar trae 26 columnas y el catálogo real de las diez sucursales
     tiene 80 productos. Copiarla tal cual dejaría fuera dinero de verdad —VODKA REGIO son
@@ -1079,8 +1097,11 @@ def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = N
     nosotros para que no perdamos, pero los colores y la organización igual, y pon los
     productos que tengamos».
 
-    Así que la estructura es la suya y las columnas salen de los datos. Van ordenadas por
-    GRUPO y dentro del grupo por nombre, que es como está su hoja —los arroces juntos, los
+    Así que la estructura es la suya y las columnas salen de los datos: de TODO el
+    histórico de la sucursal y no sólo del mes, así que un producto que este mes no se
+    vendió sale igual, con 0 (pedido por la sucursal el 08/10/2026: «las columnas siempre
+    en el mismo orden, se venda o no el producto en el mes»). Van ordenadas por GRUPO y
+    dentro del grupo por nombre, que es como está su hoja —los arroces juntos, los
     papeles juntos— y así la rejilla no se reordena de un mes a otro.
 
     **Un producto no puede salir dos veces**: `GrupoComercial` es una sola etiqueta por
@@ -1098,9 +1119,13 @@ def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = N
     keys = gestor_keys(eff)
     gestores_cfg = eff.get("gestores") or {}
     df = only_valid(enrich_for_sucursal(report, eff), keys)
+    catalogo = _catalogo(report, eff, completo)
     pedidos = [str(g) for g in (grupos or [])]
-    if not df.empty and pedidos and "GrupoComercial" in df.columns:
-        df = df[df["GrupoComercial"].astype(str).isin(pedidos)].copy()
+    if pedidos:
+        if not df.empty and "GrupoComercial" in df.columns:
+            df = df[df["GrupoComercial"].astype(str).isin(pedidos)].copy()
+        if not catalogo.empty and "GrupoComercial" in catalogo.columns:
+            catalogo = catalogo[catalogo["GrupoComercial"].astype(str).isin(pedidos)]
 
     imp, merc, socio = STD_COLS["importe"], STD_COLS["merc"], STD_COLS["socio"]
 
@@ -1108,8 +1133,8 @@ def export_modelo_ventas_cliente(report, eff: dict, grupos: list[str] | None = N
     # por nombre. Se guarda el nombre corto Y de qué grupo es, para poder ordenarlas.
     orden_grupos = [str(g) for g in (eff.get("groups_order") or [])]
     columnas: list[tuple[str, str]] = []          # (grupo, nombre corto)
-    if not df.empty:
-        resto = df[~(df["IsMalta"] | df["IsParranda"])]
+    if not catalogo.empty:
+        resto = catalogo[~(catalogo["IsMalta"] | catalogo["IsParranda"])]
         if not resto.empty:
             vistas = {(str(g), nombre_corto(n))
                       for g, n in zip(resto["GrupoComercial"].astype(str), resto[merc].astype(str))}

@@ -1661,7 +1661,8 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
     exporter = _EXPORTERS.get(modulo)
     if exporter is None:
         raise HTTPException(status_code=404, detail="Módulo de exportación desconocido")
-    report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
+    fuente = _get_source(sid, source_id)
+    report = filter_by_period(fuente, mes, desde, hasta)
 
     # Los filtros de pantalla solo los entiende este informe; a los demás se les
     # pasarían argumentos que no aceptan. Explícito y no por introspección: se
@@ -1673,7 +1674,13 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
         if modulo == "gestor-sku"
         # El de facturas de TODO acepta el filtro de grupo: sin grupo es el general.
         else {"grupos": grupo}
-        if modulo in ("facturas", "modelo-ventas-cliente")
+        if modulo == "facturas"
+        # Estos dos sacan sus productos de TODO el histórico, no del periodo: así el
+        # orden no cambia aunque un mes no se venda un producto.
+        else {"grupos": grupo, "completo": fuente}
+        if modulo == "modelo-ventas-cliente"
+        else {"completo": fuente}
+        if modulo == "productos"
         else {}
     )
 
