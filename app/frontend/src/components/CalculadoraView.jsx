@@ -37,12 +37,11 @@ const seedRows = (params) => rowsFromFormato(STD_FMT, params || {});
  * cálculo nuestro: los pone Procovar cada mes y se teclean aquí. Por eso arrancan
  * en blanco — un valor por defecto se quedaría puesto y nadie volvería a mirarlo.
  */
-// Los seis del backend (`DEFAULT_FORMATOS`). Faltaba M500, asi que su meta
-// no habia forma de ponerla y salia siempre cero sin que nadie lo dijera.
-const FORMATOS_PLAN = ["P1500", "P500", "P330", "M1500", "M500", "M330"];
+// Los cinco del backend (`DEFAULT_FORMATOS`). Malta 500 ml se retiro el 08/10/2026.
+const FORMATOS_PLAN = ["P1500", "P500", "P330", "M1500", "M330"];
 const ETIQUETA_FMT = {
   P1500: "Parranda 1.5 L", P500: "Parranda 500 ml", P330: "Parranda 330 ml",
-  M1500: "Malta 1.5 L", M500: "Malta 500 ml", M330: "Malta 330 ml",
+  M1500: "Malta 1.5 L", M330: "Malta 330 ml",
 };
 /** `P1500` -> `PARRANDA-1500`, que es como se nombran las filas de la tabla. */
 const formatoDeCodigo = (c) => `${String(c)[0] === "P" ? "PARRANDA" : "MALTA"}-${String(c).slice(1)}`;

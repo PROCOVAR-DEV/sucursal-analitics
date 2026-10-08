@@ -108,7 +108,6 @@ def compute_market(report, eff: dict) -> dict:
         ("Parranda", "IsParranda", "500", "Parranda 500 ml"),
         ("Parranda", "IsParranda", "330", "Parranda 330 ml"),
         ("Malta", "IsMalta", "1500", "Malta 1.5 L"),
-        ("Malta", "IsMalta", "500", "Malta 500 ml"),
         ("Malta", "IsMalta", "330", "Malta 330 ml"),
     ]
     sku_semanal: list[dict] = []

@@ -106,14 +106,15 @@ def test_la_meta_es_la_SUYA_y_no_la_suma_de_la_sucursal():
     assert odette[5] == 200.0
 
 
-def test_estan_los_SEIS_formatos_y_la_tabla_cuadra_con_el_total():
-    """Faltaban Malta 500 y Malta 1500. En la hoja de Gari eso eran 48,24 HL vendidos
-    que no salían por ningún lado, y la tabla no sumaba lo que decía el KPI de arriba."""
+def test_estan_los_CINCO_formatos_y_la_tabla_cuadra_con_el_total():
+    """Faltaban formatos y en la hoja de Gari eran 48,24 HL vendidos que no salían por
+    ningún lado: la tabla no sumaba lo que decía el KPI de arriba. Malta 500 ml ya no
+    existe (08/10/2026), así que son cinco."""
     ws = libro()
     filas = bloque(ws["Gari"], "Conversión Cantidad")[1:]
 
     assert [(x[0], x[1]) for x in filas] == [
-        ("Malta", "330"), ("Malta", "500"), ("Malta", "1500"),
+        ("Malta", "330"), ("Malta", "1500"),
         ("Parranda", "330"), ("Parranda", "500"), ("Parranda", "1500"),
     ]
     # 660*0,09 + 536*0,09 + 1330*0,03 + 290*0,02 = 59,4 + 48,24 + 39,9 + 5,8

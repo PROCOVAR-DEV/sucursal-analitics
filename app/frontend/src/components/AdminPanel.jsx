@@ -369,7 +369,7 @@ const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
 const pkeyOf = (y, m) => `${y}-${String(m).padStart(2, "0")}`;
 const FORMATOS = [
   ["P1500", "Parranda 1.5 L"], ["P500", "Parranda 500 ml"], ["P330", "Parranda 330 ml"],
-  ["M1500", "Malta 1.5 L"], ["M500", "Malta 500 ml"], ["M330", "Malta 330 ml"],
+  ["M1500", "Malta 1.5 L"], ["M330", "Malta 330 ml"],
 ];
 // Vacio = los seis. Es lo que habia antes de que esto existiera, asi que nada cambia
 // hasta que alguien decida.

@@ -1116,7 +1116,6 @@ _FORMATOS_DESGLOSE = [
     ("Parranda", "IsParranda", "500", "500 ml"),
     ("Parranda", "IsParranda", "330", "330 ml"),
     ("Malta", "IsMalta", "1500", "1.5 L"),
-    ("Malta", "IsMalta", "500", "500 ml"),
     ("Malta", "IsMalta", "330", "330 ml"),
 ]
 

@@ -17,7 +17,6 @@ _FORMATOS_SEM = [
     ("Parranda", "IsParranda", "500", "Parranda 500 ml"),
     ("Parranda", "IsParranda", "330", "Parranda 330 ml"),
     ("Malta", "IsMalta", "1500", "Malta 1.5 L"),
-    ("Malta", "IsMalta", "500", "Malta 500 ml"),
     ("Malta", "IsMalta", "330", "Malta 330 ml"),
 ]
 
@@ -307,7 +306,7 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None, es_ra
             # La del mes va aparte para poder decir de dónde sale la del periodo.
             "cuota_hl_mes": round(cuota_mes, 2),
             "cumplimiento_pct": round((total_hl / cuota * 100) if cuota else 0.0, 2),
-            "malta_330": M330, "malta_500": M500, "malta_1500": M1500,
+            "malta_330": M330, "malta_1500": M1500,
             "parranda_330": P330, "parranda_500": P500, "parranda_1500": P1500,
             "top_productos": top_productos, "por_grupo": por_grupo,
             "metas_cantidad": metas_cantidad,
