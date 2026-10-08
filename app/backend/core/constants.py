@@ -17,6 +17,17 @@ UNITS_PER_PALLET: dict[str, int] = {"330": 496, "500": 336, "1500": 110}
 # Tamaños de envase reconocidos
 SIZES: list[str] = ["330", "500", "1500"]
 
+# Formatos DADOS DE BAJA: ya no se venden, pero los periodos antiguos que los vendieron
+# tienen que seguir viéndolos tal cual. Un formato de aquí sale SOLO si el periodo tiene
+# ventas suyas; si no, no aparece (ni como columna de ceros). Malta 500 ml: 08/10/2026.
+FORMATOS_RETIRADOS: set[str] = {"M500"}
+
+
+def es_retirado(producto: str, size: str) -> bool:
+    """`("Malta", "500")` -> True. Mismo código que las metas: `M500`."""
+    return f"{str(producto)[:1].upper()}{size}" in FORMATOS_RETIRADOS
+
+
 # Comisiones
 COMISION_GESTOR_PCT: float = 0.01      # 1% del importe para el gestor
 COMISION_SUPERVISOR_PCT: float = 0.10  # 10% de las comisiones para el supervisor

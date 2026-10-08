@@ -51,6 +51,7 @@ from services.productos import compute_productos
 from services.ranking import compute_ranking
 from services.repository import OverlapError, _df_to_report, repository
 from services.ventra_fuente import hay_datos, report_de_ventra
+from core.constants import es_retirado
 from services.sucursal_store import config_for_period, config_for_report, sucursal_store
 from services.vendedores import compute_vendedores
 from services.gestor_sku import compute_gestor_sku
@@ -1116,6 +1117,7 @@ _FORMATOS_DESGLOSE = [
     ("Parranda", "IsParranda", "500", "500 ml"),
     ("Parranda", "IsParranda", "330", "330 ml"),
     ("Malta", "IsMalta", "1500", "1.5 L"),
+    ("Malta", "IsMalta", "500", "500 ml"),
     ("Malta", "IsMalta", "330", "330 ml"),
 ]
 
@@ -1143,6 +1145,8 @@ def _desglose_formato_general(report, eff) -> list[dict]:
         if not dfx.empty and "Hectolitros" in dfx.columns and flag in dfx.columns and size_col in dfx.columns:
             mask = dfx[flag].fillna(False) & (dfx[size_col] == size)
             hl = round(float(dfx.loc[mask, "Hectolitros"].sum()), 2)
+        if hl == 0 and es_retirado(prod, size):
+            continue          # de baja y sin ventas en este periodo: no sale
         meta = float(metas.get(_codigo_formato(prod, size), 0.0))
         out.append({
             "producto": prod, "tamano": label, "formato": f"{prod} {label}", "hectolitros": hl,
@@ -1202,7 +1206,7 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
                 {"producto": p, "tamano": lbl, "formato": f"{p} {lbl}", "hectolitros": 0.0,
                  "meta": float(meta_por_formato(eff).get(_codigo_formato(p, sz), 0.0)),
                  "cumplimiento_pct": None}
-                for p, _f, sz, lbl in _FORMATOS_DESGLOSE],
+                for p, _f, sz, lbl in _FORMATOS_DESGLOSE if not es_retirado(p, sz)],
         }
     report = filter_by_period(report, mes, desde, hasta)
     eff = _eff_scoped(suc, report, mes, user)

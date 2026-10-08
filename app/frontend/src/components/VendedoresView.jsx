@@ -618,9 +618,8 @@ function HLBreakdown({ vendor }) {
     const row = sku.find((r) => r.formato === `${prod} ${sizeLabel[size]}`);
     return row ? (row.semanal[semana] || 0) : 0;
   };
-  // Malta 500 ml ya no existe: su celda sale con guion y no suma.
-  const rowTot = (prod) => hlOf(prod, "330") + (prod === "Malta" ? 0 : hlOf(prod, "500")) + hlOf(prod, "1500");
-  const colTot = (size) => (size === "500" ? 0 : hlOf("Malta", size)) + hlOf("Parranda", size);
+  const rowTot = (prod) => hlOf(prod, "330") + hlOf(prod, "500") + hlOf(prod, "1500");
+  const colTot = (size) => hlOf("Malta", size) + hlOf("Parranda", size);
   const grand = rowTot("Malta") + rowTot("Parranda");
 
   return (
@@ -659,7 +658,7 @@ function HLBreakdown({ vendor }) {
               <tr key={prod} className="border-t border-slate-100">
                 <td className="px-3 py-2 font-medium">{prod}</td>
                 <td className="px-3 py-2 text-right">{formatNumber(hlOf(prod, "330"))}</td>
-                <td className="px-3 py-2 text-right">{prod === "Malta" ? "—" : formatNumber(hlOf(prod, "500"))}</td>
+                <td className="px-3 py-2 text-right">{prod === "Malta" && !hlOf(prod, "500") ? "—" : formatNumber(hlOf(prod, "500"))}</td>
                 <td className="px-3 py-2 text-right">{formatNumber(hlOf(prod, "1500"))}</td>
                 <td className="px-3 py-2 text-right font-semibold">{formatNumber(rowTot(prod))}</td>
               </tr>

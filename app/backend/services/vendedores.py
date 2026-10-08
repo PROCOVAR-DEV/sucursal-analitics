@@ -7,6 +7,7 @@ from datetime import date
 import pandas as pd
 
 from services.comisiones import comision_de
+from core.constants import es_retirado
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 from services.market import WEEKS, _week_of
@@ -17,6 +18,7 @@ _FORMATOS_SEM = [
     ("Parranda", "IsParranda", "500", "Parranda 500 ml"),
     ("Parranda", "IsParranda", "330", "Parranda 330 ml"),
     ("Malta", "IsMalta", "1500", "Malta 1.5 L"),
+    ("Malta", "IsMalta", "500", "Malta 500 ml"),
     ("Malta", "IsMalta", "330", "Malta 330 ml"),
 ]
 
@@ -39,13 +41,17 @@ def _sku_semanal_vendedor(sub_mp: pd.DataFrame) -> tuple[list[dict], list[str]]:
         weeks_con_datos = set(dv["__w__"].unique())
     for prod, flag, size, label in _FORMATOS_SEM:
         by_week = {w: 0.0 for w in WEEKS}
+        hay = False
         if not dv.empty and flag in dv.columns and size_col in dv.columns:
             mask = dv[flag].fillna(False) & (dv[size_col] == size)
-            if mask.any():
+            hay = bool(mask.any())
+            if hay:
                 grp = dv.loc[mask].groupby("__w__")["Hectolitros"].sum()
                 for w, v in grp.items():
                     if w in by_week:
                         by_week[w] = round(float(v), 2)
+        if es_retirado(prod, size) and not hay:
+            continue          # de baja y sin ventas en este periodo: no sale
         out.append({"producto": prod, "formato": label, "semanal": by_week, "total": round(sum(by_week.values()), 2)})
     return out, [w for w in WEEKS if w in weeks_con_datos]
 
@@ -306,7 +312,7 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None, es_ra
             # La del mes va aparte para poder decir de dónde sale la del periodo.
             "cuota_hl_mes": round(cuota_mes, 2),
             "cumplimiento_pct": round((total_hl / cuota * 100) if cuota else 0.0, 2),
-            "malta_330": M330, "malta_1500": M1500,
+            "malta_330": M330, "malta_500": M500, "malta_1500": M1500,
             "parranda_330": P330, "parranda_500": P500, "parranda_1500": P1500,
             "top_productos": top_productos, "por_grupo": por_grupo,
             "metas_cantidad": metas_cantidad,

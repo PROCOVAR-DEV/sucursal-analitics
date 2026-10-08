@@ -9,7 +9,7 @@ import io
 
 import pandas as pd
 
-from core.constants import COLORS, GROUP_BG_COLORS, SIZE_MULT
+from core.constants import COLORS, FORMATOS_RETIRADOS, GROUP_BG_COLORS, SIZE_MULT, es_retirado
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.metas_gestor import metas_formato_de
 from services.loader import STD_COLS
@@ -71,8 +71,11 @@ def _new_wb():
 def _sheet_supervisor(wb, f, data: dict):
     ws = wb.add_worksheet("Supervisor")
     groups = data["groups_order"]
+    # Un formato de baja (Malta 500 ml) solo lleva columna si algún vendedor vendió de él.
+    fmts = [k for k in ("M330", "M500", "M1500", "P330", "P500", "P1500")
+            if k not in FORMATOS_RETIRADOS or any(r.get(k) for r in data["supervisor"])]
     headers = ["Gestor", "Total Venta", "Comisión"] + [f"{g} $" for g in groups] + \
-              ["M330", "M1500", "P330", "P500", "P1500", "Total HL"]
+              fmts + ["Total HL"]
     ncol = len(headers)
     ws.merge_range(0, 0, 0, ncol - 1, f"Resumen de Ventas — {data.get('supervisor_nombre') or ''}", f["title"])
     ws.merge_range(1, 0, 1, ncol - 1, f"Periodo: {data['rango']}", f["subtitle"])
@@ -95,7 +98,7 @@ def _sheet_supervisor(wb, f, data: dict):
         c = 3
         for g in groups:
             ws.write_number(r, c, row["mix"].get(g, 0.0), f["money"]); c += 1
-        for key in ("M330", "M1500", "P330", "P500", "P1500", "total_hectolitros"):
+        for key in (*fmts, "total_hectolitros"):
             ws.write_number(r, c, row[key], f["num"]); c += 1
         r += 1
     ws.write(r, 0, "TOTAL GENERAL", f["block_txt"])
@@ -104,7 +107,7 @@ def _sheet_supervisor(wb, f, data: dict):
     c = 3
     for g in groups:
         ws.write_number(r, c, round(sum(x["mix"].get(g, 0.0) for x in data["supervisor"]), 2), f["money_b"]); c += 1
-    for key in ("M330", "M1500", "P330", "P500", "P1500", "total_hectolitros"):
+    for key in (*fmts, "total_hectolitros"):
         ws.write_number(r, c, round(sum(x[key] for x in data["supervisor"]), 2), f["block"]); c += 1
 
     mr = r + 2
@@ -759,7 +762,7 @@ def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
                     "Meta (HL)", "Hectolitros"]
         for j, h in enumerate(conv_hdr):
             ws.write(cr + 1, j, h, f["header"])
-        # LOS CINCO FORMATOS que existen (Malta 500 ml se retiró el 08/10/2026), no cuatro.
+        # LOS SEIS FORMATOS, no cuatro.
         #
         # Faltaban Malta 500 y Malta 1500, así que la tabla no cuadraba con el «Total
         # Hectolitros» de tres filas más arriba y nadie sabía por qué. En la hoja de
@@ -767,8 +770,10 @@ def export_parranda_facturas(report, eff: dict, grupos: list[str] | None = None,
         # eran exactamente la Malta de 1500, que sí se había vendido y aquí no salía.
         # Con la columna de metas encima era peor: una meta puesta a M1500 no tendría
         # fila donde ponerse y desaparecería sin avisar.
-        conv_rows = [("Malta", "330", M330), ("Malta", "1500", M1500),
+        conv_rows = [("Malta", "330", M330), ("Malta", "500", M500), ("Malta", "1500", M1500),
                      ("Parranda", "330", P330), ("Parranda", "500", P500), ("Parranda", "1500", P1500)]
+        # Malta 500 ml está de baja: la fila sale solo si este vendedor vendió de ella.
+        conv_rows = [x for x in conv_rows if not es_retirado(x[0], x[1]) or x[2]]
         for i, (prod, size, hlv) in enumerate(conv_rows):
             iscol = "IsMalta" if prod == "Malta" else "IsParranda"
             bl = 0.0

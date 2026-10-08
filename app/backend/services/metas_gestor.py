@@ -7,14 +7,12 @@ import pandas as pd
 
 from services.calendario import working_days, working_days_elapsed
 from services.comisiones import comision_de
+from core.constants import FORMATOS_RETIRADOS
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 
-# Orden de formatos como el reporte.
-DEFAULT_FORMATOS = ["P1500", "P500", "P330", "M1500", "M330"]
-# Malta 500 ml dejó de venderse en todas las sucursales (Jose, 08/10/2026). Una meta vieja de
-# este formato guardada en la base NO lo hace volver a salir.
-FORMATOS_RETIRADOS = {"M500"}
+# Orden de formatos como el reporte (incluye M500, que está de baja: ver FORMATOS_RETIRADOS).
+DEFAULT_FORMATOS = ["P1500", "P500", "P330", "M1500", "M500", "M330"]
 
 
 def _fmt_code(producto: str, size) -> str | None:
@@ -101,7 +99,7 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
     """
     Los formatos que maneja ESTA sucursal, más cualquier extra que tenga meta.
 
-    `DEFAULT_FORMATOS` son los cinco de la casa, pero no todas las venden los cinco: en
+    `DEFAULT_FORMATOS` son los seis de la casa, pero no todas las venden los seis: en
     Santiago no existe Malta 500 y salía igual, una columna de ceros en cada tabla y en
     cada Excel. Un cero ahí se lee «no vendiste nada de esto», que no es lo mismo que
     «esto aquí no se vende».
@@ -115,13 +113,19 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
     significa algo, y esconder un número que alguien tecleó es peor que una columna de
     más.
     """
-    formatos = [f for f in DEFAULT_FORMATOS if f in set(eff.get("formatos") or DEFAULT_FORMATOS)] or list(DEFAULT_FORMATOS)
+    elegidos = set(eff.get("formatos") or DEFAULT_FORMATOS)
+    # Los de baja no dependen de lo que marque la sucursal: se deciden más abajo, por ventas.
+    formatos = [f for f in DEFAULT_FORMATOS if f in elegidos or f in FORMATOS_RETIRADOS] or list(DEFAULT_FORMATOS)
     for g in keys:
         for ck in (gestores_cfg.get(g) or {}).get("metas_formato", {}):
             mc = _meta_code(ck)
-            if mc and mc not in formatos and mc not in FORMATOS_RETIRADOS:
+            if mc and mc not in formatos:
                 formatos.append(mc)
 
+    # Un formato de baja solo sale si el mes mirado tiene ventas suyas (se decide abajo,
+    # con los datos). Una meta vieja guardada para él no lo hace volver.
+    con_baja = formatos
+    formatos = [f for f in con_baja if f not in FORMATOS_RETIRADOS]
     empty = {
         "rango": report.rango_str, "periodo": eff.get("_period"), "formatos": formatos,
         "report_date": None, "dias_mes": 0, "factor": 0.0,
@@ -177,6 +181,7 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
     cero en todas partes, que es lo que ya le pasa a cualquier gestor que aún no haya
     vendido.
     """
+    formatos = [f for f in con_baja if f not in FORMATOS_RETIRADOS or (df["__code__"] == f).any()]
     df = df[df["__code__"].isin(formatos)].copy()
     month_mask = df[fec].dt.normalize() <= report_date
     day_mask = df[fec].dt.normalize() == report_date

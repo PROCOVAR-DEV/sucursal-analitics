@@ -193,7 +193,7 @@ def compute_ventas(report, eff: dict) -> dict:
             "es_supervisor": es_supervisor,
             "comision_neta": comision_neta,
             "total_hectolitros": total_hl, "cuota_hl": cuota, "cumplimiento_pct": cumplimiento,
-            "malta_330": M330, "malta_1500": M1500,
+            "malta_330": M330, "malta_500": M500, "malta_1500": M1500,
             "parranda_330": P330, "parranda_500": P500, "parranda_1500": P1500,
             "mix": mix, "conversion": conv,
         })
@@ -201,7 +201,7 @@ def compute_ventas(report, eff: dict) -> dict:
             "gestor": g, "total_venta": total_importe, "comision": comision,
             "comision_supervisor": comision_supervisor,
             "mix": mix,
-            "M330": M330, "M1500": M1500,
+            "M330": M330, "M500": M500, "M1500": M1500,
             "P330": P330, "P500": P500, "P1500": P1500,
             "total_hectolitros": total_hl,
         })

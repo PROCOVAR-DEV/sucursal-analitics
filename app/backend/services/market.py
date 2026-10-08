@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from core.constants import es_retirado
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 
@@ -108,6 +109,7 @@ def compute_market(report, eff: dict) -> dict:
         ("Parranda", "IsParranda", "500", "Parranda 500 ml"),
         ("Parranda", "IsParranda", "330", "Parranda 330 ml"),
         ("Malta", "IsMalta", "1500", "Malta 1.5 L"),
+        ("Malta", "IsMalta", "500", "Malta 500 ml"),
         ("Malta", "IsMalta", "330", "Malta 330 ml"),
     ]
     sku_semanal: list[dict] = []
@@ -124,6 +126,8 @@ def compute_market(report, eff: dict) -> dict:
                 for w, v in grp.items():
                     if w in by_week:
                         by_week[w] = round(float(v), 2)
+            if es_retirado(prod, size) and not mask.any():
+                continue      # de baja y sin ventas en este periodo: no sale
             sku_semanal.append({
                 "producto": prod, "formato": label,
                 "semanal": by_week, "total": round(sum(by_week.values()), 2),

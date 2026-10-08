@@ -4,7 +4,7 @@ import { cn } from "./ui.jsx";
 // Nombres legibles de cada formato.
 const FMT_LABEL = {
   P1500: "Parranda 1.5 L", P500: "Parranda 500 ml", P330: "Parranda 330 ml",
-  M1500: "Malta 1.5 L", M330: "Malta 330 ml",
+  M1500: "Malta 1.5 L", M500: "Malta 500 ml", M330: "Malta 330 ml",
 };
 const FMT_TONE = { P: "bg-brand-500", M: "bg-amber-500" };
 const label = (f) => FMT_LABEL[f] || f;
