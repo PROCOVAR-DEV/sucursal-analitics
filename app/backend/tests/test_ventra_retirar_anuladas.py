@@ -29,13 +29,3 @@ def test_unas_pocas_anulaciones_en_un_tramo_grande_si_se_retiran():
     vivas = guardadas - set(range(12))     # el caso real de Santiago en septiembre
     assert lineas_a_retirar(guardadas, vivas) == set(range(12))
 
-
-def test_la_pasada_diaria_cubre_el_mes_y_el_anterior_los_primeros_dias():
-    from datetime import date
-    from services.ventra import tramos_del_mes
-
-    assert tramos_del_mes(date(2026, 10, 12)) == [(date(2026, 10, 1), date(2026, 10, 12))]
-    assert tramos_del_mes(date(2026, 10, 3)) == [
-        (date(2026, 9, 1), date(2026, 9, 30)), (date(2026, 10, 1), date(2026, 10, 3))]
-    assert tramos_del_mes(date(2026, 1, 2))[0] == (date(2025, 12, 1), date(2025, 12, 31))
-    assert len(tramos_del_mes(date(2026, 10, 6))) == 1

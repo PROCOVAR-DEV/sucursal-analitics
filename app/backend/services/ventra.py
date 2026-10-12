@@ -32,7 +32,7 @@ import os
 import re
 import urllib.error
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any, Iterable
 
 import pandas as pd
@@ -203,23 +203,6 @@ def lineas_a_retirar(guardadas: set[int], vivas: set[int]) -> set[int]:
         return set()
 
     return sobran
-
-
-def tramos_del_mes(hoy: date) -> list[tuple[date, date]]:
-    """Qué se repasa en la pasada diaria: el mes en curso, y el anterior los primeros días.
-
-    Las anulaciones y correcciones de Ventra pueden llegar días después y de cualquier día
-    del mes; el repaso corto de tres días no las alcanza. Los primeros cinco días también
-    se repasa el mes que acaba de cerrar, que es cuando se hacen los cierres.
-    """
-    ini = date(hoy.year, hoy.month, 1)
-    tramos = [(ini, hoy)]
-
-    if hoy.day <= 5:
-        fin_ant = ini - timedelta(days=1)
-        tramos.insert(0, (date(fin_ant.year, fin_ant.month, 1), fin_ant))
-
-    return tramos
 
 
 def _dia(v: date | datetime | str) -> str:
