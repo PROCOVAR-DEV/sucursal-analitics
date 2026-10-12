@@ -32,7 +32,7 @@ import os
 import re
 import urllib.error
 import urllib.request
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Iterable
 
 import pandas as pd
@@ -179,6 +179,47 @@ def bases() -> list[dict[str, Any]]:
         for f in filas
         if f.get("database")
     ]
+
+
+# Cuánto de lo guardado en un tramo se puede retirar de una vez por «ya no está en Ventra».
+# Una respuesta vacía o recortada por una caída de la VPN se parecería a «todo anulado»: por
+# encima de este tope se avisa y NO se borra nada. Anular unas pocas líneas es lo normal.
+RETIRO_MAX_FRACCION = 0.05
+RETIRO_MIN_LINEAS = 50
+
+
+def lineas_a_retirar(guardadas: set[int], vivas: set[int]) -> set[int]:
+    """Las líneas guardadas que Ventra YA NO trae en ese tramo, o nada si da mala espina.
+
+    Puro, para poder probarlo. Si Ventra no devolvió ninguna línea del tramo, o devolvió tan
+    pocas que retirar lo que falta sería borrar casi todo, es más probable un fallo de
+    Ventra que cientos de anulaciones: no se toca nada.
+    """
+    if not vivas:
+        return set()
+    sobran = guardadas - vivas
+
+    if len(sobran) > max(RETIRO_MIN_LINEAS, RETIRO_MAX_FRACCION * len(guardadas)):
+        return set()
+
+    return sobran
+
+
+def tramos_del_mes(hoy: date) -> list[tuple[date, date]]:
+    """Qué se repasa en la pasada diaria: el mes en curso, y el anterior los primeros días.
+
+    Las anulaciones y correcciones de Ventra pueden llegar días después y de cualquier día
+    del mes; el repaso corto de tres días no las alcanza. Los primeros cinco días también
+    se repasa el mes que acaba de cerrar, que es cuando se hacen los cierres.
+    """
+    ini = date(hoy.year, hoy.month, 1)
+    tramos = [(ini, hoy)]
+
+    if hoy.day <= 5:
+        fin_ant = ini - timedelta(days=1)
+        tramos.insert(0, (date(fin_ant.year, fin_ant.month, 1), fin_ant))
+
+    return tramos
 
 
 def _dia(v: date | datetime | str) -> str:

@@ -21,6 +21,7 @@ import logging
 import os
 from datetime import date, datetime, timedelta
 
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from services import ventra
@@ -110,6 +111,36 @@ def guardar(filas: list[dict]) -> int:
     return total
 
 
+def retirar_anuladas(base: str, desde: date, hasta: date, ids_vivos: set[int]) -> int:
+    """Quita de la copia las líneas que Ventra ya no tiene en ese tramo.
+
+    `guardar` solo escribe: si en Ventra una factura se anula o se le quita una línea, la
+    copia seguía con ella para siempre y analitics daba más que el reporte de Ventra.
+    Medido el 12/10/2026 contra el reporte de septiembre: Santiago 4.045 líneas / 455.445,93
+    la copia, 4.033 / 454.711,43 Ventra; Granma 778 / 90.156,48 contra 770 / 89.018,48.
+    """
+    if not ids_vivos:
+        return 0
+
+    with session_scope() as s:
+        donde = (
+            VentaVentra.database == base,
+            VentaVentra.fecha >= datetime.combine(desde, datetime.min.time()),
+            VentaVentra.fecha < datetime.combine(hasta + timedelta(days=1), datetime.min.time()),
+        )
+        guardadas = set(s.scalars(select(VentaVentra.linea_id).where(*donde)))
+        quitar = ventra.lineas_a_retirar(guardadas, ids_vivos)
+
+        if len(guardadas - ids_vivos) and not quitar:
+            log.warning("[ventra] %s %s..%s: %d lineas guardadas ya no estan en Ventra; son demasiadas "
+                        "para retirarlas solas, no se toca nada", base, desde, hasta, len(guardadas - ids_vivos))
+        if quitar:
+            s.execute(delete(VentaVentra).where(VentaVentra.database == base, VentaVentra.linea_id.in_(quitar)))
+            log.info("[ventra] %s %s..%s: %d lineas anuladas en Ventra retiradas", base, desde, hasta, len(quitar))
+
+    return len(quitar)
+
+
 def _traer(base: str, desde: date, hasta: date) -> tuple[int, int, float]:
     """Un tramo de una base. Devuelve (guardadas, sin vendedor, importe sin vendedor)."""
     crudas = ventra.ventas_crudas(base, desde, hasta)
@@ -123,6 +154,9 @@ def _traer(base: str, desde: date, hasta: date) -> tuple[int, int, float]:
         df = df.assign(_linea_id=ids)
 
     n = guardar(_filas(df, base))
+    # Solo si Ventra trajo la identidad de TODAS las líneas: sin ella no se sabe qué sobra.
+    if "_linea_id" in df.columns:
+        retirar_anuladas(base, desde, hasta, {int(i) for i in df["_linea_id"]})
     sin_v, importe_sin_v = ventra.sin_vendedor(df)
 
     return n, sin_v, importe_sin_v
@@ -146,6 +180,34 @@ def al_dia(dias: int = DIAS_AL_DIA) -> dict[str, int]:
             # nueve sucursales no tienen por qué quedarse sin datos por eso.
             salida[nombre] = -1
             log.warning("[ventra] %s fallo: %s", nombre, e)
+
+    return salida
+
+
+def repaso_del_mes() -> dict[str, int]:
+    """La pasada DIARIA: el mes entero de cada base, retirando lo que Ventra anuló.
+
+    El repaso corto (`al_dia`) solo mira tres días atrás y una anulación de hace una semana
+    se quedaba en analitics para siempre. Una vez al día se repasa el mes completo (y el
+    anterior los primeros días); son unas 50.000 líneas contra las 15.000 por hora que ya
+    se descartaron, así que una vez al día sí compensa.
+    """
+    salida: dict[str, int] = {}
+
+    for b in ventra.bases():
+        nombre = b["database"]
+        total = 0
+
+        try:
+            for ini, fin in ventra.tramos_del_mes(date.today()):
+                n, sin_v, imp = _traer(nombre, ini, fin)
+                total += n
+                aviso = f" · {sin_v} sin vendedor ({imp:.2f})" if sin_v else ""
+                log.info("[ventra] %s %s..%s: %d lineas%s", nombre, ini, fin, n, aviso)
+            salida[nombre] = total
+        except ventra.VentraNoDisponible as e:
+            salida[nombre] = -1
+            log.warning("[ventra] %s fallo en el repaso del mes: %s", nombre, e)
 
     return salida
 
@@ -188,6 +250,8 @@ def recuperar(desde: date, hasta: date | None = None, base: str | None = None) -
 # Cada cuántas vueltas se hace el repaso ancho en vez de traer sólo el día. Con una
 # vuelta por hora, 12 son dos veces al día.
 VUELTAS_POR_REPASO = int(os.environ.get("VENTRA_VUELTAS_POR_REPASO", "12"))
+# Y cada cuántas el repaso del MES entero, que además retira lo anulado: 24 es una vez al día.
+VUELTAS_POR_MES = int(os.environ.get("VENTRA_VUELTAS_POR_MES", "24"))
 
 
 def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
@@ -230,16 +294,17 @@ def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
         # La primera vuelta sí repasa: si el proceso acaba de arrancar, puede llevar
         # horas parado y lo de esos días no lo ha traído nadie.
         repaso = vuelta % VUELTAS_POR_REPASO == 0
+        mes_entero = vuelta % VUELTAS_POR_MES == 0
         cuantos = dias if repaso else 1
 
         try:
-            r = al_dia(cuantos)
+            r = repaso_del_mes() if mes_entero else al_dia(cuantos)
             vivas = {k: v for k, v in r.items() if v >= 0}
             caidas = [k for k, v in r.items() if v < 0]
             log.info(
                 "[ventra] %d lineas de %d bases · %s%s",
                 sum(vivas.values()), len(vivas),
-                f"repaso de {cuantos} dias" if repaso else "sólo hoy",
+                "repaso del mes" if mes_entero else (f"repaso de {cuantos} dias" if repaso else "sólo hoy"),
                 f" · fallaron {', '.join(caidas)}" if caidas else "",
             )
         except Exception as e:  # noqa: BLE001
