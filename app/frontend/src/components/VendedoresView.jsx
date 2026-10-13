@@ -147,7 +147,9 @@ export default function VendedoresView({ sourceId, period }) {
           había arreglado en móvil y seguía en escritorio.
           Ahora se arrastra en todas las anchuras: una fila, alta fija, pase lo que pase
           con la cantidad de vendedores o el largo de los nombres. */}
-      <div className="sticky top-0 z-20 -mx-3 sm:-mx-6 px-3 sm:px-6 py-3 bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-sm flex gap-2 overflow-x-auto scroll-thin">
+      {/* z-40: las celdas fijas de las tablas (`.col-fija`, z-20/z-30) pasaban POR ENCIMA de esta tira al
+          desplazarse. Los desplegables y avisos van en z-50, por encima de ésta. */}
+      <div className="sticky top-0 z-40 -mx-3 sm:-mx-6 px-3 sm:px-6 py-3 bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-sm flex gap-2 overflow-x-auto scroll-thin">
         {data.vendedores.map((v) => {
           const active = v.gestor === activeGestor;
           const pct = v.cumplimiento_pct;
