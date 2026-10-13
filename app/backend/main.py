@@ -29,6 +29,7 @@ from fastapi.responses import JSONResponse, Response
 from services.auth_store import auth_store, ALL_SUCURSALES
 from services import refresco_ventra
 from services import cache
+from services import crm
 from services import ajustes
 from services import comisiones
 from services.clientes_analisis import compute_clientes_analisis
@@ -689,7 +690,17 @@ def src_periods(sid: str, source_id: str, suc: dict = Depends(require_access)) -
 @app.get("/api/sucursales/{sid}/sources/{source_id}/ventas")
 def src_ventas(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
-    return compute_ventas(report, _eff_scoped(suc, report, mes, user))
+    eff = _eff_scoped(suc, report, mes, user)
+    res = compute_ventas(report, eff)
+    # Las metas pueden venir del CRM, y sus KPI del mes (visitas, pedidos...) van al
+    # lado de las ventas. Sin CRM, la respuesta es la de siempre más `fuente_metas`.
+    res["fuente_metas"] = eff.get("_fuente_metas", "analytics")
+    res["crm_sin_casar"] = eff.get("_crm_sin_casar", [])
+    kpis = crm.kpis_por_clave(eff, sid)
+    for g in res.get("gestores") or []:
+        if g.get("gestor") in kpis:
+            g["crm"] = kpis[g["gestor"]]
+    return res
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/competencia")
@@ -1176,7 +1187,8 @@ def _compute_dashboard(suc: dict, source_id: str, mes: str | None, user: dict,
     editada). Sin esto, cada carga del Resumen recalculaba todo desde cero."""
     # El rango entra en la CLAVE: sin eso, pedir del 1 al 15 devolvia lo que se hubiera
     # calculado antes para el mes entero, y el numero salia mal sin que nada fallara.
-    key = ("dashboard", suc["id"], source_id, mes or "", desde or "", hasta or "", _scope_key(user))
+    key = ("dashboard", suc["id"], source_id, mes or "", desde or "", hasta or "", _scope_key(user),
+           crm.huella())
     return cache.get_or_compute(
         key, suc["id"], lambda: _compute_dashboard_uncached(suc, source_id, mes, user, desde, hasta)
     )

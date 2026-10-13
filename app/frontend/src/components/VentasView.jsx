@@ -37,6 +37,9 @@ export default function VentasView({ sourceId, period }) {
     total_importe: a.total_importe + (g.total_importe || 0),
   }), { malta_330: 0, malta_500: 0, malta_1500: 0, parranda_330: 0, parranda_500: 0, parranda_1500: 0, total_hectolitros: 0, total_importe: 0 });
 
+  // KPI del mes que manda el CRM (solo con CRM configurado y un mes concreto).
+  const conKpisCrm = data.gestores.filter((g) => g.crm);
+
   // Malta 500 ml está de baja: solo lleva columna si algún vendedor vendió de ella en este periodo.
   const hayM500 = data.gestores.some((g) => g.malta_500);
 
@@ -56,6 +59,17 @@ export default function VentasView({ sourceId, period }) {
         <Kpi label="Comisión supervisor" value={formatMoney(data.comision_supervisor)} tone="green"
           hint={`${data.supervisor_nombre || ""}${data.comision_supervisor_pct ? ` · ${(data.comision_supervisor_pct * 100).toFixed(0)}% de cada gestor` : ""}`} />
       </div>
+
+      {/* Las cuotas y los KPI los lleva el CRM: se dice de dónde sale la cuota, y a quién
+          no se ha podido casar (su código de vendedor de Accesos va como alias). */}
+      {data.fuente_metas === "crm" && (
+        <div className="text-sm text-slate-600">
+          Cuotas del CRM.
+          {data.crm_sin_casar?.length > 0 && (
+            <span className="text-amber-700"> Sin casar con un gestor de aquí: {data.crm_sin_casar.join(", ")}.</span>
+          )}
+        </div>
+      )}
 
       <BarCard title="Hectolitros por gestor" data={gestoresBar} xKey="gestor" yKey="hectolitros" />
 
@@ -110,6 +124,37 @@ export default function VentasView({ sourceId, period }) {
           </table>
         </TablaScroll>
       </div>
+      {conKpisCrm.length > 0 && (
+        <div className="panel">
+          <div className="card-header">
+            <h3 className="card-title">Actividad del mes (CRM)</h3>
+          </div>
+          <TablaScroll>
+            <table className="text-sm border-collapse">
+              <thead>
+                <tr>
+                  {["Gestor", "Visitas", "Clientes visitados", "Pedidos", "Efectividad", "Unidades", "HL pedidos"].map((h) => (
+                    <th key={h} className="bg-slate-50 text-slate-500 text-[11px] font-semibold uppercase px-3 py-2.5 text-right first:text-left border-b border-slate-200 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {conKpisCrm.map((g) => (
+                  <tr key={g.gestor}>
+                    <td className="px-3 py-2 font-medium text-slate-800 border-b border-slate-100 whitespace-nowrap">{g.gestor}</td>
+                    <td className="px-3 py-2 text-right border-b border-slate-100 tabular-nums">{formatNumber(g.crm.visitas_mes, 0)}</td>
+                    <td className="px-3 py-2 text-right border-b border-slate-100 tabular-nums">{formatNumber(g.crm.clientes_visitados, 0)}</td>
+                    <td className="px-3 py-2 text-right border-b border-slate-100 tabular-nums">{formatNumber(g.crm.pedidos_generados, 0)}</td>
+                    <td className="px-3 py-2 text-right border-b border-slate-100 tabular-nums">{formatNumber(g.crm.efectividad_venta_pct, 1)} %</td>
+                    <td className="px-3 py-2 text-right border-b border-slate-100 tabular-nums">{formatNumber(g.crm.unidades_vendidas, 0)}</td>
+                    <td className="px-3 py-2 text-right border-b border-slate-100 tabular-nums">{formatNumber(g.crm.hectolitros_vendidos, 2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TablaScroll>
+        </div>
+      )}
     </div>
   );
 }

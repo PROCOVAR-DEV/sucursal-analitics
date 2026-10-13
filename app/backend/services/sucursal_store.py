@@ -229,6 +229,12 @@ def config_for_period(suc: dict, year: int | None, month: int | None) -> dict:
             for k, g in (eff.get("gestores") or {}).items()
         }
 
+        # Las cuotas las lleva el CRM: si las tiene para este mes, mandan sobre las de
+        # aquí. Sin CRM configurado, o sin cuotas ese mes, esto no cambia nada.
+        from services import crm
+
+        eff = crm.aplicar_cuotas(eff, suc.get("id"), int(year), int(month))
+
         eff["_period"] = key
     return eff
 
