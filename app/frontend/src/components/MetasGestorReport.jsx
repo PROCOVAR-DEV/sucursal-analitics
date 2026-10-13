@@ -48,7 +48,7 @@ function activeFormatos(formatos, ...rows) {
  * puso 270 de azúcar y aquí leía 209. Lo dijo Santiago el 24/09/2026: «no coinciden».
  * Eran dos números distintos con el mismo nombre.
  */
-function CumplTable({ title, subtitle, tone, rows, showAyer = false, showDeberia = false, showMetaResto = false, conHoy = true }) {
+function CumplTable({ title, subtitle, tone, rows, showAyer = false, showDeberia = false, showMetaResto = false }) {
   const sum = (k) => rows.reduce((s, r) => s + (Number(r[k]) || 0), 0);
   return (
     <div className="rounded-xl border border-slate-200 overflow-hidden">
@@ -65,10 +65,10 @@ function CumplTable({ title, subtitle, tone, rows, showAyer = false, showDeberia
             {showDeberia && <th className="!text-right" title="Lo que tendría que llevar vendido a hoy, por días laborales transcurridos">Debería</th>}
             {showAyer && <th className="!text-right">Ayer</th>}
             {showMetaResto && <th className="!text-right" title="Lo que falta del plan del mes ÷ los días laborales que quedan, hoy incluido">Meta diaria</th>}
-            {conHoy && <th className="!text-right">{showAyer ? "Hoy" : "Vendido"}</th>}
-            {conHoy && <th className="!text-left !pl-4">Cumplimiento</th>}
-            {conHoy && <th className="!text-right">{showDeberia ? "Δ vs debería" : "Δ vs meta"}</th>}
-            {conHoy && showAyer && <th className="!text-right">Δ vs ayer</th>}
+            <th className="!text-right">{showAyer ? "Hoy" : "Vendido"}</th>
+            <th className="!text-left !pl-4">Cumplimiento</th>
+            <th className="!text-right">{showDeberia ? "Δ vs debería" : "Δ vs meta"}</th>
+            {showAyer && <th className="!text-right">Δ vs ayer</th>}
           </tr>
         </thead>
         <tbody>
@@ -84,10 +84,10 @@ function CumplTable({ title, subtitle, tone, rows, showAyer = false, showDeberia
               {showDeberia && <td className="text-right tabular-nums text-slate-400">{num(r.deberia)}</td>}
               {showAyer && <td className="text-right tabular-nums text-slate-400">{num(r.ayer)}</td>}
               {showMetaResto && <td className="text-right tabular-nums font-medium text-brand-700">{num(r.metaResto)}</td>}
-              {conHoy && <td className="text-right tabular-nums font-semibold text-slate-800">{num(r.real)}</td>}
-              {conHoy && <td className="pl-4"><Bar pct={r.pct} /></td>}
-              {conHoy && <td className="text-right"><Delta v={r.delta} /></td>}
-              {conHoy && showAyer && <td className="text-right"><Delta v={r.vsAyer} /></td>}
+              <td className="text-right tabular-nums font-semibold text-slate-800">{num(r.real)}</td>
+              <td className="pl-4"><Bar pct={r.pct} /></td>
+              <td className="text-right"><Delta v={r.delta} /></td>
+              {showAyer && <td className="text-right"><Delta v={r.vsAyer} /></td>}
             </tr>
           ))}
         </tbody>
@@ -98,16 +98,16 @@ function CumplTable({ title, subtitle, tone, rows, showAyer = false, showDeberia
             {showDeberia && <td className="px-3 py-2.5 text-right tabular-nums">{num(sum("deberia"))}</td>}
             {showAyer && <td className="px-3 py-2.5 text-right tabular-nums">{num(sum("ayer"))}</td>}
             {showMetaResto && <td className="px-3 py-2.5 text-right tabular-nums">{num(sum("metaResto"))}</td>}
-            {conHoy && <td className="px-3 py-2.5 text-right tabular-nums">{num(sum("real"))}</td>}
-            {conHoy && <td className="px-3 py-2.5">
+            <td className="px-3 py-2.5 text-right tabular-nums">{num(sum("real"))}</td>
+            <td className="px-3 py-2.5">
               {(() => {
                 const m = sum("meta"), v = sum("real");
                 const p = m ? (v / m) * 100 : 0;
                 return <div className="flex items-center gap-2"><div className="h-2 flex-1 bg-white/25 rounded-full overflow-hidden"><div className={cn("h-full rounded-full", barColor(p))} style={{ width: `${Math.min(p, 100)}%` }} /></div><span className="text-xs font-bold w-11 text-right tabular-nums">{Math.round(p)}%</span></div>;
               })()}
-            </td>}
-            {conHoy && <td className="px-3 py-2.5 text-right tabular-nums">{(() => { const d = sum("delta"); return `${d >= 0 ? "+" : ""}${num(d)}`; })()}</td>}
-            {conHoy && showAyer && <td className="px-3 py-2.5 text-right tabular-nums">{(() => { const d = sum("vsAyer"); return `${d >= 0 ? "+" : ""}${num(d)}`; })()}</td>}
+            </td>
+            <td className="px-3 py-2.5 text-right tabular-nums">{(() => { const d = sum("delta"); return `${d >= 0 ? "+" : ""}${num(d)}`; })()}</td>
+            {showAyer && <td className="px-3 py-2.5 text-right tabular-nums">{(() => { const d = sum("vsAyer"); return `${d >= 0 ? "+" : ""}${num(d)}`; })()}</td>}
           </tr>
         </tfoot>
       </table>
@@ -178,7 +178,7 @@ export function VendorFormatoTables({ block, formatos, unidad = "HL", vacio = nu
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <CumplTable title={`Acumulado del mes (${unidad})`} subtitle="Meta del mes · lo que debería llevar a hoy (días laborales) · lo vendido" tone="bg-brand-700" rows={mesRows} showDeberia />
-      <CumplTable title={`Meta del día (${unidad})`} subtitle={`Meta, lo vendido ayer y lo que toca vender hoy · Meta diaria = lo que falta del plan ÷ ${d.dias_que_quedan ?? "los"} días que quedan`} tone="bg-slate-700" rows={diaRows} showAyer showMetaResto conHoy={false} />
+      <CumplTable title={`Ventas del día (${unidad})`} subtitle={`Hoy vs. meta y vs. ayer, por producto · Meta diaria = lo que falta del plan ÷ ${d.dias_que_quedan ?? "los"} días que quedan`} tone="bg-slate-700" rows={diaRows} showAyer showMetaResto />
     </div>
   );
 }
