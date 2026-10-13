@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from services.calendario import working_days, working_days_elapsed
+from services.calendario import meta_diaria_restante, working_days, working_days_elapsed, working_days_left
 from services.comisiones import comision_de
 from core.constants import FORMATOS_RETIRADOS
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
@@ -152,6 +152,7 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
     dias_mes = working_days(report_date.year, report_date.month, eff)
     dias_corridos = working_days_elapsed(report_date, eff)
     factor = round(dias_corridos / dias_mes, 6)
+    dias_que_quedan = working_days_left(report_date, eff)
 
     # Código de formato por fila; solo bebidas (Malta/Parranda), como el reporte.
     df["__code__"] = [_fmt_code(m, s) for m, s in zip(df[merc], df.get(STD_COLS["size"], pd.Series([None] * len(df), index=df.index)))]
@@ -214,6 +215,9 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
         vant_tot = round(sum(venta_ant.values()), 2)
         ma_tot = round(meta_total_tot * factor, 2)
         md_tot = round(meta_total_tot / dias_mes, 2)
+        # Lo que falta del plan entre los días que quedan (lo vendido cuenta hasta AYER).
+        meta_resto = {f: meta_diaria_restante(meta_total[f], venta_acum[f] - venta_dia[f], dias_que_quedan) for f in formatos}
+        mr_tot = meta_diaria_restante(meta_total_tot, va_tot - vd_tot, dias_que_quedan)
 
         def rowify(d, tot):
             return {**{f: d[f] for f in formatos}, "TOTAL": tot}
@@ -229,6 +233,8 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
         }
         diario = {
             "meta_dia": rowify(meta_dia, md_tot),
+            "meta_dia_resto": rowify(meta_resto, mr_tot),
+            "dias_que_quedan": dias_que_quedan,
             "venta_dia": rowify(venta_dia, vd_tot),
             "venta_dia_ant": rowify(venta_ant, vant_tot),
             "delta_vs_ant": rowify({f: round(venta_dia[f] - venta_ant[f], 2) for f in formatos}, round(vd_tot - vant_tot, 2)),
@@ -280,7 +286,7 @@ def compute_metas_gestor(report, eff: dict, dia: str | None = None) -> dict:
         "rango": report.rango_str, "periodo": eff.get("_period"), "formatos": formatos,
         "report_date": report_date.strftime("%Y-%m-%d"),
         "report_date_ant": prev_date.strftime("%Y-%m-%d") if prev_date is not None else None,
-        "dias_mes": dias_mes, "dias_corridos": dias_corridos, "factor": factor,
+        "dias_mes": dias_mes, "dias_corridos": dias_corridos, "dias_que_quedan": dias_que_quedan, "factor": factor,
         # Días del mes con datos: el selector de "día de corte" del frontend.
         "dias_disponibles": dias_disponibles,
         "dia_anterior": prev_date.strftime("%Y-%m-%d") if prev_date is not None else None,

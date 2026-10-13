@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from services.calendario import working_days, working_days_elapsed
+from services.calendario import meta_diaria_restante, working_days, working_days_elapsed, working_days_left
 from services.enrich import enrich_for_sucursal, gestor_keys, only_valid
 from services.loader import STD_COLS
 
@@ -80,6 +80,7 @@ def compute_metas_cantidad_gestor(report, eff: dict, dia: str | None = None) -> 
     dias_mes = working_days(report_date.year, report_date.month, eff)
     dias_corridos = working_days_elapsed(report_date, eff)
     factor = round(dias_corridos / dias_mes, 6) if dias_mes else 0.0
+    dias_que_quedan = working_days_left(report_date, eff)
 
     # Sólo el mes del día de corte, como el estudio de hectolitros.
     df = df[(df[fec].dt.year == report_date.year) & (df[fec].dt.month == report_date.month)].copy()
@@ -119,6 +120,9 @@ def compute_metas_cantidad_gestor(report, eff: dict, dia: str | None = None) -> 
         meta_acum = {p: round(meta_total[p] * factor, 2) for p in productos}
         meta_dia = {p: round(meta_total[p] / dias_mes, 2) if dias_mes else 0.0 for p in productos}
 
+        # Lo que falta del plan entre los días que quedan (lo vendido cuenta hasta AYER).
+        meta_resto = {p: meta_diaria_restante(meta_total[p], venta_acum[p] - venta_dia[p], dias_que_quedan) for p in productos}
+
         def fila(d):
             return {**d, "TOTAL": round(sum(d.values()), 2)}
 
@@ -136,7 +140,8 @@ def compute_metas_cantidad_gestor(report, eff: dict, dia: str | None = None) -> 
                 "pct_total": {c: _pct(va[c], mt[c]) for c in cols},
             },
             "diario": {
-                "meta_dia": md, "venta_dia": vd, "venta_dia_ant": vant,
+                "meta_dia": md, "meta_dia_resto": fila(meta_resto), "dias_que_quedan": dias_que_quedan,
+                "venta_dia": vd, "venta_dia_ant": vant,
                 "delta_vs_ant": {c: round(vd[c] - vant[c], 2) for c in cols},
                 "delta_dia": {c: round(vd[c] - md[c], 2) for c in cols},
                 "delta_dia_pct": {c: _pct(vd[c] - md[c], md[c]) for c in cols},
@@ -148,7 +153,7 @@ def compute_metas_cantidad_gestor(report, eff: dict, dia: str | None = None) -> 
     return {
         "rango": report.rango_str, "periodo": eff.get("_period"), "formatos": productos,
         "report_date": report_date.strftime("%Y-%m-%d"),
-        "dias_mes": dias_mes, "factor": factor,
+        "dias_mes": dias_mes, "dias_que_quedan": dias_que_quedan, "factor": factor,
         "por_gestor": por_gestor,
         "dias_disponibles": dias_disponibles,
         "dia_anterior": pd.Timestamp(prev_date).strftime("%Y-%m-%d") if prev_date is not None else None,

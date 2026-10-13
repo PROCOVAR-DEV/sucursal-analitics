@@ -42,3 +42,26 @@ def working_days_elapsed(report_date, eff: dict) -> int:
     start = pd.Timestamp(report_date).replace(day=1)
     rng = pd.bdate_range(start=start, end=pd.Timestamp(report_date), freq="C", weekmask=weekmask(eff))
     return max(1, len(rng))
+
+
+def working_days_left(report_date, eff: dict) -> int:
+    """Días laborales que QUEDAN del mes, contando el día de corte si se trabaja ese día.
+
+    Es entre los que hay que repartir lo que falta del plan: a 13/10/2026 (martes) quedan 14
+    —hoy y los del 14 al 30—, no los 22 del mes. Mínimo 1: pasado el último día laborable no
+    se puede dividir entre cero y lo que falta se enseña entero.
+    """
+    d = pd.Timestamp(report_date)
+    hoy_laboral = weekmask(eff)[d.weekday()] == "1"
+    return max(1, working_days(d.year, d.month, eff) - working_days_elapsed(d, eff) + (1 if hoy_laboral else 0))
+
+
+def meta_diaria_restante(meta_mes: float, vendido_antes_de_hoy: float, dias_que_quedan: int) -> float:
+    """Lo que falta del plan del mes entre los días que quedan.
+
+    Pedido de Sidney el 13/10/2026: «si quedan 10 días y tienes un plan de 400 pacas de
+    azúcar, la meta diaria sea de 40». La meta del día de siempre (plan ÷ días del mes) no se
+    ajusta: quien va atrasado seguía viendo la misma cifra. Lo vendido cuenta HASTA AYER;
+    lo de hoy es lo que se compara contra esta meta, no lo que la mueve.
+    """
+    return round(max(0.0, float(meta_mes) - float(vendido_antes_de_hoy)) / max(1, int(dias_que_quedan)), 2)
