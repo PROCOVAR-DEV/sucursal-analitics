@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from services import metas_crm
 from services.db import session_scope, Sucursal
 from services.roster import filtrar_por_baja
 from core.constants import (
@@ -316,11 +317,18 @@ class SucursalStore:
         # deepcopy: si se compartieran los dicts anidados con row.config, una mutación
         # in-place (ej. suc["metas"][x]=...) también tocaría el snapshot "viejo" de
         # SQLAlchemy y NO se detectaría el cambio → no se guardaría.
-        return {**copy.deepcopy(row.config or {}), "id": row.sid, "nombre": row.nombre}
+        suc = {**copy.deepcopy(row.config or {}), "id": row.sid, "nombre": row.nombre}
+        # Las metas mandan desde la base del CRM cuando está configurada (services/metas_crm.py).
+        return metas_crm.juntar(suc, metas_crm.leer(row.sid)) if metas_crm.activo() else suc
 
     def _persist(self, s, sid: str, suc: dict) -> None:
         nombre = suc.get("nombre", suc.get("id", sid))
         body = {k: v for k, v in suc.items() if k not in ("id", "nombre")}
+        if metas_crm.activo():
+            parte, avisos = metas_crm.separar(suc)
+            if avisos:
+                log.warning("Metas de %s que no caben en la base del CRM y no se guardan allí: %s", sid, avisos)
+            metas_crm.guardar(sid, parte)
         row = s.query(Sucursal).filter_by(sid=sid).one_or_none()
         if row is None:
             s.add(Sucursal(sid=sid, nombre=nombre, config=body))
@@ -422,6 +430,8 @@ class SucursalStore:
             if row is None:
                 return False
             s.delete(row)
+            if metas_crm.activo():
+                metas_crm.borrar(sid)
             return True
 
     # ---------- gestores (CRUD dinámico) ----------

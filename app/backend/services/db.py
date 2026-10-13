@@ -40,7 +40,7 @@ if "DATABASE_URL" not in os.environ:
 DATABASE_URL = os.environ["DATABASE_URL"]  # analitics_app@127.0.0.1:5432/analitics
 
 
-def _conectar_reintentando():
+def _conectar_reintentando(dsn: str = DATABASE_URL):
     """Abre la conexión a Postgres, reintentando si el fallo es pasajero.
 
     `pool_pre_ping` ya detecta conexiones MUERTAS, pero no ayuda cuando lo que
@@ -64,7 +64,7 @@ def _conectar_reintentando():
 
     import psycopg2
 
-    url = make_url(DATABASE_URL)
+    url = make_url(dsn)
     espera = 0.25
     ultimo: Exception | None = None
 
