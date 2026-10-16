@@ -66,7 +66,7 @@ def facturas_sin_vendedor(df_bruto: pd.DataFrame) -> list[dict]:
     out: list[dict] = []
 
     for operacion, g in f.groupby(op, sort=False, dropna=False):
-        notas = [str(n).strip() for n in g[nota].tolist() if n is not None and str(n).strip() and str(n).lower() != "nan"]
+        notas = [str(n).strip() for n in g[nota].tolist() if not pd.isna(n) and str(n).strip()]
         fecha = g[fec].min()
 
         out.append({

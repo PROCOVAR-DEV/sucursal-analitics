@@ -26,7 +26,7 @@ def con(op, dia, **kw):
 def lineas():
     return [
         con("100", "2026-10-01", merc="CERVEZA PARRANDA 1500 ML BLISTER 6U", imp=210.60, nota=None, socio="YOENIS"),
-        con("100", "2026-10-01", merc="AZUCAR PATEKO 1 KG PACA 10U", imp=10.0, nota=None, socio="YOENIS"),
+        con("100", "2026-10-01", merc="AZUCAR PATEKO 1 KG PACA 10U", imp=10.0, nota=pd.NA, socio="YOENIS"),  # pandas guarda el vacío como NA
         con("101", "2026-10-02", merc="CERVEZA PARRANDA 1500 ML BLISTER 6U", imp=500.0, nota=CON_VENDEDOR),
         con("102", "2026-10-03", merc="ENTREGA A DOMICILIO", imp=24.08, nota="ALIANNIS"),
         con("103", "2026-10-03", merc="ACEITE SOYA SAUDE 900 ML CAJA 20U", imp=57.0, nota="ALIANNIS"),
