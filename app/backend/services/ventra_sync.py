@@ -25,6 +25,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from services import ventra
+from services.ventana_ventra import dias_del_repaso, toca_cierre
 from services.db import VentaVentra, session_scope
 from services.loader import STD_COLS
 
@@ -253,35 +254,61 @@ def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
     ser cuando alguien pregunta por qué los informes están viejos.
     """
     import time
+    from zoneinfo import ZoneInfo
 
     # Margen al arrancar: durante el despliegue la VPN puede no estar lista, y un fallo
     # en el primer segundo no dice nada de si esto funciona.
     time.sleep(int(os.environ.get("VENTRA_ESPERA_INICIAL_S", "60")))
 
     vuelta = 0
+    ultimo_cierre = None
+    no_antes = 0.0
 
-    while True:
-        # La primera vuelta sí repasa: si el proceso acaba de arrancar, puede llevar
-        # horas parado y lo de esos días no lo ha traído nadie.
-        repaso = vuelta % VUELTAS_POR_REPASO == 0
-        cuantos = dias if repaso else 1
-
+    def pasada(cuantos: int, que: str) -> bool:
+        """Una pasada de `cuantos` días. Devuelve si todas las bases contestaron."""
         try:
             r = al_dia(cuantos)
             vivas = {k: v for k, v in r.items() if v >= 0}
             caidas = [k for k, v in r.items() if v < 0]
             log.info(
                 "[ventra] %d lineas de %d bases · %s%s",
-                sum(vivas.values()), len(vivas),
-                f"repaso de {cuantos} dias" if repaso else "sólo hoy",
+                sum(vivas.values()), len(vivas), que,
                 f" · fallaron {', '.join(caidas)}" if caidas else "",
             )
+
+            return not caidas
         except Exception as e:  # noqa: BLE001
             log.exception("[ventra] la pasada fallo entera: %s", e)
 
-        vuelta += 1
-        time.sleep(cada_s)
+            return False
 
+    while True:
+        # La primera vuelta sí repasa: si el proceso acaba de arrancar, puede llevar
+        # horas parado y lo de esos días no lo ha traído nadie.
+        repaso = vuelta % VUELTAS_POR_REPASO == 0
+
+        if repaso:
+            pasada(max(dias, dias_del_repaso(date.today())), "repaso del mes")
+        else:
+            pasada(1, "sólo hoy")
+
+        vuelta += 1
+
+        # Se espera la hora, pero mirando cada minuto si toca el CIERRE: pasadas las 18:30
+        # de Cuba se vuelve a leer el mes entero, una vez al día. Es lo que hace el cotejo
+        # de Pedidos, y lo que evita que una nota corregida en Ventra se quede vieja aquí.
+        fin = time.monotonic() + cada_s
+
+        while (resto := fin - time.monotonic()) > 0:
+            time.sleep(min(60, resto))
+            ahora = datetime.now(ZoneInfo("America/Havana"))
+
+            if time.monotonic() >= no_antes and toca_cierre(ahora, ultimo_cierre):
+                if pasada(dias_del_repaso(ahora.date()), "cierre del dia (18:30 Cuba)"):
+                    ultimo_cierre = ahora.date()
+                else:
+                    # Ventra no contestó entera: se reintenta en diez minutos, no cada uno.
+                    no_antes = time.monotonic() + 600
 
 if __name__ == "__main__":  # pragma: no cover
     import argparse

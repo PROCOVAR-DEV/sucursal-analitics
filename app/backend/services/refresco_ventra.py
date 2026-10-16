@@ -23,17 +23,13 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from datetime import date, timedelta
+from datetime import date
 
 from services import ventra, ventra_sync
+from services.ventana_ventra import desde_del_repaso
 from services.ventra_sucursales import base_de
 
 log = logging.getLogger(__name__)
-
-# Cuántos días se vuelven a pedir. Los mismos que el bucle automático: lo de hoy y lo de
-# ayer, que es donde se mueve todo. Pedir más es pedirle a Ventra un histórico que ya
-# tenemos.
-DIAS = 2
 
 # El freno. Seis por hora es uno cada diez minutos de media: de sobra para «acabo de
 # facturar y quiero verlo», y lejos de poder hacerle daño a Ventra.
@@ -85,7 +81,13 @@ def cuanto_queda(sid: str) -> dict:
 
 
 def refrescar(sid: str) -> dict:
-    """Trae de Ventra los últimos días de ESA sucursal. Devuelve qué pasó."""
+    """Trae de Ventra el MES de ESA sucursal y deja la copia igual que Ventra. Devuelve qué pasó.
+
+    El mes entero y no dos días: si en Ventra corrigen una nota o anulan una línea de hace
+    una semana, el botón tiene que traerlo. Con dos días de ventana se quedaba la copia
+    vieja (Holguín, 16/10/2026: tres facturas del 01/10 «sin vendedor» que Ventra ya tenía
+    con su vendedor). `_traer` además retira lo que Ventra ya no tiene en ese tramo.
+    """
     base = base_de(sid)
 
     if not base:
@@ -102,7 +104,7 @@ def refrescar(sid: str) -> dict:
         _hechos.setdefault(sid, []).append(time.time())
 
     hasta = date.today()
-    desde = hasta - timedelta(days=DIAS)
+    desde = desde_del_repaso(hasta)
 
     with _mi_candado(sid):
         try:
