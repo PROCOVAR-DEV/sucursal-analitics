@@ -11,7 +11,7 @@ import { formatMoney } from "./Kpi.jsx";
  * del nombre— para corregirla en Ventra o darle de alta el alias. El 16/10/2026 Jose vio una
  * venta de Holguín «en blanco» y no había dónde mirar cuál era.
  *
- * Sólo administrador. Se abre desde la tarjeta «Sin vendedor» y respeta el mismo periodo y
+ * Administrador y supervisor (el supervisor, sólo sus sucursales). Se abre desde la tarjeta «Sin vendedor» y respeta el mismo periodo y
  * la misma sucursal (o «todas») que el Resumen que la abrió.
  */
 export default function ListaSinVendedor({ sourceId, period, todas, onClose }) {

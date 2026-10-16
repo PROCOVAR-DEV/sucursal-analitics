@@ -1255,12 +1255,12 @@ def _facturas_sin_vendedor(suc: dict, source_id: str, mes: str | None, user: dic
 
 def _solo_quien_ve_la_lista(user: dict) -> None:
     if not ve_lista_sin_vendedor(user.get("role")):
-        raise HTTPException(status_code=403, detail="Solo el administrador ve las facturas sin vendedor")
+        raise HTTPException(status_code=403, detail="Solo el administrador y el supervisor ven las facturas sin vendedor")
 
 
 @app.get("/api/sucursales/{sid}/sources/{source_id}/sin-vendedor")
 def src_sin_vendedor(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
-    """Las facturas sin vendedor de la sucursal, con su nota. Sólo administrador."""
+    """Las facturas sin vendedor de la sucursal, con su nota. Administrador y supervisor."""
     _solo_quien_ve_la_lista(user)
     facturas = _facturas_sin_vendedor(suc, source_id, mes, user, desde, hasta)
 
@@ -1269,7 +1269,7 @@ def src_sin_vendedor(sid: str, source_id: str, mes: str | None = Query(default=N
 
 @app.get("/api/all/sources/{source_id}/sin-vendedor")
 def all_sin_vendedor(source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), user: dict = Depends(current_user)) -> dict:
-    """Lo mismo de todas las sucursales juntas, cada factura con la suya. Sólo administrador."""
+    """Lo mismo de las sucursales a las que tiene acceso, cada factura con la suya. Administrador y supervisor."""
     _solo_quien_ve_la_lista(user)
     facturas = [
         {**f, "sucursal": suc.get("nombre") or suc["id"]}

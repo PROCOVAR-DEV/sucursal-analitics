@@ -54,8 +54,9 @@ def test_sin_huerfanas_la_lista_esta_vacia():
     assert facturas_sin_vendedor(enrich_for_sucursal(informe([con("1", "2026-10-02", merc="CERVEZA PARRANDA 1500 ML BLISTER 6U", imp=5.0, nota=CON_VENDEDOR)]), EFF)) == []
 
 
-def test_la_lista_la_ve_solo_el_administrador():
+def test_la_lista_la_ven_el_administrador_y_el_supervisor():
     assert ve_lista_sin_vendedor("admin")
     assert ve_lista_sin_vendedor(" Admin ")
-    for rol in ("supervisor", "analitico", "gestor", "vendedor", "", None, "rol-nuevo"):
+    assert ve_lista_sin_vendedor("supervisor")
+    for rol in ("analitico", "gestor", "vendedor", "", None, "rol-nuevo"):
         assert not ve_lista_sin_vendedor(rol)
