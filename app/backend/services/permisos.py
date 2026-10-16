@@ -33,6 +33,19 @@ def ve_sin_vendedor(role: str | None) -> bool:
     return str(role or "").strip().lower() in _VEN_SIN_VENDEDOR
 
 
+#: Quién ve la LISTA de esas facturas, con su nota: sólo el administrador.
+#:
+#: El total lo ve de supervisor para arriba; la lista es más: trae el cliente y la nota de
+#: cada factura, y es para quien tiene que ir a corregirlas en Ventra. Jose, 16/10/2026:
+#: «ponla para los administradores».
+_VEN_LISTA_SIN_VENDEDOR = ("admin",)
+
+
+def ve_lista_sin_vendedor(role: str | None) -> bool:
+    """¿A este rol se le enseña QUÉ facturas son las que no tienen vendedor?"""
+    return str(role or "").strip().lower() in _VEN_LISTA_SIN_VENDEDOR
+
+
 def sucursales_para(role: str, sucursales) -> list[str]:
     """Las sucursales que le tocan a un rol, con el COMODÍN quitado si no le corresponde.
 

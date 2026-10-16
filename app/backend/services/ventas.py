@@ -37,6 +37,53 @@ def _quien_supervisa(eff: dict, keys, gestores_cfg: dict) -> str | None:
     return None
 
 
+def filas_sin_vendedor(df_bruto: pd.DataFrame) -> pd.DataFrame:
+    """Las líneas facturadas a las que no se les puede atribuir un vendedor.
+
+    Una sola definición para el total («Sin vendedor» del Resumen) y para la lista de
+    facturas de `facturas_sin_vendedor`: si cada uno la escribiera por su cuenta, el día
+    que cambie una de las dos la lista dejaría de sumar lo que dice el total.
+    """
+    if df_bruto.empty or "GestorDetectado" not in df_bruto.columns or servicios.COL not in df_bruto.columns:
+        return df_bruto.iloc[0:0]
+
+    return df_bruto[df_bruto["GestorDetectado"].isna() & ~df_bruto[servicios.COL].astype(bool)]
+
+
+def facturas_sin_vendedor(df_bruto: pd.DataFrame) -> list[dict]:
+    """Esas mismas líneas, juntas por FACTURA y con la nota tal cual vino.
+
+    Es lo que hace falta para arreglarlas: la nota es lo que está mal (vacía, sin `V-`,
+    con una errata del nombre) y sin verla no se sabe a quién ponérsela ni dónde
+    corregirla. Más recientes primero.
+    """
+    f = filas_sin_vendedor(df_bruto)
+
+    if f.empty:
+        return []
+
+    op, fec, soc, merc, imp, nota = (STD_COLS[k] for k in ("op", "fecha", "socio", "merc", "importe", "nota"))
+    out: list[dict] = []
+
+    for operacion, g in f.groupby(op, sort=False, dropna=False):
+        notas = [str(n).strip() for n in g[nota].tolist() if n is not None and str(n).strip() and str(n).lower() != "nan"]
+        fecha = g[fec].min()
+
+        out.append({
+            "factura": "" if pd.isna(operacion) else str(operacion),
+            "fecha": None if pd.isna(fecha) else pd.Timestamp(fecha).strftime("%Y-%m-%d"),
+            "cliente": str(g[soc].iloc[0] or ""),
+            "punto": str(g["Objeto"].iloc[0] or "") if "Objeto" in g.columns else "",
+            "importe": round(float(g[imp].sum()), 2),
+            "lineas": int(len(g)),
+            "productos": sorted({str(m) for m in g[merc].tolist() if m}),
+            # Vacío = la nota no traía nada: se dice así, no se rellena con otra cosa.
+            "nota": notas[0] if notas else "",
+        })
+
+    return sorted(out, key=lambda x: (x["fecha"] or "", x["factura"]), reverse=True)
+
+
 def compute_ventas(report, eff: dict) -> dict:
     keys = gestor_keys(eff)
     gestores_cfg = eff.get("gestores") or {}
@@ -87,11 +134,7 @@ def compute_ventas(report, eff: dict) -> dict:
     hace que se siga arreglando en vez de volver a crecer sin que nadie mire.
     """
     col_imp = STD_COLS["importe"]
-    sin_vendedor = (
-        df_bruto[df_bruto["GestorDetectado"].isna() & ~df_bruto[servicios.COL].astype(bool)]
-        if not df_bruto.empty and "GestorDetectado" in df_bruto.columns and servicios.COL in df_bruto.columns
-        else df_bruto.iloc[0:0]
-    )
+    sin_vendedor = filas_sin_vendedor(df_bruto)
     total_sin_vendedor = round(float(sin_vendedor[col_imp].sum()), 2) if col_imp in sin_vendedor.columns else 0.0
 
     # NINGUN GRUPO PUEDE QUEDARSE SIN COLUMNA.

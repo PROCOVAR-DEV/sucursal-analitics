@@ -38,7 +38,7 @@ from services.clientes_dormidos import compute_clientes_dormidos
 from services.movimiento_clientes import compute_movimiento_clientes
 from services.metas_gestor import compute_metas_gestor, meta_por_formato
 from services.plan_sku import repartir_plan_sku
-from services.permisos import recortar_a_gestor, ve_sin_vendedor
+from services.permisos import recortar_a_gestor, ve_lista_sin_vendedor, ve_sin_vendedor
 from services.roster import quien_recibe
 from services.excel_export import (
     export_all, export_clientes_analisis, export_modelo_ventas_cliente, export_gestor_sku, export_market,
@@ -55,7 +55,7 @@ from core.constants import es_retirado
 from services.sucursal_store import config_for_period, config_for_report, sucursal_store
 from services.vendedores import compute_vendedores
 from services.gestor_sku import compute_gestor_sku
-from services.ventas import compute_ventas
+from services.ventas import compute_ventas, facturas_sin_vendedor
 
 logger = logging.getLogger(__name__)
 
@@ -1238,6 +1238,46 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
 @app.get("/api/sucursales/{sid}/sources/{source_id}/dashboard")
 def src_dashboard(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
     return _compute_dashboard(suc, source_id, mes, user, desde, hasta)
+
+
+def _facturas_sin_vendedor(suc: dict, source_id: str, mes: str | None, user: dict,
+                           desde: str | None, hasta: str | None) -> list[dict]:
+    """Las facturas de UNA sucursal que no se le pueden atribuir a ningún vendedor."""
+    report = _fuente_o_none(suc["id"], source_id)
+
+    if report is None:
+        return []
+    report = filter_by_period(report, mes, desde, hasta)
+    eff = _eff_scoped(suc, report, mes, user)
+
+    return facturas_sin_vendedor(enrich_for_sucursal(report, eff))
+
+
+def _solo_quien_ve_la_lista(user: dict) -> None:
+    if not ve_lista_sin_vendedor(user.get("role")):
+        raise HTTPException(status_code=403, detail="Solo el administrador ve las facturas sin vendedor")
+
+
+@app.get("/api/sucursales/{sid}/sources/{source_id}/sin-vendedor")
+def src_sin_vendedor(sid: str, source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> dict:
+    """Las facturas sin vendedor de la sucursal, con su nota. Sólo administrador."""
+    _solo_quien_ve_la_lista(user)
+    facturas = _facturas_sin_vendedor(suc, source_id, mes, user, desde, hasta)
+
+    return {"facturas": [{**f, "sucursal": suc.get("nombre") or suc["id"]} for f in facturas]}
+
+
+@app.get("/api/all/sources/{source_id}/sin-vendedor")
+def all_sin_vendedor(source_id: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None), user: dict = Depends(current_user)) -> dict:
+    """Lo mismo de todas las sucursales juntas, cada factura con la suya. Sólo administrador."""
+    _solo_quien_ve_la_lista(user)
+    facturas = [
+        {**f, "sucursal": suc.get("nombre") or suc["id"]}
+        for suc in _allowed_sucursales_full(user)
+        for f in _facturas_sin_vendedor(suc, source_id, mes, user, desde, hasta)
+    ]
+
+    return {"facturas": sorted(facturas, key=lambda x: (x["fecha"] or "", x["factura"]), reverse=True)}
 
 
 def _aggregate_dashboards(items: list[dict]) -> dict:

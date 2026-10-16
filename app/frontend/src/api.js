@@ -135,6 +135,8 @@ function q(mes) {
 const src = (id) => `${base()}/sources/${id}`;
 
 export async function getDashboard(id, mes = null)  { return (await api.get(`${src(id)}/dashboard${q(mes)}`)).data; }
+// Las facturas sin vendedor, con su nota. Sólo el administrador (el backend contesta 403 a los demás).
+export async function getSinVendedor(id, mes = null) { return (await api.get(`${src(id)}/sin-vendedor${q(mes)}`)).data; }
 export async function getVentas(id, mes = null)     { return (await api.get(`${src(id)}/ventas${q(mes)}`)).data; }
 export async function getProductos(id, mes = null)  { return (await api.get(`${src(id)}/productos${q(mes)}`)).data; }
 export async function getMarket(id, mes = null)     { return (await api.get(`${src(id)}/market${q(mes)}`)).data; }

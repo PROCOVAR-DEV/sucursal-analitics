@@ -3,6 +3,7 @@ import { getDashboard } from "../api.js";
 import { Kpi, formatInt, formatMoney, formatNumber } from "./Kpi.jsx";
 import { RankingBarras } from "./Charts.jsx";
 import { Competencia } from "./Competencia.jsx";
+import ListaSinVendedor from "./ListaSinVendedor.jsx";
 
 /**
  * El color del cumplimiento, igual que en las demás pantallas: verde desde 100, ámbar
@@ -12,8 +13,9 @@ import { Competencia } from "./Competencia.jsx";
 const tonoPct = (pct) =>
   pct == null ? "text-slate-300" : pct >= 100 ? "text-green-600" : pct >= 80 ? "text-amber-600" : "text-red-600";
 
-export default function DashboardView({ sourceId, period }) {
+export default function DashboardView({ sourceId, period, user }) {
   const [data, setData] = useState(null);
+  const [verSinVendedor, setVerSinVendedor] = useState(false);
   const [err, setErr] = useState(null);
   useEffect(() => {
     // `cancelled` descarta respuestas VIEJAS: al abrir, el periodo aún es null y se pide el
@@ -81,9 +83,21 @@ export default function DashboardView({ sourceId, period }) {
             el 01/10/2026 fueron 27,40 de una sola factura y costó media mañana.
             Sólo sale cuando hay algo: una tarjeta en cero todos los días es ruido. */}
         {kpis.total_sin_vendedor ? (
-          <Kpi label="Sin vendedor" value={formatMoney(kpis.total_sin_vendedor)} tone="red"
-            hint="Facturado sin «V-» en la nota: no se cuenta porque no hay a quién atribuirlo" />
+          // El administrador puede abrir la lista de facturas (con su nota) para corregirlas;
+          // el resto sólo ve el total, como siempre.
+          user?.role === "admin" ? (
+            <button type="button" onClick={() => setVerSinVendedor(true)} className="text-left rounded-xl hover:ring-2 hover:ring-red-200 focus:outline-none focus:ring-2 focus:ring-red-300">
+              <Kpi label="Sin vendedor" value={formatMoney(kpis.total_sin_vendedor)} tone="red"
+                hint="Facturado sin «V-» en la nota — pulsa para ver cuáles" />
+            </button>
+          ) : (
+            <Kpi label="Sin vendedor" value={formatMoney(kpis.total_sin_vendedor)} tone="red"
+              hint="Facturado sin «V-» en la nota: no se cuenta porque no hay a quién atribuirlo" />
+          )
         ) : null}
+        {verSinVendedor && (
+          <ListaSinVendedor sourceId={sourceId} period={period} todas={data?.id === "all"} onClose={() => setVerSinVendedor(false)} />
+        )}
         <Kpi label="Clientes" value={formatInt(kpis.total_clientes)}
           hint={`${formatInt(kpis.total_skus)} SKUs vendidos`} tone="brand" />
       </div>
