@@ -1,7 +1,7 @@
 """La ventana del repaso de Ventra y la hora del cierre (sin base de datos)."""
 from datetime import date, datetime
 
-from services.ventana_ventra import desde_del_repaso, dias_del_repaso, toca_cierre
+from services.ventana_ventra import desde_del_repaso, dias_del_repaso, iso_utc, toca_cierre
 
 
 def test_a_mitad_de_mes_el_repaso_llega_al_dia_uno():
@@ -27,3 +27,8 @@ def test_el_cierre_toca_pasadas_las_18_30_y_una_sola_vez_al_dia():
     assert not toca_cierre(datetime(2026, 10, 16, 19, 0), hoy)       # ya se hizo hoy
     assert toca_cierre(datetime(2026, 10, 17, 18, 30), hoy)           # y mañana vuelve a tocar
     assert not toca_cierre(datetime(2026, 10, 17, 9, 0), hoy)
+
+
+def test_la_hora_de_la_base_sale_con_la_z_para_que_el_navegador_la_convierta():
+    assert iso_utc(datetime(2026, 10, 16, 17, 40, 13)) == "2026-10-16T17:40:13Z"
+    assert iso_utc(None) is None

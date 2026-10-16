@@ -1638,6 +1638,7 @@ def ventra_estado(user: dict = Depends(current_user)) -> dict:
     from sqlalchemy import func, select
 
     from services.db import VentaVentra, session_scope
+    from services.ventana_ventra import iso_utc
 
     with session_scope() as s:
         filas = s.execute(
@@ -1652,7 +1653,7 @@ def ventra_estado(user: dict = Depends(current_user)) -> dict:
     bases = [
         {
             "base": b,
-            "traido": t.isoformat() if t else None,
+            "traido": iso_utc(t),
             "ultima_venta": f.isoformat()[:10] if f else None,
             "lineas": int(n),
         }

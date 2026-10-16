@@ -46,3 +46,16 @@ def toca_cierre(ahora: datetime, ultimo_cierre: date | None) -> bool:
     14:30, con las sucursales facturando todavía.
     """
     return (ahora.hour, ahora.minute) >= HORA_CIERRE and ultimo_cierre != ahora.date()
+
+
+def iso_utc(dt: datetime | None) -> str | None:
+    """Una hora que la base guarda en UTC SIN zona, lista para el navegador: con la «Z».
+
+    `traido_at` se escribe con `utcnow()` y Postgres la devuelve sin zona. Mandada así, el
+    navegador la lee como hora local suya y la pinta cuatro horas adelantada: el 16/10/2026
+    la cabecera decía «17:40» cuando eran las 13:40 de Cuba.
+    """
+    if dt is None:
+        return None
+
+    return dt.replace(tzinfo=None).isoformat() + "Z"

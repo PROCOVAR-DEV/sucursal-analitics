@@ -59,7 +59,7 @@ export function FrescuraDatos() {
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
         viejo ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500"
       }`}
-      title={`Última vez que entró algo de Ventra: ${new Date(estado.traido).toLocaleString("es-ES")}\n\n${detalle}`}
+      title={`Última vez que entró algo de Ventra: ${new Date(estado.traido).toLocaleString("es-ES", { timeZone: "America/Havana" })}\n\n${detalle}`}
     >
       <Database size={13} />
       Datos {hace(estado.traido)}
