@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getProductos } from "../api.js";
 import { BarCard } from "./Charts.jsx";
 import { formatNumber } from "./Kpi.jsx";
+import SeleccionProductos from "./SeleccionProductos.jsx";
 import { Badge, Buscador, ContadorFiltro, Panel, PanelHeader, Segmented, Select, StatTile, TablaScroll, cn, useFiltroTabla } from "./ui.jsx";
 
 const GROUP_COLORS = {
@@ -71,6 +72,9 @@ export default function ProductosView({ sourceId, period, user }) {
           </div>
         ))}
       </div>
+
+      {/* Cada uno arma su vista: uno o varios productos de cualquier grupo (Lixander, 19/10/2026). */}
+      <SeleccionProductos data={data} />
 
       {/* Top productos por grupo */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
