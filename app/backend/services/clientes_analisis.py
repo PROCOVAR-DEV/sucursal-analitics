@@ -118,12 +118,49 @@ def _fundir_ambas(piv_imp: dict, piv_cant: dict) -> dict:
     }
 
 
+def recortar(df: pd.DataFrame, grupos: list[str] | None, productos: list[str] | None, exclusivo: bool) -> pd.DataFrame:
+    """Deja solo las líneas de los grupos y de los productos elegidos.
+
+    Los dos filtros se SUMAN (grupo Y producto). Sin ninguno devuelve el df tal cual.
+
+    `exclusivo`: los clientes que SÓLO compran eso. «Eso» es lo elegido —los grupos, los
+    productos, o los dos—: cualquier compra fuera descarta al cliente entero. Se mide
+    ANTES de recortar, porque hay que mirar lo que compró fuera para poder descartarlo.
+
+    Elegir productos de un grupo («solo compran Parranda 500 ml y 1,5 L») es la misma
+    pregunta que con grupos, una vuelta más fina; por eso comparten función y no hay dos
+    versiones que puedan separarse (Lixander, supervisor de Parranda, 19/10/2026).
+    """
+    merc, socio = STD_COLS["merc"], STD_COLS["socio"]
+    dentro = pd.Series(True, index=df.index)
+    filtra = False
+
+    if grupos and "GrupoComercial" in df.columns:
+        dentro = dentro & df["GrupoComercial"].astype(str).isin([str(g) for g in grupos])
+        filtra = True
+
+    if productos and merc in df.columns:
+        dentro = dentro & df[merc].astype("string").str.strip().isin([str(p).strip() for p in productos]).fillna(False)
+        filtra = True
+
+    if not filtra:
+        return df
+
+    if exclusivo:
+        fuera = set(df.loc[~dentro, socio].astype("string").str.strip().dropna())
+
+        return df[dentro & ~df[socio].astype("string").str.strip().isin(fuera)]
+
+    return df[dentro]
+
+
 def compute_clientes_analisis(
     report,
     eff: dict,
     grupos: list[str] | None = None,
     metrica: str = "importe",
     exclusivo: bool = False,
+    productos: list[str] | None = None,
 ) -> dict:
     """El pivote de clientes × producto, en importe o en cantidad.
 
@@ -152,27 +189,21 @@ def compute_clientes_analisis(
         else []
     )
 
-    if grupos and "GrupoComercial" in df.columns:
-        elegidos = [str(g) for g in grupos]
-        dentro = df["GrupoComercial"].astype(str).isin(elegidos)
+    # Los productos que EXISTEN, con su grupo, para el selector. También ANTES de filtrar y por
+    # la misma razón que los grupos: si no, al elegir uno desaparecerían los demás.
+    productos_disponibles = []
+    if "GrupoComercial" in df.columns and merc in df.columns:
+        pares = df[[merc, "GrupoComercial"]].copy()
+        pares[merc] = pares[merc].astype("string").str.strip()
+        pares["GrupoComercial"] = pares["GrupoComercial"].astype("string").str.strip()
+        pares = pares.dropna().drop_duplicates()
+        productos_disponibles = [
+            {"producto": str(r[merc]), "grupo": str(r["GrupoComercial"])}
+            for _, r in pares.sort_values(["GrupoComercial", merc]).iterrows()
+            if str(r[merc]).strip()
+        ]
 
-        """
-        `exclusivo`: los que SÓLO compran eso, que no es lo mismo que «los que compran eso».
-
-        El filtro de grupo de siempre recorta LÍNEAS: un cliente que compra Parranda y
-        además arroz sigue saliendo, sólo que se le ocultan las líneas del arroz. Sirve
-        para «cuánta Parranda vendo», no para «quién es cliente sólo de Parranda».
-
-        Lo pidió Carlo, y es otra pregunta: la cartera que no compra nada más. Se
-        calcula ANTES de recortar —hay que mirar lo que compró FUERA del grupo para
-        poder descartarlo— y por eso no se puede sacar de la tabla ya filtrada.
-        """
-        if exclusivo:
-            socio_col = STD_COLS["socio"]
-            fuera = set(df.loc[~dentro, socio_col].astype("string").str.strip().dropna())
-            df = df[dentro & ~df[socio_col].astype("string").str.strip().isin(fuera)]
-        else:
-            df = df[dentro]
+    df = recortar(df, grupos, productos, exclusivo)
 
     # La columna que se suma. Si se pide cantidad y no viene esa columna, se cae
     # al importe: mejor enseñar el número de siempre que una tabla vacía sin
@@ -215,7 +246,9 @@ def compute_clientes_analisis(
         "periodo": eff.get("_period"),
         "grupos_disponibles": disponibles,
         "grupos": list(grupos or []),
-        "exclusivo": bool(exclusivo and grupos),
+        "productos_disponibles": productos_disponibles,
+        "productos": list(productos or []),
+        "exclusivo": bool(exclusivo and (grupos or productos)),
         "metrica": metrica_real,
         "oficina": pivotar(df, True),
         "por_gestor": por_gestor,

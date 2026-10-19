@@ -790,13 +790,15 @@ def src_clientes_analisis(
     # Sólo los clientes que NO compran nada fuera de los grupos elegidos. Es otra
     # pregunta que la del filtro: ver `compute_clientes_analisis`.
     exclusivo: bool = Query(default=False),
+    # Productos concretos (por nombre), repetible: ?producto=A&producto=B. Se suman al grupo.
+    producto: list[str] = Query(default=[]),
     suc: dict = Depends(require_access),
     user: dict = Depends(current_user),
 ) -> dict:
     report = filter_by_period(_get_source(sid, source_id), mes, desde, hasta)
     return compute_clientes_analisis(
         report, _eff_scoped(suc, report, mes, user), grupos=grupo, metrica=metrica,
-        exclusivo=exclusivo,
+        exclusivo=exclusivo, productos=producto,
     )
 
 
@@ -1550,6 +1552,8 @@ def _aggregate_clientes(items: list[tuple[str, dict]]) -> dict:
     skus: dict[str, dict] = {}
     clientes: list[dict] = []
     disponibles: list[str] = []
+    productos_disponibles: list[dict] = []
+    productos_vistos: set[str] = set()
 
     for sucursal, it in items:
         of = it.get("oficina") or {}
@@ -1571,6 +1575,12 @@ def _aggregate_clientes(items: list[tuple[str, dict]]) -> dict:
             if g not in disponibles:
                 disponibles.append(g)
 
+        for pd_ in it.get("productos_disponibles") or []:
+            if pd_["producto"] not in productos_vistos:
+                productos_vistos.add(pd_["producto"])
+                productos_disponibles.append(pd_)
+
+    productos_disponibles.sort(key=lambda x: (x["grupo"], x["producto"]))
     clientes.sort(key=lambda c: -(c.get("total") or 0))
     lista_skus = sorted(
         ({"sku": e["sku"], "total": round(e["total"], 2)} for e in skus.values()),
@@ -1582,6 +1592,8 @@ def _aggregate_clientes(items: list[tuple[str, dict]]) -> dict:
         "periodo": None,
         "grupos_disponibles": disponibles,
         "grupos": [],
+        "productos_disponibles": productos_disponibles,
+        "productos": [],
         "metrica": items[0][1].get("metrica", "importe") if items else "importe",
         "oficina": {
             "skus": lista_skus,
@@ -1599,6 +1611,7 @@ def _aggregate_clientes(items: list[tuple[str, dict]]) -> dict:
 def all_clientes_analisis(source_id: str, mes: str | None = Query(default=None),
                           desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
                           grupo: list[str] = Query(default=[]), metrica: str = Query(default="importe"),
+                          producto: list[str] = Query(default=[]),
                           user: dict = Depends(current_user)) -> dict:
     """«A quién le vendemos» en TODAS las sucursales a la vez."""
     salida = []
@@ -1612,7 +1625,7 @@ def all_clientes_analisis(source_id: str, mes: str | None = Query(default=None),
         rep = filter_by_period(rep, mes, desde, hasta)
         salida.append((
             suc.get("nombre") or suc["id"],
-            compute_clientes_analisis(rep, _eff_scoped(suc, rep, mes, user), grupo, metrica),
+            compute_clientes_analisis(rep, _eff_scoped(suc, rep, mes, user), grupo, metrica, productos=producto),
         ))
 
     agg = _aggregate_clientes(salida)
@@ -1700,7 +1713,7 @@ _EXPORTERS = {
 @app.get("/api/sucursales/{sid}/sources/{source_id}/export/{modulo}.xlsx")
 def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query(default=None), desde: str | None = Query(default=None), hasta: str | None = Query(default=None),
                   grupo: list[str] = Query(default=[]), metrica: str = Query(default="importe"),
-                  exclusivo: bool = Query(default=False),
+                  exclusivo: bool = Query(default=False), producto: list[str] = Query(default=[]),
                   suc: dict = Depends(require_access), user: dict = Depends(current_user)) -> Response:
     exporter = _EXPORTERS.get(modulo)
     if exporter is None:
@@ -1712,7 +1725,7 @@ def export_module(sid: str, source_id: str, modulo: str, mes: str | None = Query
     # pasarían argumentos que no aceptan. Explícito y no por introspección: se
     # lee de un vistazo cuál los usa.
     extra = (
-        {"grupos": grupo, "metrica": metrica, "exclusivo": exclusivo}
+        {"grupos": grupo, "metrica": metrica, "exclusivo": exclusivo, "productos": producto}
         if modulo == "clientes-analisis"
         else {"grupos": grupo, "metrica": metrica}
         if modulo == "gestor-sku"

@@ -437,7 +437,8 @@ NOMBRE_INFORME = "Modelo estandarizado de ventas por cliente"
 
 
 def export_clientes_analisis(report, eff: dict, grupos: list[str] | None = None,
-                             metrica: str = "importe", exclusivo: bool = False) -> bytes:
+                             metrica: str = "importe", exclusivo: bool = False,
+                             productos: list[str] | None = None) -> bytes:
     """El Excel sale con LO MISMO que se está viendo en pantalla.
 
     Antes salía siempre el informe completo en importe, sin los filtros. Un
@@ -445,11 +446,15 @@ def export_clientes_analisis(report, eff: dict, grupos: list[str] | None = None,
     tenerlo: se reenvía por correo, se discute con él delante, y nadie sabe que
     está mirando otra cosa.
     """
-    data = compute_clientes_analisis(report, eff, grupos=grupos, metrica=metrica, exclusivo=exclusivo)
+    data = compute_clientes_analisis(report, eff, grupos=grupos, metrica=metrica, exclusivo=exclusivo, productos=productos)
     real = data.get("metrica", "importe")
     # Los grupos elegidos van en el título: es lo único que dice, dentro del
     # archivo, que esto no es el total de todo.
     sufijo = f" — {', '.join(grupos)}" if grupos else ""
+    # Y los productos, si se eligieron: sin eso el Excel de «Parranda» de todo el grupo y el de
+    # dos productos del grupo se llaman igual y miden cosas distintas.
+    if productos:
+        sufijo += f" · {len(productos)} producto{'s' if len(productos) != 1 else ''}: {', '.join(productos[:4])}{'…' if len(productos) > 4 else ''}"
     # Que el titulo diga que es la cartera EXCLUSIVA: un Excel sin eso se confunde con
     # el normal del mismo grupo, y son dos poblaciones distintas.
     if data.get("exclusivo"):

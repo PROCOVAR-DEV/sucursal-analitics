@@ -20,6 +20,8 @@ export default function ClientesAnalisisView({ sourceId, period }) {
   const [busy, setBusy] = useState(false);
   // Grupos comerciales elegidos. Vacio = todos, que es como estaba.
   const [grupos, setGrupos] = useState([]);
+  // Productos concretos elegidos (uno o varios, del grupo elegido o de todos). Vacio = todos.
+  const [productos, setProductos] = useState([]);
   // "importe" (dolares) o "cantidad" (por empaque, tal como viene del origen).
   const [metrica, setMetrica] = useState("importe");
   // Sólo los clientes que no compran nada fuera del grupo elegido.
@@ -46,22 +48,39 @@ export default function ClientesAnalisisView({ sourceId, period }) {
   // La lista de grupos se conserva entre consultas: el servidor la calcula ANTES
   // de filtrar, pero si se vaciara al recargar, el desplegable parpadearia.
   const [gruposDisponibles, setGruposDisponibles] = useState([]);
+  // Igual con los productos: [{producto, grupo}], calculados por el servidor ANTES de filtrar.
+  const [productosDisponibles, setProductosDisponibles] = useState([]);
 
   useEffect(() => {
     // Descarta respuestas viejas (ver DashboardView): si no, la del acumulado pisa la del mes.
     let cancelled = false;
     setData(null); setErr(null);
-    getClientesAnalisis(sourceId, period, grupos, metrica, exclusivo)
+    getClientesAnalisis(sourceId, period, grupos, metrica, exclusivo, productos)
       .then((d) => {
         if (cancelled) return;
         setData(d);
         if (d.grupos_disponibles?.length) setGruposDisponibles(d.grupos_disponibles);
+        if (d.productos_disponibles?.length) setProductosDisponibles(d.productos_disponibles);
       })
       .catch((e) => { if (!cancelled) setErr(e?.response?.data?.detail || e.message); });
     return () => { cancelled = true; };
     // `grupos` se serializa: es un array nuevo en cada render y como dependencia
     // suelta relanzaria la peticion sin parar.
-  }, [sourceId, period, grupos.join("|"), metrica, exclusivo]);
+  }, [sourceId, period, grupos.join("|"), productos.join("|"), metrica, exclusivo]);
+
+  // Los productos que se pueden elegir son los de los grupos elegidos (o todos, sin grupo). Al
+  // cambiar de grupo, lo ya marcado que no sea de ese grupo se quita: si no, quedaría una selección
+  // que no se ve y que deja la tabla vacía sin explicación.
+  const productosDelGrupo = useMemo(
+    () => productosDisponibles.filter((x) => !grupos.length || grupos.includes(x.grupo)),
+    [productosDisponibles, grupos.join("|")],
+  );
+
+  useEffect(() => {
+    const validos = new Set(productosDelGrupo.map((x) => x.producto));
+
+    setProductos((sel) => (sel.every((x) => validos.has(x)) ? sel : sel.filter((x) => validos.has(x))));
+  }, [productosDelGrupo]);
 
   // Al cambiar de periodo o de fuente se vuelve a la vista general: el gestor
   // elegido puede no existir en el periodo nuevo.
@@ -95,7 +114,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
 
   async function handleExport() {
     setBusy(true);
-    try { await downloadExport(sourceId, "clientes-analisis", period, { grupos, metrica, ...(exclusivo && grupos.length ? { exclusivo: 1 } : {}) }); }
+    try { await downloadExport(sourceId, "clientes-analisis", period, { grupos, productos, metrica, ...(exclusivo && (grupos.length || productos.length) ? { exclusivo: 1 } : {}) }); }
     catch (e) { alert(e?.response?.data?.detail || "No se pudo descargar"); }
     finally { setBusy(false); }
   }
@@ -116,7 +135,7 @@ export default function ClientesAnalisisView({ sourceId, period }) {
         <Button variant="outline" icon={Download} onClick={handleExport} disabled={busy}>
           {busy
             ? "Generando…"
-            : grupos.length || esCantidad
+            : grupos.length || productos.length || esCantidad
               ? "Exportar lo que veo"
               : "Exportar Excel"}
         </Button>
@@ -146,9 +165,9 @@ export default function ClientesAnalisisView({ sourceId, period }) {
         {/* SOLO de este grupo. No es lo mismo que el filtro de al lado: ese recorta
             LINEAS —el que compra Parranda y arroz sigue saliendo, sin el arroz— y esto
             recorta CLIENTES: los que no compran nada fuera del grupo. Lo pidio Carlo. */}
-        {grupos.length > 0 && (
+        {(grupos.length > 0 || productos.length > 0) && (
           <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer"
-            title="Deja solo a los clientes que NO compran nada fuera de los grupos elegidos">
+            title="Deja solo a los clientes que NO compran nada fuera de lo elegido (grupos o productos)">
             <input type="checkbox" className="accent-brand-600" checked={exclusivo}
               onChange={(e) => setExclusivo(e.target.checked)} />
             Sólo compran esto
@@ -162,6 +181,18 @@ export default function ClientesAnalisisView({ sourceId, period }) {
             valor={grupos}
             onChange={setGrupos}
             textoTodos="Todos los grupos"
+          />
+        )}
+
+        {/* Los productos del grupo elegido (o de todos): uno, varios o todos. Lixander, supervisor de
+            Parranda, 19/10/2026: «poder seleccionar un multi select para los productos de ese grupo». */}
+        {productosDelGrupo.length > 1 && (
+          <FiltroMulti
+            etiqueta="Producto"
+            opciones={productosDelGrupo.map((x) => ({ id: x.producto, label: grupos.length === 1 ? x.producto : `${x.producto} · ${x.grupo}` }))}
+            valor={productos}
+            onChange={setProductos}
+            textoTodos="Todos los productos"
           />
         )}
       </div>
