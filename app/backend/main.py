@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from contextlib import asynccontextmanager
 
 import pandas as pd
 
@@ -59,10 +60,6 @@ from services.ventas import compute_ventas, facturas_sin_vendedor
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Sucursal Analytics API", version="3.0.0")
-
-
-@app.on_event("startup")
 def _arrancar_sincronizador() -> None:
     """Trae de Ventra lo del día, cada hora, en un hilo aparte de la API.
 
@@ -93,6 +90,15 @@ def _arrancar_sincronizador() -> None:
 
     threading.Thread(target=ventra_sync.bucle, daemon=True, name="ventra-sync").start()
     logger.info("[ventra] sincronizador en marcha dentro de la API")
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    _arrancar_sincronizador()
+    yield
+
+
+app = FastAPI(title="Sucursal Analytics API", version="3.0.0", lifespan=_lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 

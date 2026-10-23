@@ -26,7 +26,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from services import ventra
 from services.ventana_ventra import dias_del_repaso, toca_cierre
-from services.db import VentaVentra, session_scope
+from services.db import utcnow, VentaVentra, session_scope
 from services.loader import STD_COLS
 
 log = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ def _filas(df, base: str) -> list[dict]:
                 "nota": r[STD_COLS["nota"]],
                 "objeto": str(r[ventra.COL_OBJETO] or ""),
                 "tipo_punto": str(r[ventra.COL_TIPO_PUNTO] or ""),
-                "traido_at": datetime.utcnow(),
+                "traido_at": utcnow(),
             }
         )
 

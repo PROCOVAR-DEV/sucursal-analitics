@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 
-from services.db import session_scope, Upload, UploadRow
+from services.db import utcnow, session_scope, Upload, UploadRow
 from services.loader import ReportData, STD_COLS, _type_df, _add_stable_helpers
 
 
@@ -158,7 +157,7 @@ class UploadRepository:
 
         df = report.df
         uid = uuid.uuid4().hex
-        uploaded_at = datetime.utcnow().isoformat(timespec="seconds")
+        uploaded_at = utcnow().isoformat(timespec="seconds")
         dmin = report.date_min.isoformat() if report.date_min is not None else None
         dmax = report.date_max.isoformat() if report.date_max is not None else None
 
