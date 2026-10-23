@@ -761,7 +761,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
             ) : (
               <div className="tabla-alta">
                 <table className="tbl">
-                  <thead><tr><th className="col-fija">Vendedor</th><th className="!text-right">Plan</th><th className="!text-right">% del total</th></tr></thead>
+                  <thead><tr><th className="col-fija">Vendedor</th><th className="text-right!">Plan</th><th className="text-right!">% del total</th></tr></thead>
                   <tbody>
                     {delMes.map(([k, g]) => {
                       const v = cantidadDe(k, prodSel);
@@ -813,7 +813,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
           right={<span className="text-sm text-slate-500">Total: <b className="text-brand-700">{formatNumber(grandTotal, 2)} HL</b></span>} />
         <div className="tabla-alta">
           <table className="tbl">
-            <thead><tr><th className="!text-center">En el mes</th><th>Vendedor</th><th className="!text-right">Meta HL</th><th className="!text-right">Meta CCC</th><th className="!text-right">HL / Día</th><th className="!text-center">Acción</th></tr></thead>
+            <thead><tr><th className="text-center!">En el mes</th><th>Vendedor</th><th className="text-right!">Meta HL</th><th className="text-right!">Meta CCC</th><th className="text-right!">HL / Día</th><th className="text-center!">Acción</th></tr></thead>
             <tbody>
               {gestores.map(([k, g]) => {
                 const hl = vendorHL(k);
@@ -943,7 +943,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
             </div>} />
           <div className="tabla-alta">
             <table className="tbl">
-              <thead><tr><th>Producto</th><th>Formato</th><th className="!text-right">Pallets</th><th className="!text-right">Blísters</th><th className="!text-right">Hectolitros</th><th className="!text-right">Cantidad</th><th></th></tr></thead>
+              <thead><tr><th>Producto</th><th>Formato</th><th className="text-right!">Pallets</th><th className="text-right!">Blísters</th><th className="text-right!">Hectolitros</th><th className="text-right!">Cantidad</th><th></th></tr></thead>
               <tbody>
                 {rows.map((r) => {
                   const c = calc(r);

@@ -176,7 +176,7 @@ export function SelectorPeriodo({ value, meses = [], onChange, className }) {
           // botón, un botón anidado no es HTML válido y el navegador lo saca de su sitio.
           <span
             aria-label="Quitar el periodo"
-            className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="shrink-0 rounded-sm p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             role="button"
             tabIndex={-1}
             onClick={(e) => {
@@ -190,7 +190,7 @@ export function SelectorPeriodo({ value, meses = [], onChange, className }) {
       </button>
 
       {abierto && (
-        <div className="absolute left-0 z-30 mt-1 w-[19rem] rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+        <div className="absolute left-0 z-30 mt-1 w-76 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
           {/* Los meses, en un desplegable.
               Estuvieron como pastillas, una por mes, y con nueve meses de datos ocupaban
               cuatro filas: el calendario quedaba empujado hasta abajo y había que buscarlo.
@@ -204,7 +204,7 @@ export function SelectorPeriodo({ value, meses = [], onChange, className }) {
               Mes completo
             </label>
             <select
-              className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-brand-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-brand-500 focus:outline-hidden"
               value={esRango(value) ? "" : value || "todo"}
               onChange={(e) => {
                 const v = e.target.value;
@@ -234,7 +234,7 @@ export function SelectorPeriodo({ value, meses = [], onChange, className }) {
             <div className="flex items-center gap-1">
               <button
                 aria-label="Mes anterior"
-                className="rounded p-1 text-slate-500 hover:bg-slate-100"
+                className="rounded-sm p-1 text-slate-500 hover:bg-slate-100"
                 type="button"
                 onClick={() => setAncla(new Date(ancla.getFullYear(), ancla.getMonth() - 1, 1))}
               >
@@ -245,7 +245,7 @@ export function SelectorPeriodo({ value, meses = [], onChange, className }) {
               </span>
               <button
                 aria-label="Mes siguiente"
-                className="rounded p-1 text-slate-500 hover:bg-slate-100"
+                className="rounded-sm p-1 text-slate-500 hover:bg-slate-100"
                 type="button"
                 onClick={() => setAncla(new Date(ancla.getFullYear(), ancla.getMonth() + 1, 1))}
               >

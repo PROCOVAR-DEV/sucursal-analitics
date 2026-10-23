@@ -201,10 +201,10 @@ export default function App() {
   // pagina en vez de su contenedor.
   return (
     <div className="h-screen flex flex-col overflow-x-hidden">
-      <header className="bg-gradient-to-r from-brand-900 via-brand-700 to-brand-500 text-white shadow shrink-0">
+      <header className="bg-linear-to-r/srgb from-brand-900 via-brand-700 to-brand-500 text-white shadow-sm shrink-0">
         <div className="px-3 sm:px-6 py-3 flex items-center justify-between gap-3 sm:gap-4 flex-wrap">
           <div className="min-w-0">
-            <h1 className="text-base sm:text-lg font-bold leading-tight">Sucursal Analytics</h1>
+            <h1 className="text-base sm:text-lg font-bold leading-tight sm:leading-7">Sucursal Analytics</h1>
             {/* Breadcrumb: dónde estás */}
             <p className="text-xs text-brand-100/90 flex items-center gap-1.5 truncate">
               <span className="opacity-80">{isAll ? "Todas las sucursales" : (currentSuc?.nombre || "—")}</span>
@@ -248,7 +248,7 @@ export default function App() {
               a esas fechas. El backend ya aceptaba `desde`/`hasta`; lo que faltaba era
               por dónde pedirlo. */}
           <SelectorPeriodo
-            className="flex-1 min-w-[12rem] sm:flex-none sm:w-64"
+            className="flex-1 min-w-48 sm:flex-none sm:w-64"
             meses={periods}
             value={period}
             onChange={setPeriod}

@@ -23,7 +23,7 @@ export default function Login({ onLogin }) {
   }
 
   return (
-    <div className="h-screen flex items-center justify-center bg-gradient-to-br from-brand-900 via-brand-700 to-brand-500 p-4">
+    <div className="h-screen flex items-center justify-center bg-linear-to-br/srgb from-brand-900 via-brand-700 to-brand-500 p-4">
       <form onSubmit={submit} className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-8 space-y-5">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-brand-800">Sucursal Analytics</h1>

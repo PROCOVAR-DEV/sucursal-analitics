@@ -76,7 +76,7 @@ export default function ListaSinVendedor({ sourceId, period, todas, onClose }) {
                         <span className="block text-xs text-slate-400">{f.punto}{f.punto ? " · " : ""}{f.lineas} línea{f.lineas === 1 ? "" : "s"}</span>
                       </td>
                       <td className="py-1.5 pr-3 text-right whitespace-nowrap tabular-nums">{formatMoney(f.importe)}</td>
-                      <td className="py-1.5 font-mono text-xs whitespace-pre-wrap break-words">
+                      <td className="py-1.5 font-mono text-xs whitespace-pre-wrap wrap-break-word">
                         {f.nota ? f.nota : <span className="font-sans italic text-red-600">(nota vacía)</span>}
                       </td>
                     </tr>

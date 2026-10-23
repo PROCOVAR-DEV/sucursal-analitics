@@ -102,7 +102,7 @@ export default function FiltroMulti({
         aria-expanded={abierto}
         className={cn(
           "flex items-center gap-1.5 min-w-[150px] max-w-[260px] px-2.5 py-1.5 rounded-lg border text-xs text-left transition-colors",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400",
+          "focus:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400",
           valor.length
             ? "border-slate-900 bg-slate-900 text-white font-semibold"
             : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",

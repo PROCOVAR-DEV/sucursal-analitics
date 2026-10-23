@@ -397,7 +397,7 @@ export default function GestorSkuView({ sourceId, period }) {
                     // nombre que no se deja acortar no vuelva a estirar la columna.
                     <th
                       key={p}
-                      className="py-2 px-3 text-right align-bottom text-xs font-semibold leading-tight max-w-[7.5rem]"
+                      className="py-2 px-3 text-right align-bottom text-xs font-semibold leading-tight max-w-30"
                       title={p}
                     >
                       {(() => {

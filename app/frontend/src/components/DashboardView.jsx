@@ -86,7 +86,7 @@ export default function DashboardView({ sourceId, period, user }) {
           // El administrador y el supervisor pueden abrir la lista de facturas (con su nota)
           // para corregirlas; el resto sólo ve el total, como siempre.
           ["admin", "supervisor"].includes(user?.role) ? (
-            <button type="button" onClick={() => setVerSinVendedor(true)} className="text-left rounded-xl hover:ring-2 hover:ring-red-200 focus:outline-none focus:ring-2 focus:ring-red-300">
+            <button type="button" onClick={() => setVerSinVendedor(true)} className="text-left rounded-xl hover:ring-2 hover:ring-red-200 focus:outline-hidden focus:ring-2 focus:ring-red-300">
               <Kpi label="Sin vendedor" value={formatMoney(kpis.total_sin_vendedor)} tone="red"
                 hint="Facturado sin «V-» en la nota — pulsa para ver cuáles" />
             </button>

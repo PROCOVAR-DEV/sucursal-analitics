@@ -1,19 +1,65 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind 4 (antes 3). Todo lo de aquí abajo está para que se vea IGUAL que con la 3.
 
-html, body, #root {
-  height: 100%;
+   La 3 mezclaba componentes y utilidades en UNA cascada, y ganaba la especificidad:
+   `.tbl tbody td` le ganaba a `px-2`. La 4 los separa en capas y la utilidad gana
+   siempre. Para no cambiar nada, los componentes van en la capa de utilidades, DELANTE
+   de las utilidades generadas (`@tailwind utilities` al final de ese bloque). */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "./preflight-v3.css" layer(base);
+
+@theme {
+  /* La paleta de la 4 está en oklch y no es la misma: se fijan los hex de la 3 de las
+     familias que se usan. */
+  --color-slate-50: #f8fafc; --color-slate-100: #f1f5f9; --color-slate-200: #e2e8f0; --color-slate-300: #cbd5e1; --color-slate-400: #94a3b8; --color-slate-500: #64748b; --color-slate-600: #475569; --color-slate-700: #334155; --color-slate-800: #1e293b; --color-slate-900: #0f172a; --color-slate-950: #020617;
+  --color-red-50: #fef2f2; --color-red-100: #fee2e2; --color-red-200: #fecaca; --color-red-300: #fca5a5; --color-red-400: #f87171; --color-red-500: #ef4444; --color-red-600: #dc2626; --color-red-700: #b91c1c; --color-red-800: #991b1b; --color-red-900: #7f1d1d; --color-red-950: #450a0a;
+  --color-amber-50: #fffbeb; --color-amber-100: #fef3c7; --color-amber-200: #fde68a; --color-amber-300: #fcd34d; --color-amber-400: #fbbf24; --color-amber-500: #f59e0b; --color-amber-600: #d97706; --color-amber-700: #b45309; --color-amber-800: #92400e; --color-amber-900: #78350f; --color-amber-950: #451a03;
+  --color-emerald-50: #ecfdf5; --color-emerald-100: #d1fae5; --color-emerald-200: #a7f3d0; --color-emerald-300: #6ee7b7; --color-emerald-400: #34d399; --color-emerald-500: #10b981; --color-emerald-600: #059669; --color-emerald-700: #047857; --color-emerald-800: #065f46; --color-emerald-900: #064e3b; --color-emerald-950: #022c22;
+  --color-green-50: #f0fdf4; --color-green-100: #dcfce7; --color-green-200: #bbf7d0; --color-green-300: #86efac; --color-green-400: #4ade80; --color-green-500: #22c55e; --color-green-600: #16a34a; --color-green-700: #15803d; --color-green-800: #166534; --color-green-900: #14532d; --color-green-950: #052e16;
+  --color-blue-50: #eff6ff; --color-blue-100: #dbeafe; --color-blue-200: #bfdbfe; --color-blue-300: #93c5fd; --color-blue-400: #60a5fa; --color-blue-500: #3b82f6; --color-blue-600: #2563eb; --color-blue-700: #1d4ed8; --color-blue-800: #1e40af; --color-blue-900: #1e3a8a; --color-blue-950: #172554;
+  --color-indigo-50: #eef2ff; --color-indigo-100: #e0e7ff; --color-indigo-200: #c7d2fe; --color-indigo-300: #a5b4fc; --color-indigo-400: #818cf8; --color-indigo-500: #6366f1; --color-indigo-600: #4f46e5; --color-indigo-700: #4338ca; --color-indigo-800: #3730a3; --color-indigo-900: #312e81; --color-indigo-950: #1e1b4b;
+  --color-rose-50: #fff1f2; --color-rose-100: #ffe4e6; --color-rose-200: #fecdd3; --color-rose-300: #fda4af; --color-rose-400: #fb7185; --color-rose-500: #f43f5e; --color-rose-600: #e11d48; --color-rose-700: #be123c; --color-rose-800: #9f1239; --color-rose-900: #881337; --color-rose-950: #4c0519;
+
+  --color-brand-50: #eff6ff; --color-brand-100: #dbeafe; --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd; --color-brand-400: #60a5fa; --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb; --color-brand-700: #1d4ed8; --color-brand-800: #1e40af;
+  --color-brand-900: #172554;
+  --color-surface: #f6f7f9;
+  --color-ink: #0f172a; --color-ink-muted: #64748b; --color-ink-soft: #94a3b8;
+
+  /* Interlineado en rem, como la 3: la 4 lo da como proporción y los hijos con otro
+     tamaño de letra heredaban una altura de línea distinta. */
+  --text-xs--line-height: 1rem; --text-sm--line-height: 1.25rem; --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem; --text-xl--line-height: 1.75rem; --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem; --text-4xl--line-height: 2.5rem;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius-xl: 0.85rem;
+  --radius-2xl: 1.1rem;
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06);
+  --shadow-pop: 0 4px 20px -4px rgb(15 23 42 / 0.12);
+  --animate-fade-in: fade-in 0.2s ease-out;
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
 }
 
-body {
-  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
-  color: #0f172a;
-  background: #f6f7f9;
-  -webkit-font-smoothing: antialiased;
-}
+/* En la 3, hover: valía también en pantallas táctiles; la 4 lo limita a (hover: hover). */
+@custom-variant hover (&:hover);
 
-@layer components {
+@layer utilities {
+  html, body, #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    color: #0f172a;
+    background: #f6f7f9;
+    -webkit-font-smoothing: antialiased;
+  }
+
   /* ---------- Superficies ---------- */
   .card {
     @apply bg-white rounded-xl border border-slate-200/80 shadow-card p-5;
@@ -84,17 +130,17 @@ body {
   .section-title { @apply text-lg font-bold text-slate-900; }
 
   /* ---------- Botones ---------- */
-  .btn {
+  .btn, .btn-primary, .btn-outline, .btn-ghost, .btn-subtle, .btn-danger, .btn-icon {
     @apply inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold
            transition-colors disabled:opacity-50 disabled:cursor-not-allowed
-           focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50;
+           focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/50;
   }
-  .btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-700 shadow-sm; }
-  .btn-outline { @apply btn bg-white text-slate-700 border border-slate-300 hover:bg-slate-50; }
-  .btn-ghost   { @apply btn bg-transparent text-slate-600 hover:bg-slate-100; }
-  .btn-subtle  { @apply btn bg-slate-100 text-slate-700 hover:bg-slate-200; }
-  .btn-danger  { @apply btn bg-red-50 text-red-600 hover:bg-red-100 border border-red-100; }
-  .btn-icon    { @apply btn p-2 rounded-lg; }
+  .btn-primary { @apply bg-brand-600 text-white hover:bg-brand-700 shadow-xs; }
+  .btn-outline { @apply bg-white text-slate-700 border border-slate-300 hover:bg-slate-50; }
+  .btn-ghost   { @apply bg-transparent text-slate-600 hover:bg-slate-100; }
+  .btn-subtle  { @apply bg-slate-100 text-slate-700 hover:bg-slate-200; }
+  .btn-danger  { @apply bg-red-50 text-red-600 hover:bg-red-100 border border-red-100; }
+  .btn-icon    { @apply p-2 rounded-lg; }
   .btn-sm      { @apply px-2.5 py-1 text-xs rounded-md; }
 
   /* ---------- Campos ---------- */
@@ -102,7 +148,7 @@ body {
   .input {
     @apply w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800
            placeholder:text-slate-400 transition
-           focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-400;
+           focus:outline-hidden focus:ring-2 focus:ring-brand-500/40 focus:border-brand-400;
   }
   select.input { @apply pr-8 cursor-pointer; }
   .input-sm { @apply px-2 py-1 text-xs rounded-md; }
@@ -112,21 +158,21 @@ body {
     @apply inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold
            text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors;
   }
-  .tab-active { @apply bg-brand-600 text-white hover:bg-brand-700 hover:text-white shadow-sm; }
+  .tab-active { @apply bg-brand-600 text-white hover:bg-brand-700 hover:text-white shadow-xs; }
 
   .seg {
     @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium
            text-slate-500 hover:text-slate-800 transition-colors;
   }
-  .seg-active { @apply bg-white text-brand-700 shadow-sm; }
+  .seg-active { @apply bg-white text-brand-700 shadow-xs; }
 
   /* ---------- Badges ---------- */
-  .badge { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold; }
-  .badge-brand   { @apply badge bg-brand-50 text-brand-700; }
-  .badge-green   { @apply badge bg-emerald-50 text-emerald-700; }
-  .badge-amber   { @apply badge bg-amber-50 text-amber-700; }
-  .badge-red     { @apply badge bg-red-50 text-red-700; }
-  .badge-slate   { @apply badge bg-slate-100 text-slate-600; }
+  .badge, .badge-brand, .badge-green, .badge-amber, .badge-red, .badge-slate { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold; }
+  .badge-brand   { @apply bg-brand-50 text-brand-700; }
+  .badge-green   { @apply bg-emerald-50 text-emerald-700; }
+  .badge-amber   { @apply bg-amber-50 text-amber-700; }
+  .badge-red     { @apply bg-red-50 text-red-700; }
+  .badge-slate   { @apply bg-slate-100 text-slate-600; }
 
   /* ---------- Tablas ---------- */
   .tbl { @apply w-full text-sm border-collapse; }
@@ -148,12 +194,16 @@ body {
   .tbl tbody tr:hover td { @apply bg-brand-50/40; }
   .tbl-zebra tbody tr:nth-child(even) td { @apply bg-slate-50/60; }
   .num { @apply tabular-nums text-right; }
+
+  @tailwind utilities;
 }
 
-@layer utilities {
-  .scroll-thin { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
-  .scroll-thin::-webkit-scrollbar { height: 9px; width: 9px; }
-  .scroll-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
-  .scroll-thin::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-  .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+/* Utilidad propia: en la 4 se declara con @utility para poder usarla en @apply. */
+@utility scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  &::-webkit-scrollbar { height: 9px; width: 9px; }
+  &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+  &::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  &::-webkit-scrollbar-track { background: transparent; }
 }

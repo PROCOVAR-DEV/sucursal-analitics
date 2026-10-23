@@ -276,7 +276,7 @@ function Tabla({ reglas, mes, puedeEditar, editando, setEditando, onGuardar, onB
         </div>
       )}
       <ContadorFiltro mostradas={filtradas.length} q={q} total={(reglas || []).length} />
-      <TablaScroll className="!mx-0 !px-0">
+      <TablaScroll className="mx-0! px-0!">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="text-left border-b border-slate-200 text-slate-500">
@@ -299,13 +299,13 @@ function Tabla({ reglas, mes, puedeEditar, editando, setEditando, onGuardar, onB
                 <td className="py-2 pr-4 font-medium">{r.nombre}</td>
                 <td className="py-2 pr-4">
                   <span className="text-slate-500">{r.tipo === "grupo" ? "Grupo" : "Producto"}</span>{" "}
-                  <span className="font-mono text-xs bg-slate-100 rounded px-1.5 py-0.5">{r.objetivo}</span>
+                  <span className="font-mono text-xs bg-slate-100 rounded-sm px-1.5 py-0.5">{r.objetivo}</span>
                 </td>
                 <td className="py-2 pr-4 text-right tabular-nums">
                   {ed ? (
                     <input
                       type="number" step="0.01"
-                      className="w-20 border border-slate-300 rounded px-2 py-1 text-right"
+                      className="w-20 border border-slate-300 rounded-sm px-2 py-1 text-right"
                       value={editando.porciento}
                       onChange={(e) => setEditando({ ...editando, porciento: e.target.value })}
                     />
@@ -318,7 +318,7 @@ function Tabla({ reglas, mes, puedeEditar, editando, setEditando, onGuardar, onB
                   {ed ? (
                     <input
                       type="month" min={mes}
-                      className="border border-slate-300 rounded px-2 py-1"
+                      className="border border-slate-300 rounded-sm px-2 py-1"
                       value={editando.hasta}
                       onChange={(e) => setEditando({ ...editando, hasta: e.target.value })}
                     />
