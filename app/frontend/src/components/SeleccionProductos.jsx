@@ -100,9 +100,9 @@ export default function SeleccionProductos({ data }) {
             <thead>
               <tr>
                 <th className="col-fija">Producto</th><th>Grupo</th>
-                <th className="!text-right">Ventas ($)</th><th className="!text-right">% de la selección</th>
-                <th className="!text-right">Cantidad</th>
-                <th className="!text-right">Meta</th><th className="!text-right">Real</th><th className="!text-right">% Cumpl.</th>
+                <th className="text-right!">Ventas ($)</th><th className="text-right!">% de la selección</th>
+                <th className="text-right!">Cantidad</th>
+                <th className="text-right!">Meta</th><th className="text-right!">Real</th><th className="text-right!">% Cumpl.</th>
               </tr>
             </thead>
             <tbody>

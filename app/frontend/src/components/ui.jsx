@@ -195,7 +195,7 @@ export function MultiSelect({ value = [], options, onChange, placeholder = "Ning
           return (
             <button key={o.value} type="button" onClick={() => toggle(o.value)}
               className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-left transition whitespace-nowrap", on ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100")}>
-              <span className={cn("grid place-items-center w-4 h-4 rounded border shrink-0", on ? "bg-brand-600 border-brand-600 text-white" : "border-slate-300")}>
+              <span className={cn("grid place-items-center w-4 h-4 rounded-sm border shrink-0", on ? "bg-brand-600 border-brand-600 text-white" : "border-slate-300")}>
                 {on && <Check size={12} />}
               </span>
               {o.label}
@@ -339,7 +339,7 @@ export function Toast({ msg, onClose }) {
   const border = ok ? "border-emerald-200" : warn ? "border-amber-200" : "border-red-200";
   const iconBg = ok ? "bg-emerald-100 text-emerald-600" : warn ? "bg-amber-100 text-amber-600" : "bg-red-100 text-red-600";
   return createPortal(
-    <div className="fixed bottom-5 right-5 z-[2000] max-w-sm animate-fade-in">
+    <div className="fixed bottom-5 right-5 z-2000 max-w-sm animate-fade-in">
       <div className={cn("flex items-start gap-3 pl-3 pr-2 py-3 rounded-xl border shadow-pop bg-white", border)}>
         <span className={cn("grid place-items-center w-7 h-7 rounded-lg shrink-0 mt-0.5", iconBg)}>
           {ok ? <Check size={16} /> : <span className="font-bold">!</span>}
@@ -420,7 +420,7 @@ export function Buscador({ value, onChange, placeholder = "Filtrar…", classNam
         {value && (
           <button
             aria-label="Limpiar filtro"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             onClick={() => onChange("")}
             type="button"
           >

@@ -128,10 +128,10 @@ export default function ProductosView({ sourceId, period, user }) {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th className="col-fija">Grupo</th><th className="!text-right">Productos</th>
-                  <th className="!text-right">Meta</th><th className="!text-right">Real</th>
-                  <th className="!text-right">% Cumpl.</th><th className="!text-right">Debería</th>
-                  <th className="!text-right">Delta</th><th className="!text-right">Prom. día</th><th className="!text-right">Nec./día</th>
+                  <th className="col-fija">Grupo</th><th className="text-right!">Productos</th>
+                  <th className="text-right!">Meta</th><th className="text-right!">Real</th>
+                  <th className="text-right!">% Cumpl.</th><th className="text-right!">Debería</th>
+                  <th className="text-right!">Delta</th><th className="text-right!">Prom. día</th><th className="text-right!">Nec./día</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,9 +162,9 @@ export default function ProductosView({ sourceId, period, user }) {
             <thead>
               <tr>
                 <th className="col-fija">Producto</th><th>Grupo</th>
-                <th className="!text-right">Meta</th><th className="!text-right">Real</th>
-                <th className="!text-right">% Cumpl.</th><th className="!text-right">Debería</th>
-                <th className="!text-right">Delta</th><th className="!text-right">Prom. día</th><th className="!text-right">Nec./día</th>
+                <th className="text-right!">Meta</th><th className="text-right!">Real</th>
+                <th className="text-right!">% Cumpl.</th><th className="text-right!">Debería</th>
+                <th className="text-right!">Delta</th><th className="text-right!">Prom. día</th><th className="text-right!">Nec./día</th>
               </tr>
             </thead>
             <tbody>

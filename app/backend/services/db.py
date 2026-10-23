@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from pathlib import Path
 
 from sqlalchemy import (
@@ -25,6 +25,11 @@ from sqlalchemy.orm import (
     sessionmaker,
     relationship,
 )
+
+def utcnow() -> datetime:
+    """La hora UTC sin zona, igual que el antiguo `datetime.utcnow()` (deprecado en 3.12)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 
 # DATABASE_URL viene del entorno. El servicio (systemd) lo inyecta con EnvironmentFile=.env;
 # los scripts/comandos manuales NO, así que si falta lo leemos del .env de app/backend.
@@ -120,7 +125,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(40), nullable=False, default="usuario")
     # {sucursales, nombre, gestor}
     data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class Sucursal(Base):
@@ -129,7 +134,7 @@ class Sucursal(Base):
     nombre: Mapped[str] = mapped_column(String(200), nullable=False)
     config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utcnow, onupdate=utcnow
     )
 
 
@@ -146,7 +151,7 @@ class Ajuste(Base):
     clave: Mapped[str] = mapped_column(String(80), primary_key=True)
     valor: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utcnow, onupdate=utcnow
     )
 
 
@@ -204,11 +209,11 @@ class ResultCache(Base):
     sid: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
     version: Mapped[str] = mapped_column(Text, nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    computed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     # Cuándo se sirvió por última vez. Es lo que permite purgar por uso real:
     # un reporte de un mes que nadie abre desde hace semanas ocupa espacio para
     # nada, y recalcularlo cuesta segundos si alguien vuelve a pedirlo.
-    last_read_at: Mapped[datetime] = mapped_column(DateTime, index=True, default=datetime.utcnow)
+    last_read_at: Mapped[datetime] = mapped_column(DateTime, index=True, default=utcnow)
 
 
 class VentaVentra(Base):
@@ -251,7 +256,7 @@ class VentaVentra(Base):
     # es una etiqueta al lado, y si mañana se corrige, se recalcula sin haber perdido nada.
     objeto: Mapped[str] = mapped_column(String(120), nullable=False, default="", index=True)
     tipo_punto: Mapped[str] = mapped_column(String(30), nullable=False, default="", index=True)
-    traido_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    traido_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 def init_db() -> None:

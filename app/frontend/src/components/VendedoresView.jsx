@@ -149,7 +149,7 @@ export default function VendedoresView({ sourceId, period }) {
           con la cantidad de vendedores o el largo de los nombres. */}
       {/* z-40: las celdas fijas de las tablas (`.col-fija`, z-20/z-30) pasaban POR ENCIMA de esta tira al
           desplazarse. Los desplegables y avisos van en z-50, por encima de ésta. */}
-      <div className="sticky top-0 z-40 -mx-3 sm:-mx-6 px-3 sm:px-6 py-3 bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-sm flex gap-2 overflow-x-auto scroll-thin">
+      <div className="sticky top-0 z-40 -mx-3 sm:-mx-6 px-3 sm:px-6 py-3 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200 shadow-xs flex gap-2 overflow-x-auto scroll-thin">
         {data.vendedores.map((v) => {
           const active = v.gestor === activeGestor;
           const pct = v.cumplimiento_pct;
@@ -162,7 +162,7 @@ export default function VendedoresView({ sourceId, period }) {
             <button
               key={v.gestor}
               title={v.nombre || v.gestor}
-              className={`tab shrink-0 flex flex-col items-start gap-0.5 py-2 px-4 max-w-[11rem] ${active ? "tab-active" : ""}`}
+              className={`tab shrink-0 flex flex-col items-start gap-0.5 py-2 px-4 max-w-44 ${active ? "tab-active" : ""}`}
               onClick={() => setSelGestor(v.gestor)}
             >
               <span className="font-semibold truncate w-full text-left">{nombreCorto(v.nombre || v.gestor, v.gestor)}</span>
@@ -322,7 +322,7 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
             {vendor.por_grupo.map((gr) => (
               <div key={gr.grupo} className="flex items-center gap-3">
                 <span className="w-32 sm:w-44 shrink-0 truncate text-sm font-medium">{gr.grupo}</span>
-                <div className="h-2 flex-1 min-w-[3rem] overflow-hidden rounded-full bg-slate-100">
+                <div className="h-2 flex-1 min-w-12 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.min(100, gr.pct)}%` }} />
                 </div>
                 <span className="w-12 shrink-0 text-right text-xs tabular-nums text-slate-500">{formatNumber(gr.pct, 0)}%</span>
@@ -415,7 +415,7 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
             </div>
             <Buscador onChange={setQProd} placeholder="Producto o familia…" value={qProd} />
           </div>
-          <div className="max-h-[30rem] overflow-auto scroll-thin rounded-lg border border-slate-200">
+          <div className="max-h-120 overflow-auto scroll-thin rounded-lg border border-slate-200">
             <table className="min-w-full text-sm">
               {/* Cabecera pegajosa: son todos los productos, no un top, y al bajar por
                   una lista larga se pierde de qué es cada columna. */}
@@ -453,7 +453,7 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
                     <td className="px-3 py-1.5 text-right tabular-nums">
                       {/* Teñida: de un vistazo se ve en qué productos manda él. */}
                       <span
-                        className="inline-block rounded px-1.5 py-0.5"
+                        className="inline-block rounded-sm px-1.5 py-0.5"
                         style={p.pct_de_la_oficina ? { background: `rgba(37, 99, 235, ${0.05 + 0.35 * Math.min(1, p.pct_de_la_oficina / 50)})` } : undefined}
                       >
                         {formatNumber(p.pct_de_la_oficina, 1)}%

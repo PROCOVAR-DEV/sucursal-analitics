@@ -61,14 +61,14 @@ function CumplTable({ title, subtitle, tone, rows, showAyer = false, showDeberia
         <thead>
           <tr>
             <th className="col-fija">Producto</th>
-            <th className="!text-right">{showDeberia ? "Meta mes" : "Meta"}</th>
-            {showDeberia && <th className="!text-right" title="Lo que tendría que llevar vendido a hoy, por días laborales transcurridos">Debería</th>}
-            {showAyer && <th className="!text-right">Ayer</th>}
-            {showMetaResto && <th className="!text-right" title="Lo que falta del plan del mes ÷ los días laborales que quedan, hoy incluido">Meta diaria</th>}
-            <th className="!text-right">{showAyer ? "Hoy" : "Vendido"}</th>
-            <th className="!text-left !pl-4">Cumplimiento</th>
-            <th className="!text-right">{showDeberia ? "Δ vs debería" : "Δ vs meta"}</th>
-            {showAyer && <th className="!text-right">Δ vs ayer</th>}
+            <th className="text-right!">{showDeberia ? "Meta mes" : "Meta"}</th>
+            {showDeberia && <th className="text-right!" title="Lo que tendría que llevar vendido a hoy, por días laborales transcurridos">Debería</th>}
+            {showAyer && <th className="text-right!">Ayer</th>}
+            {showMetaResto && <th className="text-right!" title="Lo que falta del plan del mes ÷ los días laborales que quedan, hoy incluido">Meta diaria</th>}
+            <th className="text-right!">{showAyer ? "Hoy" : "Vendido"}</th>
+            <th className="text-left! pl-4!">Cumplimiento</th>
+            <th className="text-right!">{showDeberia ? "Δ vs debería" : "Δ vs meta"}</th>
+            {showAyer && <th className="text-right!">Δ vs ayer</th>}
           </tr>
         </thead>
         <tbody>
@@ -196,8 +196,8 @@ export function GeneralTable({ data, sel, onSel }) {
         <thead>
           <tr>
             <th>Vendedor</th>
-            <th className="!text-right">Venta $</th><th className="!text-right">HL</th>
-            <th className="!text-right">Meta HL</th><th className="!text-left !pl-4">Cumplimiento</th>
+            <th className="text-right!">Venta $</th><th className="text-right!">HL</th>
+            <th className="text-right!">Meta HL</th><th className="text-left! pl-4!">Cumplimiento</th>
           </tr>
         </thead>
         <tbody>

@@ -122,7 +122,7 @@ export default function UploadPanel({ sourceId, onSelect, onRefresh }) {
           <input id="file-input" ref={inputRef} type="file" accept=".xls,.xlsx" className="hidden"
             onChange={(e) => handleFile(e.target.files?.[0])} />
         </div>
-        {error && <div className="mt-2 p-2 text-xs bg-red-50 text-red-700 rounded border border-red-200">{error}</div>}
+        {error && <div className="mt-2 p-2 text-xs bg-red-50 text-red-700 rounded-sm border border-red-200">{error}</div>}
       </div>
 
       {/* Las dos fuentes, siempre las dos y siempre a la vista.

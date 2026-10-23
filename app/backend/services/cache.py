@@ -27,12 +27,11 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import text
 
-from services.db import session_scope
+from services.db import utcnow, session_scope
 
 log = logging.getLogger(__name__)
 
@@ -115,7 +114,7 @@ def _marca_de_ventra(sid: str) -> str:
         # Sin marca de Ventra no se puede garantizar que lo guardado valga: se devuelve
         # algo distinto cada vez para que NO se use la caché, que es el lado seguro.
         log.exception("No se pudo calcular la marca de Ventra de %s", sid)
-        return f"desconocida-{datetime.utcnow().isoformat()}"
+        return f"desconocida-{utcnow().isoformat()}"
 
 
 def sucursal_version(sid: str) -> str | None:
