@@ -6,6 +6,12 @@ import { VendorFormatoTables } from "./MetasGestorReport.jsx";
 import FiltroMulti from "./FiltroMulti.jsx";
 import { Buscador, cn, filtrarFilas } from "./ui.jsx";
 
+// El drop size ronda 0,5–3 HL por operación: con formatNumber (enteros) todo saldría 1 o 2.
+const fmtDrop = (n) =>
+  n === null || n === undefined || isNaN(n)
+    ? "–"
+    : Number(n).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 /**
  * El nombre en corto para la tira: primero y último.
  *
@@ -139,6 +145,70 @@ export default function VendedoresView({ sourceId, period }) {
         <Kpi label="Total Operaciones" value={formatInt(data.total_operaciones)} tone="slate" />
       </div>
 
+      {/* DROP SIZE DE PARRANDA: hectolitros por operación, solo del grupo PARRANDA, sea cual
+          sea el filtro de grupo de arriba. Pedido por la oficina para que cada vendedor se
+          compare con el resto y con el total. Más alto = más volumen por factura. */}
+      {data.drop_size_parranda?.operaciones > 0 && (
+        <div className="card">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h3 className="font-semibold">Drop size Parranda</h3>
+              <p className="text-xs text-slate-500">
+                Hectolitros por operación, solo productos del grupo Parranda.
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-bold tabular-nums text-brand-600">
+                {fmtDrop(data.drop_size_parranda.drop_size)}
+              </span>
+              <span className="ml-1 text-xs text-slate-500">HL/op · toda la oficina</span>
+            </div>
+          </div>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-slate-500">
+                  <th className="py-1 text-left font-medium">Vendedor</th>
+                  <th className="py-1 text-right font-medium">Operaciones</th>
+                  <th className="py-1 text-right font-medium">HL</th>
+                  <th className="py-1 text-right font-medium">Drop size</th>
+                  <th className="py-1 text-right font-medium">vs oficina</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...data.vendedores]
+                  .filter((v) => v.parranda_operaciones > 0)
+                  .sort((x, y) => y.drop_size_parranda - x.drop_size_parranda)
+                  .map((v) => {
+                    const dif = data.drop_size_parranda.drop_size
+                      ? (v.drop_size_parranda / data.drop_size_parranda.drop_size - 1) * 100
+                      : 0;
+                    return (
+                      <tr key={v.gestor} className="border-t border-slate-100 cursor-pointer hover:bg-slate-50"
+                        onClick={() => setSelGestor(v.gestor)}>
+                        <td className="py-1.5">{nombreCorto(v.nombre || v.gestor, v.gestor)}</td>
+                        <td className="py-1.5 text-right tabular-nums">{formatInt(v.parranda_operaciones)}</td>
+                        <td className="py-1.5 text-right tabular-nums">{fmtDrop(v.parranda_hl)}</td>
+                        <td className="py-1.5 text-right tabular-nums font-semibold">{fmtDrop(v.drop_size_parranda)}</td>
+                        <td className={`py-1.5 text-right tabular-nums text-xs font-semibold ${dif >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                          {dif >= 0 ? "+" : ""}{Math.round(dif)} %
+                        </td>
+                      </tr>
+                    );
+                  })}
+                <tr className="border-t-2 border-slate-200 font-semibold">
+                  <td className="py-1.5">Toda la oficina</td>
+                  <td className="py-1.5 text-right tabular-nums">{formatInt(data.drop_size_parranda.operaciones)}</td>
+                  <td className="py-1.5 text-right tabular-nums">{fmtDrop(data.drop_size_parranda.hectolitros)}</td>
+                  <td className="py-1.5 text-right tabular-nums">{fmtDrop(data.drop_size_parranda.drop_size)}</td>
+                  <td />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* LA TIRA DE VENDEDORES: UNA SOLA FILA, SIEMPRE.
           Envolvía en pantalla ancha (`sm:flex-wrap`) y con nombres largos se rompía: en
           La Habana son ocho, con cosas como «RIGOBERTO MANUEL MARTINEZ SABORIT», y la
@@ -199,6 +269,7 @@ export default function VendedoresView({ sourceId, period }) {
           prorrateado={(data.proporcion_periodo ?? 1) < 1}
           totalOficina={data.total_importe}
           totalOficinaHL={data.total_hectolitros}
+          dropOficina={data.drop_size_parranda?.drop_size}
           diasRango={data.dias_del_rango}
           diasMes={data.dias_del_mes}
         />
@@ -207,7 +278,7 @@ export default function VendedoresView({ sourceId, period }) {
   );
 }
 
-function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia, hayHL = true, grupos = [], comisionSobreTodo = false, prorrateado = false, diasRango = 0, diasMes = 0, metasCantBlock = null, productosConMeta = [], totalOficina = 0, totalOficinaHL = 0 }) {
+function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponibles, diaAnterior, selDia, onSelDia, hayHL = true, grupos = [], comisionSobreTodo = false, prorrateado = false, diasRango = 0, diasMes = 0, metasCantBlock = null, productosConMeta = [], totalOficina = 0, totalOficinaHL = 0, dropOficina = 0 }) {
   /**
    * Filtrar la lista de productos del gestor.
    *
@@ -283,7 +354,7 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
         )}
       </div>
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {/*
           * CUÁNTO PESA ESTA PERSONA EN LA SUCURSAL.
           *
@@ -304,6 +375,8 @@ function VendorDetail({ vendor, metasBlock, formatos, reportDate, diasDisponible
               hint={totalOficinaHL ? `${formatNumber(vendor.total_hectolitros / totalOficinaHL * 100, 1)} % de la oficina — es con esto con lo que se reparte el plan` : undefined} />
           : <Kpi label="Cantidad" value={formatNumber(vendor.total_cantidad, 2)} tone="brand" hint="Unidades vendidas" />}
         <Kpi label="Operaciones" value={formatInt(vendor.num_operaciones)} tone="slate" />
+        <Kpi label="Drop size Parranda" value={fmtDrop(vendor.drop_size_parranda)} tone="brand"
+          hint={`${formatInt(vendor.parranda_operaciones)} operaciones · ${fmtDrop(vendor.parranda_hl)} HL${dropOficina ? ` · oficina ${fmtDrop(dropOficina)}` : ""}`} />
         <Kpi label="Clientes Únicos" value={formatInt(vendor.num_clientes)} tone="slate" />
       </div>
 

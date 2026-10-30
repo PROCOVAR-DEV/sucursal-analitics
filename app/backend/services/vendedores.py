@@ -29,6 +29,27 @@ def _sum_hl(sub: pd.DataFrame, mask: pd.Series, size: str) -> float:
     return round(float(sub.loc[mask & (sub[STD_COLS["size"]] == size), "Hectolitros"].sum()), 2)
 
 
+def drop_size_parranda(sub: pd.DataFrame) -> dict:
+    """Operaciones y hectolitros del grupo PARRANDA, y su drop size (HL por operación).
+
+    Solo cuenta el grupo comercial PARRANDA, sea cual sea el filtro de la pantalla: el
+    drop size que se pidió es de Parranda y no debe moverse al mirar otras familias.
+    """
+    op, hl = STD_COLS["op"], "Hectolitros"
+    if sub.empty or "GrupoComercial" not in sub.columns or hl not in sub.columns:
+        return {"operaciones": 0, "hectolitros": 0.0, "drop_size": 0.0}
+    par = sub[sub["GrupoComercial"].astype(str).str.upper() == "PARRANDA"]
+    if par.empty:
+        return {"operaciones": 0, "hectolitros": 0.0, "drop_size": 0.0}
+    ops = int(par[op].nunique()) if op in par.columns else int(len(par))
+    hls = float(pd.to_numeric(par[hl], errors="coerce").fillna(0).sum())
+    return {
+        "operaciones": ops,
+        "hectolitros": round(hls, 2),
+        "drop_size": round(hls / ops, 3) if ops else 0.0,
+    }
+
+
 def _sku_semanal_vendedor(sub_mp: pd.DataFrame) -> tuple[list[dict], list[str]]:
     """HL por formato (SKU) y por semana de calendario, para UN vendedor."""
     fec, size_col = STD_COLS["fecha"], STD_COLS["size"]
@@ -300,6 +321,7 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None, es_ra
         metas_cantidad.sort(key=lambda m: m["cumplimiento_pct"])
 
         sku_semanal, weeks_disponibles = _sku_semanal_vendedor(sub_mp)
+        drop = drop_size_parranda(sub_todo)
 
         vendedores_out.append({
             "gestor": g, "nombre": g_cfg.get("nombre", g), "sector": g_cfg.get("sector", ""),
@@ -314,6 +336,8 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None, es_ra
             "cumplimiento_pct": round((total_hl / cuota * 100) if cuota else 0.0, 2),
             "malta_330": M330, "malta_500": M500, "malta_1500": M1500,
             "parranda_330": P330, "parranda_500": P500, "parranda_1500": P1500,
+            "parranda_operaciones": drop["operaciones"], "parranda_hl": drop["hectolitros"],
+            "drop_size_parranda": drop["drop_size"],
             "top_productos": top_productos, "por_grupo": por_grupo,
             "metas_cantidad": metas_cantidad,
             # Cómo va vendiendo por SEMANA (HL por formato, semanas de calendario).
@@ -337,6 +361,10 @@ def compute_vendedores(report, eff: dict, grupos: list[str] | None = None, es_ra
         "total_importe": round(sum(v["total_importe"] for v in vendedores_out), 2),
         "total_hectolitros": round(sum(v["total_hectolitros"] for v in vendedores_out), 2),
         "total_operaciones": sum(v["num_operaciones"] for v in vendedores_out),
+        # Oficina entera, contando cada factura una sola vez aunque la toquen dos gestores.
+        "drop_size_parranda": drop_size_parranda(
+            df_all[df_all["GestorDetectado"].isin(keys)] if not df_all.empty else df_all
+        ),
         "grupos_disponibles": grupos_disponibles,
         "grupos": pedidos,
         # Para que la pantalla pueda decir "cuota de 7 de los 22 días del mes" en vez de
