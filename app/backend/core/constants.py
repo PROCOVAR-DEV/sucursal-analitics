@@ -8,8 +8,10 @@ leer estas constantes directamente: reciben la config efectiva de la sucursal.
 from __future__ import annotations
 
 # --- Factores de conversión (semilla) ---
-# Hectolitros = Cantidad × SIZE_MULT[tamaño]
-SIZE_MULT: dict[str, float] = {"330": 0.02, "500": 0.03, "1500": 0.09}
+# Hectolitros = Cantidad × SIZE_MULT[tamaño]. Un blíster son 6 botellas: 6 × 0,33 L = 1,98 L.
+# El 330 NO es 0,02 (eso es 2 L): con 0,02 se cuenta un 1,01 % de más, que es la diferencia
+# con el Excel de CCSA (Camagüey, 1-28/10/2026: 198,34 HL contra 196).
+SIZE_MULT: dict[str, float] = {"330": 0.0198, "500": 0.03, "1500": 0.09}
 
 # Unidades (blisters) por Pallet, por tamaño (Malta y Parranda comparten valores)
 UNITS_PER_PALLET: dict[str, int] = {"330": 496, "500": 336, "1500": 110}

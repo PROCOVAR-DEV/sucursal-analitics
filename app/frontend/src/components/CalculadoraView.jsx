@@ -108,7 +108,7 @@ export default function CalculadoraView({ cfg: cfgProp, sid: sidProp, sourceId =
   const pkey = pkeyOf(ym.y, ym.m);
 
   const params = cfg?.parametros || {};
-  const sizeMult = params.size_mult || { 330: 0.02, 500: 0.03, 1500: 0.09 };
+  const sizeMult = params.size_mult || { 330: 0.0198, 500: 0.03, 1500: 0.09 };
   const unitsPP = params.units_per_pallet || { 330: 496, 500: 336, 1500: 110 };
   const sizes = params.sizes || ["330", "500", "1500"];
   // Esta tabla es de HECTOLITROS: formato, pallets, blísters. Solo valen los productos

@@ -68,7 +68,7 @@ Validado contra la hoja Supervisor del Excel generado (coincide exacto):
 
 ## 2. Conceptos y cálculos del dominio
 
-- **Hectolitros** = `Cantidad × SIZE_MULT[tamaño]`, con `SIZE_MULT = {330: 0.02,
+- **Hectolitros** = `Cantidad × SIZE_MULT[tamaño]`, con `SIZE_MULT = {330: 0.0198,
   500: 0.03, 1500: 0.09}`. El tamaño se detecta del texto de la mercancía.
 - **Producto cerveza**: `MALTA` (requiere "MALTA" + "GUAJIRA") o `PARRANDA`.
   Códigos de columna: `M330 M500 M1500 P330 P500 P1500`.
