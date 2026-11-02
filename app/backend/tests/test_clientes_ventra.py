@@ -32,3 +32,12 @@ def test_si_aun_no_hay_ningun_codigo_no_se_enseña_nada():
     assert contar_clientes(df([("ANA", None), ("PEDRO", "")])) is None
     assert contar_clientes(pd.DataFrame(columns=[S])) is None
     assert contar_clientes(None) is None
+
+
+def test_el_relleno_arranca_aunque_el_bucle_este_apagado():
+    # En producción VENTRA_SYNC_EN_API=false: un relleno colgado del bucle no corría nunca.
+    from pathlib import Path
+    fuente = (Path(__file__).resolve().parents[1] / "main.py").read_text()
+    i = fuente.index("def _arrancar_sincronizador")
+    cuerpo = fuente[i:fuente.index("@asynccontextmanager", i)]
+    assert cuerpo.index("relleno_inicial") < cuerpo.index("os.environ.get(\"VENTRA_SYNC_EN_API\"")

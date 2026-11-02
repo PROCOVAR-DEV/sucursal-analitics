@@ -264,6 +264,28 @@ def rellenar_un_mes(intentados: set, cuantos: int = RELLENO_POR_VUELTA) -> int:
     return hechos
 
 
+def relleno_inicial(espera_s: int | None = None) -> None:
+    """Rellena el `cliente_codigo` del histórico UNA vez, al arrancar, aunque el bucle esté apagado.
+
+    En producción el bucle de la API va APAGADO (`VENTRA_SYNC_EN_API=false`): trae Ventra un
+    temporizador del servidor (`procovar-vigilar-ventra`) y el refresco bajo demanda. Un relleno
+    colgado de ese bucle no corría nunca. Este hilo es aparte, acotado y termina solo: va de lo más
+    reciente a lo más antiguo, `RELLENO_POR_VUELTA` pares (base, mes) cada vez, con pausa entre
+    tandas para no cargar a Ventra, y se para cuando ya no queda ninguna línea sin código.
+    Nunca revienta.
+    """
+    import time
+
+    time.sleep(int(os.environ.get("VENTRA_RELLENO_ESPERA_S", "90")) if espera_s is None else espera_s)
+    intentados: set = set()
+    try:
+        while rellenar_un_mes(intentados) > 0:
+            time.sleep(int(os.environ.get("VENTRA_RELLENO_PAUSA_S", "20")))
+        log.info("[ventra] relleno del codigo de cliente: terminado (%d pares)", len(intentados))
+    except Exception as e:  # noqa: BLE001
+        log.warning("[ventra] el relleno del codigo de cliente se paro: %s", e)
+
+
 def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
     """Trae lo nuevo cada hora, y de vez en cuando repasa unos días atrás.
 

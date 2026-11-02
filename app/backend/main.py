@@ -82,6 +82,11 @@ def _arrancar_sincronizador() -> None:
     Va en un hilo demonio: si el proceso se para, se va con él en vez de mantenerlo
     vivo esperando a un `sleep` de una hora.
     """
+    # El relleno del código de cliente va aparte del bucle: corre aunque éste esté apagado, una vez,
+    # y termina solo (ver `ventra_sync.relleno_inicial`).
+    from services import ventra_sync as _vs
+    threading.Thread(target=_vs.relleno_inicial, daemon=True, name="ventra-relleno").start()
+
     if os.environ.get("VENTRA_SYNC_EN_API", "true").lower() != "true":
         logger.info("[ventra] el sincronizador dentro de la API está apagado")
         return
