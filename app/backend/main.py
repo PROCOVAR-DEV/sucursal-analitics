@@ -1227,8 +1227,8 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
     productos = compute_productos(report, eff)
     ranking = compute_ranking(report, eff)
     clientes = compute_clientes_analisis(report, eff)
-    from services.clientes_ventra import contar_clientes
-    _cc = contar_clientes(report.df)
+    from services.clientes_ventra import calidad_de_fichas
+    _cc = calidad_de_fichas(report.df)
     return {
         "id": source_id, "filename": report.filename, "rango": report.rango_str, "filas": int(len(report.df)),
         "kpis": {
@@ -1241,10 +1241,11 @@ def _compute_dashboard_uncached(suc: dict, source_id: str, mes: str | None, user
             # cuadrar contra AXIS, no para medir a nadie. Ver `permisos.ve_sin_vendedor`.
             "total_sin_vendedor": ventas.get("total_sin_vendedor", 0.0) if ve_sin_vendedor(user.get("role")) else 0.0,
             "total_clientes": clientes["oficina"]["num_clientes"], "total_skus": clientes["oficina"]["num_skus"],
-            # Clientes contados por el código que les da VENTRA (no por el nombre ni por el C- de la
-            # nota). None hasta que el worker rellena ese código en el periodo mirado.
-            "clientes_por_codigo": (_cc or {}).get("por_codigo"),
-            "clientes_sin_codigo": (_cc or {}).get("sin_codigo"),
+            # Calidad de las fichas de cliente de Ventra: duplicadas (cuentan de más) y compartidas
+            # por personas distintas (cuentan de menos). Para arreglarlas en Axis; el número de
+            # clientes sigue siendo el de nombres. None hasta que se rellena el código de Ventra.
+            "fichas_compartidas": (_cc or {}).get("fichas_compartidas"),
+            "clientes_con_varias_fichas": (_cc or {}).get("clientes_con_varias_fichas"),
             "dias_laborales_transcurridos": productos["dias_laborales_transcurridos"],
             "dias_laborales_totales": productos["dias_laborales_totales"]},
         "gestores_ventas": ventas["gestores"], "ranking_general": ranking["general"],

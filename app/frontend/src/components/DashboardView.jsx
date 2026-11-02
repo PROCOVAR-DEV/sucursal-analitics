@@ -98,11 +98,11 @@ export default function DashboardView({ sourceId, period, user }) {
         {verSinVendedor && (
           <ListaSinVendedor sourceId={sourceId} period={period} todas={data?.id === "all"} onClose={() => setVerSinVendedor(false)} />
         )}
-        {/* Por nombre (lo de siempre) y, cuando el worker ya rellenó el código de Ventra, por código:
-            el mismo cliente escrito de dos formas cuenta una vez, y la venta de mostrador sin pedido
-            también tiene su cliente. */}
+        {/* El número de clientes es el de nombres. Debajo, solo si hay algo que arreglar en Axis: fichas de
+            Ventra duplicadas (el mismo cliente con dos códigos) o compartidas (un código, personas distintas). */}
         <Kpi label="Clientes" value={formatInt(kpis.total_clientes)}
-          hint={`${formatInt(kpis.total_skus)} SKUs vendidos${kpis.clientes_por_codigo != null ? ` · ${formatInt(kpis.clientes_por_codigo)} por código de Ventra` : ""}`}
+          hint={`${formatInt(kpis.total_skus)} SKUs vendidos${(kpis.clientes_con_varias_fichas || kpis.fichas_compartidas)
+            ? ` · fichas a revisar en Axis: ${formatInt(kpis.clientes_con_varias_fichas || 0)} duplicadas, ${formatInt(kpis.fichas_compartidas || 0)} compartidas` : ""}`}
           tone="brand" />
       </div>
 

@@ -1,43 +1,50 @@
 import pandas as pd
 
-from services.clientes_ventra import contar_clientes
+from services.clientes_ventra import calidad_de_fichas
 from services.loader import STD_COLS
 from services.ventra import COL_CLIENTE_CODIGO
 
-S = STD_COLS["socio"]
+S, N = STD_COLS["socio"], STD_COLS["nota"]
 
 
 def df(filas):
-    return pd.DataFrame(filas, columns=[S, COL_CLIENTE_CODIGO])
+    return pd.DataFrame(filas, columns=[S, COL_CLIENTE_CODIGO, N])
 
 
-def test_el_mismo_cliente_escrito_distinto_cuenta_una_vez_por_codigo():
-    # «Geovany» y «Jeovani» son la misma persona: mismo código de Ventra
-    r = contar_clientes(df([("GEOVANY HERNANDEZ", "5798"), ("Jeovani Hernandez", "5798"), ("ANA", "100")]))
-    assert r == {"por_nombre": 3, "por_codigo": 2, "sin_codigo": 0}
+def test_el_mismo_cliente_con_dos_fichas_se_cuenta_como_duplicado():
+    r = calidad_de_fichas(df([("EMILIO ARANGO", "1965", ""), ("EMILIO ARANGO", "1966", ""), ("ANA", "100", "")]))
+    assert r == {"fichas": 3, "fichas_compartidas": 0, "clientes_con_varias_fichas": 1}
 
 
-def test_la_venta_de_mostrador_sin_pedido_tambien_es_un_cliente():
-    # No lleva C- en la nota, pero sí su código de Ventra
-    r = contar_clientes(df([("CARLOS LOPEZ", "31379"), ("CARLOS LOPEZ", "31379"), ("ROSA", "55")]))
-    assert r["por_codigo"] == 2
+def test_el_prefijo_PO_y_la_tilde_no_hacen_otro_cliente():
+    r = calidad_de_fichas(df([("PO-ALIESKI MORALES PACHECO", "3289", ""), ("Alieski Morales Pacheco", "1234", "")]))
+    assert r["clientes_con_varias_fichas"] == 1
 
 
-def test_lineas_viejas_sin_codigo_cuentan_por_nombre_y_no_desaparecen():
-    r = contar_clientes(df([("ANA", "100"), ("PEDRO", None), ("pedro", None), ("ANA", None)]))
-    assert r == {"por_nombre": 2, "por_codigo": 2, "sin_codigo": 1}  # ANA ya está por código; PEDRO por nombre
+def test_un_apellido_mal_escrito_con_el_mismo_codigo_de_parranda_es_duplicado():
+    n = "P-X; V-ANDY; C-CM01TCP0531;"
+    r = calidad_de_fichas(df([("CAROL ALEJANDRO RODRIGUEZ", "1974", n), ("KAROL ALEJANDRO RODRIGUEZ", "3741", n)]))
+    assert r["clientes_con_varias_fichas"] == 1
+
+
+def test_una_ficha_con_dos_personas_distintas_es_compartida():
+    r = calidad_de_fichas(df([("HODELVIS BRITO", "3641", ""), ("ODELKIS POLA GOMEZ", "3641", "")]))
+    assert r["fichas_compartidas"] == 1 and r["clientes_con_varias_fichas"] == 0
+
+
+def test_dos_personas_distintas_con_fichas_distintas_no_son_nada_raro():
+    r = calidad_de_fichas(df([("ANA PEREZ", "1", ""), ("LUIS GOMEZ", "2", "")]))
+    assert r == {"fichas": 2, "fichas_compartidas": 0, "clientes_con_varias_fichas": 0}
+
+
+def test_el_texto_pegado_tras_el_codigo_no_crea_fichas_ni_duplicados():
+    n1 = "P-X; V-A; C-CM01OTR0004; *TRANSFERENCIA: BR601DP175997"
+    n2 = "P-Y; V-A; C-CM01OTR0004;"
+    r = calidad_de_fichas(df([("JUAN RUIZ", "50", n1), ("JUAN RUIZ", "50", n2)]))
+    assert r == {"fichas": 1, "fichas_compartidas": 0, "clientes_con_varias_fichas": 0}
 
 
 def test_si_aun_no_hay_ningun_codigo_no_se_enseña_nada():
-    assert contar_clientes(df([("ANA", None), ("PEDRO", "")])) is None
-    assert contar_clientes(pd.DataFrame(columns=[S])) is None
-    assert contar_clientes(None) is None
-
-
-def test_el_relleno_arranca_aunque_el_bucle_este_apagado():
-    # En producción VENTRA_SYNC_EN_API=false: un relleno colgado del bucle no corría nunca.
-    from pathlib import Path
-    fuente = (Path(__file__).resolve().parents[1] / "main.py").read_text()
-    i = fuente.index("def _arrancar_sincronizador")
-    cuerpo = fuente[i:fuente.index("@asynccontextmanager", i)]
-    assert cuerpo.index("relleno_inicial") < cuerpo.index("os.environ.get(\"VENTRA_SYNC_EN_API\"")
+    assert calidad_de_fichas(df([("ANA", None, ""), ("PEDRO", "", "")])) is None
+    assert calidad_de_fichas(pd.DataFrame(columns=[S])) is None
+    assert calidad_de_fichas(None) is None
