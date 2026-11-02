@@ -256,6 +256,11 @@ class VentaVentra(Base):
     # es una etiqueta al lado, y si mañana se corrige, se recalcula sin haber perdido nada.
     objeto: Mapped[str] = mapped_column(String(120), nullable=False, default="", index=True)
     tipo_punto: Mapped[str] = mapped_column(String(30), nullable=False, default="", index=True)
+    # El código del cliente EN VENTRA (`customerCode`: un número por socio, p. ej. «5798»). Es la
+    # identidad de quien recibe la factura, venga o no pedido en la nota: las ventas de mostrador
+    # llevan `V-` y no `C-`, y con la nota sola no se sabe quién es su cliente. NO es el código de
+    # Parranda (CM01TCP0629, el del `C-`); son dos sistemas, y mezclarlos contaría dos veces.
+    cliente_codigo: Mapped[str | None] = mapped_column(String(40), nullable=True)
     traido_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -279,6 +284,8 @@ _MIGRACIONES = [
     ("analytics_result_cache", "idx_last_read",
      "create index if not exists ix_analytics_result_cache_last_read_at"
      " on analytics_result_cache (last_read_at)"),
+    ("analytics_venta_ventra", "cliente_codigo",
+     "alter table analytics_venta_ventra add column if not exists cliente_codigo varchar(40)"),
     ("analytics_result_cache", "idx_computed",
      "create index if not exists ix_analytics_result_cache_computed_at"
      " on analytics_result_cache (computed_at)"),

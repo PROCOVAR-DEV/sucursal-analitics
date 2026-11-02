@@ -60,6 +60,8 @@ OPER_TYPE_VENTA = 2
 COL_OBJETO = "Objeto"
 COL_TIPO_PUNTO = "TipoPunto"
 COL_BASE = "BaseVentra"
+# El código del cliente en Ventra (`customerCode`). Ver `VentaVentra.cliente_codigo`.
+COL_CLIENTE_CODIGO = "CodigoClienteVentra"
 
 
 class VentraNoDisponible(RuntimeError):
@@ -265,13 +267,14 @@ def a_dataframe(filas: Iterable[dict[str, Any]], base: str = "") -> pd.DataFrame
                 COL_OBJETO: objeto,
                 COL_TIPO_PUNTO: tipo_de_punto(objeto),
                 COL_BASE: base,
+                COL_CLIENTE_CODIGO: (str(f.get("customerCode")).strip() if f.get("customerCode") not in (None, "") else None),
             }
         )
 
     df = pd.DataFrame(datos, columns=[
         STD_COLS["op"], STD_COLS["fecha"], STD_COLS["socio"], STD_COLS["merc"],
         STD_COLS["grupo"], STD_COLS["cant"], STD_COLS["importe"], STD_COLS["nota"],
-        COL_OBJETO, COL_TIPO_PUNTO, COL_BASE,
+        COL_OBJETO, COL_TIPO_PUNTO, COL_BASE, COL_CLIENTE_CODIGO,
     ])
 
     if df.empty:

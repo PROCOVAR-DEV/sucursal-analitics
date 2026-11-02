@@ -53,6 +53,8 @@ def _filas(df, base: str) -> list[dict]:
         if fecha is None or (hasattr(fecha, "__class__") and str(fecha) == "NaT"):
             continue
         op = r[STD_COLS["op"]]
+        cc = r.get(ventra.COL_CLIENTE_CODIGO)
+        codigo_cliente = None if cc is None or cc != cc or str(cc).strip() == "" else str(cc).strip()
         filas.append(
             {
                 # Ventra no manda el `id` en el DataFrame —lo deja fuera el mapeo—, así
@@ -70,6 +72,7 @@ def _filas(df, base: str) -> list[dict]:
                 "nota": r[STD_COLS["nota"]],
                 "objeto": str(r[ventra.COL_OBJETO] or ""),
                 "tipo_punto": str(r[ventra.COL_TIPO_PUNTO] or ""),
+                "cliente_codigo": codigo_cliente,
                 "traido_at": utcnow(),
             }
         )
@@ -102,7 +105,7 @@ def guardar(filas: list[dict]) -> int:
                     c: stmt.excluded[c]
                     for c in (
                         "fecha", "oper_number", "socio", "mercancia", "grupo",
-                        "cantidad", "importe", "nota", "objeto", "tipo_punto", "traido_at",
+                        "cantidad", "importe", "nota", "objeto", "tipo_punto", "cliente_codigo", "traido_at",
                     )
                 },
             )
@@ -225,6 +228,35 @@ def recuperar(desde: date, hasta: date | None = None, base: str | None = None) -
 VUELTAS_POR_REPASO = int(os.environ.get("VENTRA_VUELTAS_POR_REPASO", "12"))
 
 
+def rellenar_un_mes(intentados: set) -> bool:
+    """Vuelve a traer UN mes (de UNA base) cuyas líneas guardadas no tienen `cliente_codigo`.
+
+    Es lo que hace que una columna nueva se llene SOLA en el histórico, sin que nadie lance una
+    recuperación a mano: tras desplegar, el worker va mes a mes, de lo más reciente a lo más
+    antiguo, una vez por vuelta. Cada mes se intenta una sola vez por arranque (si Ventra no manda
+    código en alguna línea, no se insiste cada hora). El mes en curso lo cubre el repaso.
+    """
+    from sqlalchemy import text
+
+    hoy = date.today()
+    with session_scope() as s:
+        filas = s.execute(text(
+            "select database, date_trunc('month', fecha)::date from analytics_venta_ventra"
+            " where cliente_codigo is null group by 1, 2 order by 2 desc, 1")).all()
+    for base, mes in filas:
+        if (base, mes) in intentados or (mes.year, mes.month) == (hoy.year, hoy.month):
+            continue
+        intentados.add((base, mes))
+        fin = (date(mes.year + (mes.month == 12), mes.month % 12 + 1, 1) - timedelta(days=1))
+        try:
+            n = recuperar(mes, fin, base=base)
+            log.info("[ventra] relleno del codigo de cliente: %s %s..%s (%s lineas)", base, mes, fin, n)
+        except Exception as e:  # noqa: BLE001
+            log.warning("[ventra] relleno de %s %s fallo: %s", base, mes, e)
+        return True
+    return False
+
+
 def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
     """Trae lo nuevo cada hora, y de vez en cuando repasa unos días atrás.
 
@@ -261,6 +293,7 @@ def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
     time.sleep(int(os.environ.get("VENTRA_ESPERA_INICIAL_S", "60")))
 
     vuelta = 0
+    intentados_relleno: set = set()
     ultimo_cierre = None
     no_antes = 0.0
 
@@ -293,6 +326,12 @@ def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
             pasada(1, "sólo hoy")
 
         vuelta += 1
+
+        # El histórico se rellena solo, un mes por vuelta (ver `rellenar_un_mes`).
+        try:
+            rellenar_un_mes(intentados_relleno)
+        except Exception as e:  # noqa: BLE001
+            log.warning("[ventra] el relleno del historico no pudo empezar: %s", e)
 
         # Se espera la hora, pero mirando cada minuto si toca el CIERRE: pasadas las 18:30
         # de Cuba se vuelve a leer el mes entero, una vez al día. Es lo que hace el cotejo

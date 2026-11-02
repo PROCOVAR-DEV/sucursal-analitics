@@ -98,8 +98,12 @@ export default function DashboardView({ sourceId, period, user }) {
         {verSinVendedor && (
           <ListaSinVendedor sourceId={sourceId} period={period} todas={data?.id === "all"} onClose={() => setVerSinVendedor(false)} />
         )}
+        {/* Por nombre (lo de siempre) y, cuando el worker ya rellenó el código de Ventra, por código:
+            el mismo cliente escrito de dos formas cuenta una vez, y la venta de mostrador sin pedido
+            también tiene su cliente. */}
         <Kpi label="Clientes" value={formatInt(kpis.total_clientes)}
-          hint={`${formatInt(kpis.total_skus)} SKUs vendidos`} tone="brand" />
+          hint={`${formatInt(kpis.total_skus)} SKUs vendidos${kpis.clientes_por_codigo != null ? ` · ${formatInt(kpis.clientes_por_codigo)} por código de Ventra` : ""}`}
+          tone="brand" />
       </div>
 
       {/* UN SOLO GRÁFICO PRINCIPAL, y es el que contesta «¿quién está tirando?».

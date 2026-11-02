@@ -28,7 +28,7 @@ import pandas as pd
 
 from services.db import VentaVentra, session_scope
 from services.loader import STD_COLS, ReportData, _add_stable_helpers, _type_df
-from services.ventra import COL_BASE, COL_OBJETO, COL_TIPO_PUNTO
+from services.ventra import COL_BASE, COL_CLIENTE_CODIGO, COL_OBJETO, COL_TIPO_PUNTO
 from services.ventra_sucursales import base_de
 
 # Las mismas que arma `repository._df_de_filas`, más las tres que sólo trae Ventra.
@@ -38,7 +38,7 @@ from services.ventra_sucursales import base_de
 _COLS = [
     STD_COLS["op"], STD_COLS["fecha"], STD_COLS["socio"], STD_COLS["merc"],
     STD_COLS["grupo"], STD_COLS["cant"], STD_COLS["importe"], STD_COLS["suma"],
-    STD_COLS["nota"], COL_OBJETO, COL_TIPO_PUNTO, COL_BASE,
+    STD_COLS["nota"], COL_OBJETO, COL_TIPO_PUNTO, COL_BASE, COL_CLIENTE_CODIGO,
 ]
 
 
@@ -106,6 +106,7 @@ def report_de_ventra(
                 STD_COLS["nota"]: r.nota,
                 COL_OBJETO: r.objeto,
                 COL_TIPO_PUNTO: r.tipo_punto,
+                COL_CLIENTE_CODIGO: r.cliente_codigo,
                 COL_BASE: r.database,
             }
             for r in q.order_by(VentaVentra.fecha, VentaVentra.oper_number).all()

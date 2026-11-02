@@ -134,3 +134,37 @@ def test_sin_lineas_no_revienta():
     df = ventra.a_dataframe([], base="moa")
     assert df.empty
     assert ventra.sin_vendedor(df) == (0, 0.0)
+
+
+# ---------------------------------------------------------------- el código del cliente EN VENTRA
+
+def test_se_guarda_el_codigo_del_cliente_de_ventra():
+    # Las ventas de mostrador llevan `V-` y no `C-`: con la nota sola no se sabe quién es el
+    # cliente. `customerCode` es su identidad en Ventra, venga o no pedido.
+    df = ventra.a_dataframe([
+        linea(operNumber=1, customerCode="5798", note="V-IRADIEL CISNEROS;"),
+        linea(operNumber=2, customerCode=" 31379 ", note="P-X; V-ANDY; C-CM01TCP0001;"),
+        linea(operNumber=3, customerCode=None),
+        linea(operNumber=4, customerCode=""),
+    ], base="camaguey")
+    assert list(df[ventra.COL_CLIENTE_CODIGO]) == ["5798", "31379", None, None]
+
+
+def test_el_codigo_de_ventra_no_se_mezcla_con_el_de_la_nota():
+    # Son dos sistemas: el de la nota (CM01TCP0629, de Parranda) y el de Ventra (5798). La columna
+    # nueva solo lleva el segundo; la nota sigue entera en su columna.
+    df = ventra.a_dataframe([linea(note="P-X; V-ANDY; C-CM01TCP0629;", customerCode="5798")])
+    assert df[ventra.COL_CLIENTE_CODIGO].iloc[0] == "5798"
+    assert "CM01TCP0629" in df[STD_COLS["nota"]].iloc[0]
+
+
+def test_sin_lineas_la_columna_existe_igual():
+    assert ventra.COL_CLIENTE_CODIGO in ventra.a_dataframe([], base="moa").columns
+
+
+def test_la_columna_esta_en_el_modelo_y_en_las_migraciones():
+    # Sin importar `services.db` (conecta a la base al importarse): se mira el código fuente.
+    from pathlib import Path
+    fuente = (Path(__file__).resolve().parents[1] / "services" / "db.py").read_text()
+    assert "cliente_codigo: Mapped[str | None]" in fuente
+    assert '"analytics_venta_ventra", "cliente_codigo"' in fuente
