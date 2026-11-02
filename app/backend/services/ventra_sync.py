@@ -228,13 +228,17 @@ def recuperar(desde: date, hasta: date | None = None, base: str | None = None) -
 VUELTAS_POR_REPASO = int(os.environ.get("VENTRA_VUELTAS_POR_REPASO", "12"))
 
 
-def rellenar_un_mes(intentados: set) -> bool:
-    """Vuelve a traer UN mes (de UNA base) cuyas líneas guardadas no tienen `cliente_codigo`.
+RELLENO_POR_VUELTA = int(os.environ.get("VENTRA_RELLENO_POR_VUELTA", "12"))
+
+
+def rellenar_un_mes(intentados: set, cuantos: int = RELLENO_POR_VUELTA) -> int:
+    """Vuelve a traer hasta `cuantos` pares (base, mes) cuyas líneas guardadas no tienen `cliente_codigo`.
 
     Es lo que hace que una columna nueva se llene SOLA en el histórico, sin que nadie lance una
-    recuperación a mano: tras desplegar, el worker va mes a mes, de lo más reciente a lo más
-    antiguo, una vez por vuelta. Cada mes se intenta una sola vez por arranque (si Ventra no manda
-    código en alguna línea, no se insiste cada hora). El mes en curso lo cubre el repaso.
+    recuperación a mano: tras desplegar, el worker va de lo más reciente a lo más antiguo, unos
+    cuantos por vuelta (doce por defecto: el último mes de las diez bases cabe en una vuelta). Cada
+    par se intenta una sola vez por arranque (si Ventra no manda código en alguna línea, no se
+    insiste cada hora). El mes en curso lo cubre el repaso. Devuelve cuántos tocó.
     """
     from sqlalchemy import text
 
@@ -243,7 +247,10 @@ def rellenar_un_mes(intentados: set) -> bool:
         filas = s.execute(text(
             "select database, date_trunc('month', fecha)::date from analytics_venta_ventra"
             " where cliente_codigo is null group by 1, 2 order by 2 desc, 1")).all()
+    hechos = 0
     for base, mes in filas:
+        if hechos >= cuantos:
+            break
         if (base, mes) in intentados or (mes.year, mes.month) == (hoy.year, hoy.month):
             continue
         intentados.add((base, mes))
@@ -253,8 +260,8 @@ def rellenar_un_mes(intentados: set) -> bool:
             log.info("[ventra] relleno del codigo de cliente: %s %s..%s (%s lineas)", base, mes, fin, n)
         except Exception as e:  # noqa: BLE001
             log.warning("[ventra] relleno de %s %s fallo: %s", base, mes, e)
-        return True
-    return False
+        hechos += 1
+    return hechos
 
 
 def bucle(cada_s: int = 3600, dias: int = DIAS_AL_DIA) -> None:
