@@ -25,9 +25,15 @@ from services.ventra import COL_CLIENTE_CODIGO
 _CODIGO_PARRANDA = re.compile(r"^[A-Za-z]{2}[0-9]{2}[A-Za-z]{3}[0-9]{4}$")
 
 
+def _texto(v) -> str:
+    """El valor como texto, o "" si falta. Con las columnas de pandas «nullable» lo que falta es `pd.NA`, y
+    `v or ""` revienta con «boolean value of NA is ambiguous» (así cayó el dashboard de Holguín el 04/11)."""
+    return "" if v is None or (not isinstance(v, str) and pd.isna(v)) else str(v)
+
+
 def _norm(s) -> str:
     """Nombre comparable: sin «PO-», sin tildes ni signos. «PO-JUAN PÉREZ» y «Juan Perez» son uno."""
-    s = re.sub(r"^\s*PO[-.\s]+", "", str(s or ""), flags=re.IGNORECASE)
+    s = re.sub(r"^\s*PO[-.\s]+", "", _texto(s), flags=re.IGNORECASE)
     t = unicodedata.normalize("NFKD", s.upper()).encode("ascii", "ignore").decode()
     return re.sub(r"[^A-Z0-9]", "", t)
 
@@ -39,7 +45,7 @@ def _parecidos(a: str, b: str) -> bool:
 
 def _codigo_de_la_nota(nota) -> str | None:
     """El código de Parranda de la nota, CORTADO en el primer «;» y solo si tiene forma de código."""
-    m = re.search(r"C-([^;]*)", str(nota or ""))
+    m = re.search(r"C-([^;]*)", _texto(nota))
     t = m.group(1).strip().upper() if m else ""
     return t if _CODIGO_PARRANDA.match(t) else None
 
@@ -51,7 +57,7 @@ def calidad_de_fichas(df: pd.DataFrame) -> dict | None:
     """
     if df is None or df.empty or COL_CLIENTE_CODIGO not in df.columns:
         return None
-    cod = df[COL_CLIENTE_CODIGO].map(lambda v: None if v is None or v != v or str(v).strip() == "" else str(v).strip())
+    cod = df[COL_CLIENTE_CODIGO].map(lambda v: None if _texto(v).strip() == "" else _texto(v).strip())
     if cod.notna().sum() == 0:
         return None  # aún no se han rellenado: mejor no enseñar nada que enseñar un número a medias
 

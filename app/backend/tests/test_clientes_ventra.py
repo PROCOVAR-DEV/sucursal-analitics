@@ -48,3 +48,14 @@ def test_si_aun_no_hay_ningun_codigo_no_se_enseña_nada():
     assert calidad_de_fichas(df([("ANA", None, ""), ("PEDRO", "", "")])) is None
     assert calidad_de_fichas(pd.DataFrame(columns=[S])) is None
     assert calidad_de_fichas(None) is None
+
+
+def test_los_valores_que_faltan_como_pd_NA_no_tumban_el_calculo():
+    # Con columnas «nullable» de pandas lo que falta es pd.NA, y `valor or ""` revienta. Cayó el dashboard de Holguín.
+    d = pd.DataFrame(
+        {S: pd.array(["ANA", pd.NA, "ANA"], dtype="string"),
+         COL_CLIENTE_CODIGO: pd.array(["100", "101", pd.NA], dtype="string"),
+         N: pd.array([pd.NA, "P-1; C-CM01TCP0001;", "C-CM01TCP0001;"], dtype="string")}
+    )
+    r = calidad_de_fichas(d)
+    assert r is not None and r["fichas"] == 2
